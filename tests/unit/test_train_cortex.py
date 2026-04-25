@@ -59,12 +59,16 @@ class TestVerifiedDefaults:
         assert c.lr_scheduler_type == "cosine"
         assert c.use_gradient_checkpointing == "unsloth"
 
-    def test_e4b_specific_overrides(self):
+    def test_e4b_5090_safe_overrides(self):
+        # Updated after measuring real VRAM peaks on the 5090 in smoke
+        # test 11 (commit + log linked in docs/unsloth.md):
+        #   batch=2 + max_seq=2048 → peak 31.7 / 31.8 GB (nearly OOM)
+        # batch=1 + max_seq=2048 leaves ~10 GB of headroom for safety.
         c = TrainConfig()
-        # E4B can take a larger batch than 31B on the same hardware
-        assert c.per_device_train_batch_size == 4
-        # Longer ctx than 31B vision (which used 2048)
-        assert c.max_seq_length == 8192
+        assert c.per_device_train_batch_size == 1
+        assert c.max_seq_length == 2048
+        # Effective batch held constant at 4 via gradient accumulation
+        assert c.gradient_accumulation_steps == 4
         assert c.load_in_4bit is True  # QLoRA
 
     def test_chat_template(self):

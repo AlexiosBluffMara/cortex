@@ -60,9 +60,11 @@ DEFAULT_USE_RSLORA = False
 DEFAULT_LOFTQ_CONFIG: Any = None
 DEFAULT_USE_GRADIENT_CHECKPOINTING = "unsloth"  # long-context aware
 
-# Training — E4B can take a larger per-device batch than 31B
-DEFAULT_PER_DEVICE_TRAIN_BATCH_SIZE = 4   # Daniel's 31B used 1 (A100-40GB)
-DEFAULT_GRADIENT_ACCUMULATION_STEPS = 4   # effective batch 16
+# Training — measured peak VRAM at batch=2, max_seq=2048 was 31.7/31.8 GB
+# on the 5090 (smoke test 11). batch=1 leaves comfortable headroom; effective
+# batch is held at 4 via gradient accumulation.
+DEFAULT_PER_DEVICE_TRAIN_BATCH_SIZE = 1   # measured: batch=2 nearly OOMs
+DEFAULT_GRADIENT_ACCUMULATION_STEPS = 4   # effective batch 4
 DEFAULT_MAX_GRAD_NORM = 0.3               # Daniel: 0.3 — load-bearing
 DEFAULT_WARMUP_RATIO = 0.03
 DEFAULT_NUM_TRAIN_EPOCHS = 3
@@ -74,7 +76,9 @@ DEFAULT_LOGGING_STEPS = 10
 DEFAULT_SAVE_STRATEGY = "epoch"
 DEFAULT_REPORT_TO = "none"
 
-DEFAULT_MAX_SEQ_LENGTH = 8192             # E4B; Daniel's 31B vision used 2048
+DEFAULT_MAX_SEQ_LENGTH = 2048             # measured: 8192 OOMs on 5090; our
+                                          # synthetic answers max ~700 tokens
+                                          # so 2048 has comfortable headroom
 DEFAULT_LOAD_IN_4BIT = True               # QLoRA — 4-bit base, BF16 LoRA adapters
 
 # Ollama Modelfile parameters
@@ -306,10 +310,21 @@ def run(config: TrainConfig) -> dict[str, Any]:
         return summary
 
     # --- Real training (heavy imports deferred so --dry-run stays light) ---
+    # Unsloth optimizes by not returning logits (since causal-LM training
+    # only needs the loss). trl 0.22's compute_loss reads outputs.logits for
+    # entropy computation, so we have to opt back into logits explicitly via
+    # this env var BEFORE importing unsloth or instantiating the trainer.
+    import os
+    os.environ.setdefault("UNSLOTH_RETURN_LOGITS", "1")
     import torch
     from datasets import Dataset
+    from transformers import DataCollatorForSeq2Seq
     from trl import SFTConfig, SFTTrainer
-    from unsloth import FastModel
+    # FastLanguageModel is the text-only path. The multimodal `FastModel`
+    # expects an 'images' column even for text-only data, which fails our
+    # ShareGPT-format dataset. Gemma 4 E4B's text-only fine-tune is the
+    # right path for cortex-gemma-4-e4b.
+    from unsloth import FastLanguageModel
     from unsloth.chat_templates import get_chat_template
 
     # Live metrics callback: writes per-step loss/lr/vram to a JSONL file the
@@ -360,7 +375,7 @@ def run(config: TrainConfig) -> dict[str, Any]:
         def on_prediction_step(self, *a, **k): pass
 
     # 1. Load base model in 4-bit (QLoRA) — Daniel Han-Chen's setup
-    model, tokenizer = FastModel.from_pretrained(
+    model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=config.base_model,
         max_seq_length=config.max_seq_length,
         dtype=torch.bfloat16,
@@ -369,7 +384,7 @@ def run(config: TrainConfig) -> dict[str, Any]:
     tokenizer = get_chat_template(tokenizer, chat_template=config.chat_template)
 
     # 2. Wrap with LoRA adapters
-    model = FastModel.get_peft_model(
+    model = FastLanguageModel.get_peft_model(
         model,
         r=config.lora_r,
         lora_alpha=config.lora_alpha,
@@ -381,14 +396,33 @@ def run(config: TrainConfig) -> dict[str, Any]:
         use_rslora=config.use_rslora,
     )
 
-    # 3. Build the dataset by mapping each ShareGPT example through the chat
-    # template
-    def _format(ex: dict[str, Any]) -> dict[str, str]:
-        messages = to_gemma_chat_format(ex)
-        text = tokenizer.apply_chat_template(messages, tokenize=False)
-        return {"text": text}
+    # 3. Pre-tokenize the dataset ourselves with the (multimodal) processor
+    # in text-only mode. We bypass trl's `_collate_language_modeling` data
+    # collator below — it always routes through the Gemma 4 image processor,
+    # which then crashes on torch.stack of an empty image batch even when no
+    # images exist. Pre-tokenizing here lets us hand SFTTrainer a dataset of
+    # pure `input_ids` + `labels` and use a plain language-modeling collator.
+    underlying_tokenizer = getattr(tokenizer, "tokenizer", tokenizer)
 
-    dataset = Dataset.from_list(examples).map(_format)
+    def _format(ex: dict[str, Any]) -> dict[str, Any]:
+        messages = to_gemma_chat_format(ex)
+        text = underlying_tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=False,
+        )
+        encoded = underlying_tokenizer(
+            text,
+            truncation=True,
+            max_length=config.max_seq_length,
+            padding=False,
+            return_attention_mask=True,
+        )
+        return {
+            "input_ids": encoded["input_ids"],
+            "attention_mask": encoded["attention_mask"],
+            "labels": encoded["input_ids"][:],  # standard causal-LM labels
+        }
+
+    dataset = Dataset.from_list(examples).map(_format, remove_columns=list(examples[0].keys()))
 
     # 4. Train via TRL
     sft_config = SFTConfig(
@@ -410,8 +444,25 @@ def run(config: TrainConfig) -> dict[str, Any]:
         dataset_text_field="text",
         # trl 0.24+ renamed max_seq_length -> max_length
         max_length=config.max_seq_length,
+        # trl 0.22+ inspects the model's forward() signature and drops any
+        # dataset column not in it. Our pre-formatted "text" column survives
+        # because we pass dataset_text_field="text", but the metadata + id
+        # + conversations columns get filtered. Disabling that filter keeps
+        # the dataset intact and lets the trainer use the "text" column.
+        remove_unused_columns=False,
     )
     callbacks = [_MetricsCallback()] if metrics_path is not None else []
+    # Causal-LM collator with dynamic padding. Bypasses trl's multimodal image
+    # processor pipeline that doesn't apply to our text-only data.
+    # `DataCollatorForSeq2Seq` is the standard fit for causal LM with variable
+    # sequence lengths: pads input_ids/attention_mask/labels to the max in
+    # each batch, doesn't try MLM masking.
+    text_collator = DataCollatorForSeq2Seq(
+        tokenizer=underlying_tokenizer,
+        padding=True,
+        label_pad_token_id=-100,
+        return_tensors="pt",
+    )
     # trl 0.24+ renamed `tokenizer` → `processing_class`
     trainer = SFTTrainer(
         model=model,
@@ -419,6 +470,7 @@ def run(config: TrainConfig) -> dict[str, Any]:
         train_dataset=dataset,
         args=sft_config,
         callbacks=callbacks,
+        data_collator=text_collator,
     )
 
     # Run training, catching CUDA OOM so we can emit a structured failure
