@@ -289,3 +289,269 @@ class TestGenerator:
                 )
             )
         assert out_a.read_text(encoding="utf-8") == out_b.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Supervisor mode: resume + retry + max-runtime + health check
+# ---------------------------------------------------------------------------
+
+class TestSupervisorResume:
+    def test_resume_skips_existing_ids(self, tmp_path: Path):
+        out = tmp_path / "ds.jsonl"
+
+        # First pass — write 5 examples
+        first = generate(GeneratorConfig(
+            backend=StubBackend(),
+            n_per_family=1,
+            seed=42,
+            output_path=out,
+            region_filter=("V1",),
+        ))
+        assert first == 5
+
+        # Capture the existing JSONL
+        first_lines = out.read_text(encoding="utf-8").splitlines()
+
+        # Second pass with resume=True — should write 0 new (all IDs exist)
+        second = generate(GeneratorConfig(
+            backend=StubBackend(),
+            n_per_family=1,
+            seed=42,
+            output_path=out,
+            region_filter=("V1",),
+            resume=True,
+        ))
+        assert second == 0
+
+        # File is unchanged
+        assert out.read_text(encoding="utf-8").splitlines() == first_lines
+
+    def test_resume_continues_partial_run(self, tmp_path: Path):
+        # Hand-build a partial JSONL with only 2 examples for V1
+        out = tmp_path / "partial.jsonl"
+        # Generate full first to learn the IDs, then truncate to 2 entries
+        generate(GeneratorConfig(
+            backend=StubBackend(),
+            n_per_family=1,
+            seed=99,
+            output_path=out,
+            region_filter=("V1",),
+        ))
+        all_lines = out.read_text(encoding="utf-8").splitlines()
+        assert len(all_lines) == 5
+        # Keep only the first 2 lines
+        out.write_text("\n".join(all_lines[:2]) + "\n", encoding="utf-8")
+
+        # Resume should fill in the remaining 3
+        written = generate(GeneratorConfig(
+            backend=StubBackend(),
+            n_per_family=1,
+            seed=99,
+            output_path=out,
+            region_filter=("V1",),
+            resume=True,
+        ))
+        assert written == 3
+        final_lines = out.read_text(encoding="utf-8").splitlines()
+        # All 5 examples now present, no duplicates
+        ids = [json.loads(line)["id"] for line in final_lines]
+        assert len(ids) == 5
+        assert len(set(ids)) == 5
+
+    def test_resume_with_no_existing_file_starts_fresh(self, tmp_path: Path):
+        out = tmp_path / "missing.jsonl"
+        written = generate(GeneratorConfig(
+            backend=StubBackend(),
+            n_per_family=1,
+            seed=7,
+            output_path=out,
+            region_filter=("V1",),
+            resume=True,
+        ))
+        assert written == 5
+        assert out.exists()
+
+
+class TestSupervisorRetry:
+    def test_retry_succeeds_on_third_attempt(self, tmp_path: Path):
+        # Backend that fails twice then succeeds — exercises the retry loop.
+        from unittest.mock import MagicMock
+        attempts = {"n": 0}
+
+        def _gen(system, user):
+            attempts["n"] += 1
+            if attempts["n"] < 3:
+                raise RuntimeError("transient failure")
+            return "answer after retry"
+
+        backend = MagicMock()
+        backend.name = "flaky-stub"
+        backend.generate.side_effect = _gen
+
+        out = tmp_path / "retry.jsonl"
+        # 5 examples × 3 attempts = enough — but the count() resets per example
+        # so each example burns 3 calls (2 fail, 1 succeed)
+        attempts["n"] = 0
+        from scripts.generate_neuro_dataset import _generate_with_retry, _Logger
+        result = _generate_with_retry(
+            backend, "system", "user", max_attempts=4, log=_Logger(None),
+        )
+        assert result == "answer after retry"
+        assert attempts["n"] == 3
+
+    def test_retry_gives_up_after_max(self, tmp_path: Path):
+        from unittest.mock import MagicMock
+        backend = MagicMock()
+        backend.name = "always-fails"
+        backend.generate.side_effect = RuntimeError("nope")
+
+        from scripts.generate_neuro_dataset import _generate_with_retry, _Logger
+        result = _generate_with_retry(
+            backend, "system", "user", max_attempts=2, log=_Logger(None),
+        )
+        assert result is None
+        assert backend.generate.call_count == 2
+
+    def test_empty_response_treated_as_failure(self, tmp_path: Path):
+        from unittest.mock import MagicMock
+        backend = MagicMock()
+        backend.name = "empties"
+        backend.generate.return_value = "   "
+
+        from scripts.generate_neuro_dataset import _generate_with_retry, _Logger
+        result = _generate_with_retry(
+            backend, "system", "user", max_attempts=3, log=_Logger(None),
+        )
+        assert result is None  # whitespace-only responses don't count
+        assert backend.generate.call_count == 3
+
+    def test_failed_examples_skipped_not_aborted(self, tmp_path: Path):
+        # Backend fails for half, succeeds for the rest. The full dataset
+        # should still produce SOME output, with failures logged.
+        from unittest.mock import MagicMock
+        calls = {"n": 0}
+
+        def _gen(system, user):
+            calls["n"] += 1
+            # Fail on every 3rd call
+            if calls["n"] % 3 == 0:
+                raise RuntimeError("simulated")
+            return f"ok-{calls['n']}"
+
+        backend = MagicMock()
+        backend.name = "partial"
+        backend.generate.side_effect = _gen
+
+        out = tmp_path / "partial.jsonl"
+        log_path = tmp_path / "log.jsonl"
+        written = generate(GeneratorConfig(
+            backend=backend,
+            n_per_family=1,
+            seed=42,
+            output_path=out,
+            region_filter=("V1",),
+            retries_per_example=1,  # no retry — failures are real
+            log_path=log_path,
+        ))
+        # Some examples succeed, some don't, but we don't abort
+        assert 0 < written < 5
+        # Log captured at least one giving-up event
+        log_contents = log_path.read_text(encoding="utf-8")
+        assert "giving up" in log_contents
+
+
+class TestSupervisorDeadline:
+    def test_max_runtime_terminates_cleanly(self, tmp_path: Path):
+        import time as _time
+        from unittest.mock import MagicMock
+        # Each call takes 50ms; total budget 100ms → only ~2 examples
+        def _slow(system, user):
+            _time.sleep(0.05)
+            return "ok"
+
+        backend = MagicMock()
+        backend.name = "slow"
+        backend.generate.side_effect = _slow
+
+        out = tmp_path / "slow.jsonl"
+        written = generate(GeneratorConfig(
+            backend=backend,
+            n_per_family=10,  # would normally produce 50 examples for V1
+            seed=42,
+            output_path=out,
+            region_filter=("V1",),
+            max_runtime_s=0.15,
+        ))
+        # We didn't write all 50 — proves the deadline kicked in
+        assert written < 50
+        # File contains exactly `written` lines (durability via flush)
+        lines = out.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == written
+
+
+class TestSupervisorHealthCheck:
+    def test_health_check_can_short_circuit(self, tmp_path: Path, monkeypatch):
+        from unittest.mock import MagicMock
+        check_calls = {"n": 0}
+
+        def _check() -> bool:
+            check_calls["n"] += 1
+            return False  # always unhealthy
+
+        backend = MagicMock()
+        backend.name = "fine"
+        backend.generate.return_value = "should never be called"
+
+        # Patch time.sleep inside the supervisor to a no-op so the 30s
+        # cooldown doesn't make the test slow.
+        from scripts import generate_neuro_dataset as gnd
+        monkeypatch.setattr(gnd.time, "sleep", lambda _s: None)
+
+        out = tmp_path / "no_health.jsonl"
+        written = generate(GeneratorConfig(
+            backend=backend,
+            n_per_family=1,
+            seed=42,
+            output_path=out,
+            region_filter=("V1",),
+            health_check=_check,
+        ))
+        # Health check failed twice (initial + post-sleep), so we aborted
+        assert written == 0
+        assert check_calls["n"] >= 2
+        backend.generate.assert_not_called()
+
+
+class TestSupervisorCLI:
+    def test_supervised_flag_enables_resume_and_retries(self, tmp_path: Path, monkeypatch):
+        # Run twice via the CLI — second invocation with --supervised should
+        # see the existing data and skip everything.
+        out = tmp_path / "cli.jsonl"
+        from scripts.generate_neuro_dataset import main
+
+        # First run, no supervisor
+        rc = main([
+            "--backend", "stub",
+            "--n-per-family", "1",
+            "--seed", "42",
+            "--output", str(out),
+            "--regions", "V1",
+            "--quiet",
+        ])
+        assert rc == 0
+        first_lines = out.read_text(encoding="utf-8").splitlines()
+        assert len(first_lines) == 5
+
+        # Second run with --supervised should be a no-op (all IDs exist)
+        rc = main([
+            "--backend", "stub",
+            "--n-per-family", "1",
+            "--seed", "42",
+            "--output", str(out),
+            "--regions", "V1",
+            "--quiet",
+            "--supervised",
+        ])
+        assert rc == 0
+        # File unchanged
+        assert out.read_text(encoding="utf-8").splitlines() == first_lines
