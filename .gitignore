@@ -79,6 +79,7 @@ data/raw/
 data/processed/
 data/*.log
 data/*.jsonl
+data/*.md
 data/cortex_train*.jsonl
 outputs/
 !outputs/.gitkeep
