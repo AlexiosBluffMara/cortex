@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "atlas": "schaefer-400-stand-in",
+  "n_networks": 7,
+  "_note": "Stand-in atlas. Replace with the real Schaefer-400 + Yeo-7 lookup table when brain.glb lands. Coordinates are normalized to [-1,1] x [-0.6, 0.7] x [-0.7, 0.7] approximating cortical surface space, NOT MNI millimetres.",
+  "networks": {
+    "visual":            {"label": "Visual",            "color": "#7e57ff"},
+    "auditory":          {"label": "Auditory",          "color": "#ff8a3d"},
+    "default_mode":      {"label": "Default Mode",      "color": "#4dd2ff"},
+    "frontoparietal":    {"label": "Frontoparietal",    "color": "#26d4a8"},
+    "somatomotor":       {"label": "Somatomotor",       "color": "#ffd34d"},
+    "dorsal_attention":  {"label": "Dorsal Attention",  "color": "#ff5d8f"},
+    "ventral_attention": {"label": "Ventral Attention", "color": "#ff7b7b"},
+    "limbic":            {"label": "Limbic",            "color": "#a3e635"}
+  },
+  "regions": [
+    {"id": "V1",   "name": "Primary Visual Cortex",            "network": "visual",            "hemi": "L", "brodmann": "BA17",     "xyz": [-0.10, -0.55,  0.10]},
+    {"id": "V1r",  "name": "Primary Visual Cortex (R)",        "network": "visual",            "hemi": "R", "brodmann": "BA17",     "xyz": [ 0.10, -0.55,  0.10]},
+    {"id": "V2",   "name": "Extrastriate Visual Cortex",       "network": "visual",            "hemi": "L", "brodmann": "BA18",     "xyz": [-0.20, -0.50,  0.20]},
+    {"id": "V2r",  "name": "Extrastriate Visual Cortex (R)",   "network": "visual",            "hemi": "R", "brodmann": "BA18",     "xyz": [ 0.20, -0.50,  0.20]},
+    {"id": "V4",   "name": "Color-selective Cortex",           "network": "visual",            "hemi": "L", "brodmann": "BA19",     "xyz": [-0.30, -0.45, -0.05]},
+    {"id": "MT",   "name": "Middle Temporal area (MT/V5)",     "network": "visual",            "hemi": "L", "brodmann": "BA19/37",  "xyz": [-0.50, -0.40,  0.05]},
+    {"id": "FFA",  "name": "Fusiform Face Area",               "network": "visual",            "hemi": "R", "brodmann": "BA37",     "xyz": [ 0.40, -0.20, -0.30]},
+    {"id": "PPA",  "name": "Parahippocampal Place Area",       "network": "visual",            "hemi": "L", "brodmann": "BA36",     "xyz": [-0.35, -0.10, -0.40]},
+
+    {"id": "A1",   "name": "Primary Auditory Cortex",          "network": "auditory",          "hemi": "L", "brodmann": "BA41",     "xyz": [-0.55,  0.05,  0.05]},
+    {"id": "A1r",  "name": "Primary Auditory Cortex (R)",      "network": "auditory",          "hemi": "R", "brodmann": "BA41",     "xyz": [ 0.55,  0.05,  0.05]},
+    {"id": "STG",  "name": "Superior Temporal Gyrus",          "network": "auditory",          "hemi": "L", "brodmann": "BA22",     "xyz": [-0.55, -0.05,  0.00]},
+    {"id": "STGr", "name": "Superior Temporal Gyrus (R)",      "network": "auditory",          "hemi": "R", "brodmann": "BA22",     "xyz": [ 0.55, -0.05,  0.00]},
+    {"id": "STS",  "name": "Superior Temporal Sulcus",         "network": "auditory",          "hemi": "L", "brodmann": "BA22",     "xyz": [-0.50, -0.10, -0.05]},
+
+    {"id": "mPFC", "name": "Medial Prefrontal Cortex",         "network": "default_mode",      "hemi": "M", "brodmann": "BA10/32",  "xyz": [ 0.00,  0.55,  0.30]},
+    {"id": "PCC",  "name": "Posterior Cingulate Cortex",       "network": "default_mode",      "hemi": "M", "brodmann": "BA23/31",  "xyz": [ 0.00, -0.20,  0.45]},
+    {"id": "Hipp", "name": "Hippocampus",                      "network": "default_mode",      "hemi": "L", "brodmann": "BA28/35",  "xyz": [-0.30, -0.05, -0.20]},
+    {"id": "Hippr","name": "Hippocampus (R)",                  "network": "default_mode",      "hemi": "R", "brodmann": "BA28/35",  "xyz": [ 0.30, -0.05, -0.20]},
+    {"id": "AG",   "name": "Angular Gyrus",                    "network": "default_mode",      "hemi": "L", "brodmann": "BA39",     "xyz": [-0.55, -0.30,  0.30]},
+    {"id": "vmPFC","name": "Ventromedial Prefrontal Cortex",   "network": "default_mode",      "hemi": "M", "brodmann": "BA10",     "xyz": [ 0.00,  0.55,  0.10]},
+    {"id": "Prec", "name": "Precuneus",                        "network": "default_mode",      "hemi": "M", "brodmann": "BA7",      "xyz": [ 0.00, -0.30,  0.50]},
+    {"id": "TP",   "name": "Temporal Pole",                    "network": "default_mode",      "hemi": "L", "brodmann": "BA38",     "xyz": [-0.40,  0.30, -0.30]},
+
+    {"id": "dlPFC","name": "Dorsolateral Prefrontal Cortex",   "network": "frontoparietal",    "hemi": "L", "brodmann": "BA9/46",   "xyz": [-0.45,  0.45,  0.30]},
+    {"id": "dlPFCr","name":"Dorsolateral Prefrontal Cortex (R)","network":"frontoparietal",    "hemi": "R", "brodmann": "BA9/46",   "xyz": [ 0.45,  0.45,  0.30]},
+    {"id": "IPS",  "name": "Intraparietal Sulcus",             "network": "frontoparietal",    "hemi": "L", "brodmann": "BA7/40",   "xyz": [-0.40, -0.30,  0.45]},
+    {"id": "IPSr", "name": "Intraparietal Sulcus (R)",         "network": "frontoparietal",    "hemi": "R", "brodmann": "BA7/40",   "xyz": [ 0.40, -0.30,  0.45]},
+    {"id": "preSMA","name":"Pre-Supplementary Motor Area",     "network": "frontoparietal",    "hemi": "M", "brodmann": "BA6",      "xyz": [ 0.00,  0.30,  0.50]},
+    {"id": "FEF",  "name": "Frontal Eye Fields",               "network": "frontoparietal",    "hemi": "L", "brodmann": "BA8",      "xyz": [-0.30,  0.35,  0.45]},
+    {"id": "MFG",  "name": "Middle Frontal Gyrus",             "network": "frontoparietal",    "hemi": "L", "brodmann": "BA46",     "xyz": [-0.45,  0.40,  0.20]},
+
+    {"id": "M1",   "name": "Primary Motor Cortex",             "network": "somatomotor",       "hemi": "L", "brodmann": "BA4",      "xyz": [-0.30,  0.05,  0.55]},
+    {"id": "M1r",  "name": "Primary Motor Cortex (R)",         "network": "somatomotor",       "hemi": "R", "brodmann": "BA4",      "xyz": [ 0.30,  0.05,  0.55]},
+    {"id": "S1",   "name": "Primary Somatosensory Cortex",     "network": "somatomotor",       "hemi": "L", "brodmann": "BA1/2/3",  "xyz": [-0.30, -0.05,  0.55]},
+    {"id": "S1r",  "name": "Primary Somatosensory Cortex (R)", "network": "somatomotor",       "hemi": "R", "brodmann": "BA1/2/3",  "xyz": [ 0.30, -0.05,  0.55]},
+    {"id": "SMA",  "name": "Supplementary Motor Area",         "network": "somatomotor",       "hemi": "M", "brodmann": "BA6",      "xyz": [ 0.00,  0.20,  0.55]},
+    {"id": "PMC",  "name": "Premotor Cortex",                  "network": "somatomotor",       "hemi": "L", "brodmann": "BA6",      "xyz": [-0.40,  0.20,  0.50]},
+
+    {"id": "SPL",  "name": "Superior Parietal Lobule",         "network": "dorsal_attention",  "hemi": "L", "brodmann": "BA5/7",    "xyz": [-0.35, -0.40,  0.55]},
+    {"id": "SPLr", "name": "Superior Parietal Lobule (R)",     "network": "dorsal_attention",  "hemi": "R", "brodmann": "BA5/7",    "xyz": [ 0.35, -0.40,  0.55]},
+    {"id": "FEFd", "name": "Frontal Eye Fields (Dorsal)",      "network": "dorsal_attention",  "hemi": "L", "brodmann": "BA8",      "xyz": [-0.25,  0.40,  0.50]},
+    {"id": "V3A",  "name": "Visual Area V3A",                  "network": "dorsal_attention",  "hemi": "L", "brodmann": "BA19",     "xyz": [-0.20, -0.50,  0.30]},
+
+    {"id": "AI",   "name": "Anterior Insula",                  "network": "ventral_attention", "hemi": "L", "brodmann": "BA13",     "xyz": [-0.45,  0.20, -0.05]},
+    {"id": "AIr",  "name": "Anterior Insula (R)",              "network": "ventral_attention", "hemi": "R", "brodmann": "BA13",     "xyz": [ 0.45,  0.20, -0.05]},
+    {"id": "ACC",  "name": "Anterior Cingulate Cortex",        "network": "ventral_attention", "hemi": "M", "brodmann": "BA24/32",  "xyz": [ 0.00,  0.35,  0.30]},
+    {"id": "TPJ",  "name": "Temporoparietal Junction",         "network": "ventral_attention", "hemi": "L", "brodmann": "BA39/40",  "xyz": [-0.55, -0.20,  0.20]},
+    {"id": "TPJr", "name": "Temporoparietal Junction (R)",     "network": "ventral_attention", "hemi": "R", "brodmann": "BA39/40",  "xyz": [ 0.55, -0.20,  0.20]},
+    {"id": "vFC",  "name": "Ventral Frontal Cortex",           "network": "ventral_attention", "hemi": "L", "brodmann": "BA45",     "xyz": [-0.45,  0.30,  0.05]},
+    {"id": "IFG",  "name": "Inferior Frontal Gyrus",           "network": "ventral_attention", "hemi": "L", "brodmann": "BA44/45",  "xyz": [-0.50,  0.30,  0.15]},
+
+    {"id": "Amyg", "name": "Amygdala",                         "network": "limbic",            "hemi": "L", "brodmann": "(subcortical)", "xyz": [-0.20,  0.05, -0.25]},
+    {"id": "Amygr","name": "Amygdala (R)",                     "network": "limbic",            "hemi": "R", "brodmann": "(subcortical)", "xyz": [ 0.20,  0.05, -0.25]},
+    {"id": "OFC",  "name": "Orbitofrontal Cortex",             "network": "limbic",            "hemi": "L", "brodmann": "BA11",     "xyz": [-0.20,  0.45, -0.20]},
+    {"id": "OFCr", "name": "Orbitofrontal Cortex (R)",         "network": "limbic",            "hemi": "R", "brodmann": "BA11",     "xyz": [ 0.20,  0.45, -0.20]},
+    {"id": "Ins",  "name": "Insular Cortex",                   "network": "limbic",            "hemi": "L", "brodmann": "BA13",     "xyz": [-0.40,  0.10, -0.10]}
+  ]
+}

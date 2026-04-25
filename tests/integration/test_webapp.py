@@ -203,6 +203,70 @@ class TestWebSocket:
 # Static
 # ---------------------------------------------------------------------------
 
+class TestAtlas:
+    def test_atlas_endpoint_returns_full_atlas(self, client):
+        resp = client.get("/api/atlas")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["schema_version"] == 1
+        assert body["n_networks"] == 7
+        assert "regions" in body and len(body["regions"]) >= 50
+        assert "networks" in body
+        # Every network entry must carry a label and color
+        for net in body["networks"].values():
+            assert "label" in net
+            assert net["color"].startswith("#")
+
+    def test_every_atlas_region_has_required_fields(self, client):
+        atlas = client.get("/api/atlas").json()
+        net_keys = set(atlas["networks"].keys())
+        for region in atlas["regions"]:
+            assert {"id", "name", "network", "hemi", "xyz"} <= region.keys()
+            assert region["network"] in net_keys, f"unknown network on {region['id']}"
+            assert len(region["xyz"]) == 3
+            for v in region["xyz"]:
+                assert -1.5 <= v <= 1.5  # normalized coords
+
+    def test_atlas_404_when_file_missing(self, client, monkeypatch, tmp_path):
+        from webapp import server as srv
+        monkeypatch.setattr(srv, "PUBLIC_DIR", tmp_path)
+        resp = client.get("/api/atlas")
+        assert resp.status_code == 404
+
+
+class TestSimulatedBOLD:
+    def test_simulated_bold_shape(self, client):
+        resp = client.get("/api/scan/abc123/bold-simulate?n_t=50")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["scan_id"] == "abc123"
+        assert body["n_t"] == 50
+        assert body["simulated"] is True
+        assert body["tr_seconds"] == 0.5
+        # bold is (n_t, n_regions)
+        assert len(body["bold"]) == body["n_t"]
+        assert all(len(row) == body["n_regions"] for row in body["bold"])
+        assert len(body["region_ids"]) == body["n_regions"]
+
+    def test_simulated_bold_is_deterministic_per_scan_id(self, client):
+        a = client.get("/api/scan/same_id/bold-simulate?n_t=20").json()
+        b = client.get("/api/scan/same_id/bold-simulate?n_t=20").json()
+        assert a["bold"] == b["bold"]
+
+    def test_simulated_bold_differs_across_scan_ids(self, client):
+        a = client.get("/api/scan/scan_aaa/bold-simulate?n_t=20").json()
+        b = client.get("/api/scan/scan_bbb/bold-simulate?n_t=20").json()
+        assert a["bold"] != b["bold"]
+
+    def test_simulated_bold_clamps_n_t(self, client):
+        # Caller asks for 9999 → clamped to 512
+        resp = client.get("/api/scan/x/bold-simulate?n_t=9999").json()
+        assert resp["n_t"] == 512
+        # Caller asks for 1 → clamped to 8
+        resp = client.get("/api/scan/x/bold-simulate?n_t=1").json()
+        assert resp["n_t"] == 8
+
+
 class TestStatic:
     def test_root_returns_404_when_viewer_not_built(self, client, monkeypatch, tmp_path):
         # If the viewer build is genuinely missing, GET / should 404 with a clear message.

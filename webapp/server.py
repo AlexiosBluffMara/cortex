@@ -283,6 +283,66 @@ def create_app(
         return record
 
     # -----------------------------------------------------------------------
+    # Atlas + simulated BOLD (drives the Three.js viewer)
+    # -----------------------------------------------------------------------
+
+    @app.get("/api/atlas")
+    async def get_atlas() -> Any:
+        """Return the Schaefer-style stand-in atlas the viewer renders against.
+
+        The viewer fetches this once on load. Replacing the file on disk is
+        the canonical way to swap in the real Schaefer-400 + Yeo-7 lookup.
+        """
+        atlas_file = PUBLIC_DIR / "atlas.json"
+        if not atlas_file.exists():
+            raise HTTPException(status_code=404, detail="atlas.json missing")
+        import json as _json
+        return _json.loads(atlas_file.read_text(encoding="utf-8"))
+
+    @app.get("/api/scan/{scan_id}/bold-simulate")
+    async def simulate_bold(scan_id: str, n_t: int = 100) -> dict[str, Any]:
+        """Return a deterministic, scan-id-keyed simulated BOLD trace for demos.
+
+        Real scans get their actual TRIBE v2 predictions. This endpoint exists
+        so the time scrubber can demo on the placeholder index page even when
+        no real inference has run. Trace shape: (n_t, n_regions).
+        """
+        atlas_file = PUBLIC_DIR / "atlas.json"
+        if not atlas_file.exists():
+            raise HTTPException(status_code=404, detail="atlas.json missing")
+        import json as _json
+        import math
+        atlas = _json.loads(atlas_file.read_text(encoding="utf-8"))
+        regions = atlas["regions"]
+
+        # Seed the trace deterministically from the scan_id so reloads animate
+        # the same way.
+        seed = sum(ord(c) for c in scan_id) or 1
+        n_t = max(8, min(n_t, 512))
+        bold = []
+        for t in range(n_t):
+            row = []
+            for i, _r in enumerate(regions):
+                # Each region gets a phase-shifted gaussian "burst" centered
+                # at a different time, plus a low-frequency drift.
+                centre = (seed * (i + 1)) % n_t
+                width = 6.0 + ((seed + i) % 5)
+                burst = math.exp(-((t - centre) ** 2) / (2 * width * width))
+                drift = 0.15 * math.sin(0.06 * (t + seed % 17) + i)
+                row.append(round(0.85 * burst + drift, 4))
+            bold.append(row)
+
+        return {
+            "scan_id": scan_id,
+            "n_t": n_t,
+            "n_regions": len(regions),
+            "region_ids": [r["id"] for r in regions],
+            "bold": bold,                        # (n_t, n_regions)
+            "tr_seconds": 0.5,                   # 2 Hz, matching TRIBE v2
+            "simulated": True,
+        }
+
+    # -----------------------------------------------------------------------
     # WebSocket
     # -----------------------------------------------------------------------
 

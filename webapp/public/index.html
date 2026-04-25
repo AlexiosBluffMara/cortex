@@ -22,13 +22,37 @@
 
     <main class="layout">
         <section class="panel viewer">
-            <div id="three-root" class="three-root" aria-label="3D brain visualization placeholder"></div>
+            <div id="three-root" class="three-root" aria-label="3D brain visualization"></div>
+
+            <aside class="sidebar" id="region-sidebar" aria-live="polite">
+                <p>Click a region to inspect. Drag the time slider to replay BOLD activations.</p>
+            </aside>
+
             <div class="overlay" id="viewer-overlay">
-                <p>Upload a clip to begin. The cortex will render here while TRIBE v2 runs and Gemma narrates.</p>
+                <p>Upload a clip to begin. The cortex will animate as TRIBE v2 runs and Gemma narrates.</p>
+            </div>
+
+            <div class="viewer-controls">
+                <div class="control-row">
+                    <label class="control-label" for="time-scrubber">Time</label>
+                    <input
+                        type="range"
+                        id="time-scrubber"
+                        class="time-scrubber"
+                        min="0"
+                        max="99"
+                        value="0"
+                        step="1"
+                        disabled
+                        aria-label="BOLD timepoint scrubber"
+                    />
+                    <output id="time-scrubber-label" class="control-value">t = 0.0s</output>
+                </div>
+                <div id="network-toggles" class="network-toggles" aria-label="Toggle brain networks"></div>
             </div>
         </section>
 
-        <aside class="panel sidebar">
+        <aside class="panel sidebar-right">
             <h2 class="panel-title">Submit a scan</h2>
             <form id="scan-form" class="scan-form">
                 <label class="field">
