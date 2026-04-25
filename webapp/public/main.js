@@ -65,9 +65,11 @@ const root = document.getElementById("three-root");
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0d12);
 
-const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
-camera.position.set(2.4, 1.3, 2.4);
-camera.lookAt(0, 0, 0);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+// 3/4 anterior view — shows both hemispheres, the dorsal aspect, and the
+// brain stem ovoid in the same frame.
+camera.position.set(2.6, 1.4, 2.4);
+camera.lookAt(0, -0.05, 0);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -277,6 +279,45 @@ renderer.domElement.addEventListener("click", (event) => {
     selectRegion(hits[0].object.userData.id);
 });
 
+// Hover labels — floating tooltip following the cursor when over an ROI.
+const tooltip = document.createElement("div");
+tooltip.className = "roi-tooltip";
+tooltip.style.display = "none";
+document.body.appendChild(tooltip);
+
+renderer.domElement.addEventListener("mousemove", (event) => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    ndcPointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    ndcPointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(ndcPointer, camera);
+
+    const candidates = Array.from(state.regionMeshes.values()).filter((m) => m.visible);
+    const hits = raycaster.intersectObjects(candidates, false);
+    if (hits.length === 0) {
+        tooltip.style.display = "none";
+        renderer.domElement.style.cursor = "default";
+        return;
+    }
+    const region = hits[0].object.userData;
+    const network = state.atlas?.networks?.[region.network];
+    tooltip.style.display = "block";
+    tooltip.style.left = `${event.clientX + 12}px`;
+    tooltip.style.top = `${event.clientY + 8}px`;
+    tooltip.style.borderColor = network?.color || "#888";
+    tooltip.innerHTML = `
+        <div class="roi-tooltip-title">${escapeHtml(region.name)}</div>
+        <div class="roi-tooltip-net" style="color:${network?.color || "#888"}">
+            ${escapeHtml(network?.label || region.network)}
+        </div>
+    `;
+    renderer.domElement.style.cursor = "pointer";
+});
+
+renderer.domElement.addEventListener("mouseleave", () => {
+    tooltip.style.display = "none";
+    renderer.domElement.style.cursor = "default";
+});
+
 function selectRegion(regionId) {
     state.selectedRegionId = regionId;
     const region = state.atlas.regions.find((r) => r.id === regionId);
@@ -318,6 +359,31 @@ function escapeHtml(s) {
 scrubber.addEventListener("input", () => {
     if (state.bold) applyBoldFrame(parseInt(scrubber.value, 10));
 });
+
+// Auto-play: advances the scrubber once every ~120 ms. Toggled by a button.
+let playTimer = null;
+const playButton = document.getElementById("play-toggle");
+function setPlaying(playing) {
+    if (playing) {
+        if (playTimer) return;
+        playButton?.classList.add("playing");
+        if (playButton) playButton.textContent = "⏸";
+        playTimer = setInterval(() => {
+            if (!state.bold) return;
+            const max = parseInt(scrubber.max, 10);
+            let v = parseInt(scrubber.value, 10) + 1;
+            if (v > max) v = 0;
+            scrubber.value = String(v);
+            applyBoldFrame(v);
+        }, 120);
+    } else {
+        if (playTimer) clearInterval(playTimer);
+        playTimer = null;
+        playButton?.classList.remove("playing");
+        if (playButton) playButton.textContent = "▶";
+    }
+}
+playButton?.addEventListener("click", () => setPlaying(playTimer === null));
 
 function applyBoldFrame(t) {
     if (!state.bold) return;
