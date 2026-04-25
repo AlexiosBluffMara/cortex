@@ -1,0 +1,251 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cortex"
+version = "0.1.0"
+description = "Cortex — multimodal brain-response analysis with Gemma 4 + TRIBE v2, optimized for the RTX 5090."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Soumit Lahiri", email = "soumitlahiri@philanthropytraders.com" },
+]
+keywords = [
+    "gemma", "gemma4", "tribe", "fmri", "brain", "neuroscience",
+    "ollama", "multimodal", "rtx5090", "blackwell"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+
+# PyTorch is installed separately from the cu128 index to get Blackwell sm_120 support:
+#   pip install --index-url https://download.pytorch.org/whl/cu128 torch torchvision
+# Non-PyTorch deps below.
+dependencies = [
+    # TRIBE v2 transitive deps (pinned by the upstream)
+    "exca==0.5.22",
+    "neuralset==0.0.2",
+    "neuraltrain==0.0.2",
+    "x-transformers==1.27.20",
+    "einops==0.8.2",
+    "pyyaml==6.0.3",
+    "transformers==5.5.4",
+    "huggingface_hub==1.11.0",
+    "safetensors==0.7.0",
+    "tokenizers==0.22.2",
+    "soundfile==0.13.1",
+    "julius==0.2.7",
+    "langdetect==1.0.9",
+    "spacy==3.8.13",
+    # Brain / science stack
+    "nilearn==0.13.1",
+    "nibabel==5.4.2",
+    "numpy==2.4.4",
+    "scipy==1.17.1",
+    "scikit-learn==1.8.0",
+    "scikit-image==0.26.0",
+    "pandas==3.0.2",
+    "pyarrow==23.0.1",
+    "matplotlib==3.10.8",
+    "seaborn==0.13.2",
+    "pillow==11.3.0",
+    # Video / media
+    "moviepy==2.2.1",
+    "imageio-ffmpeg==0.6.0",
+    # HTTP / async
+    "requests==2.33.1",
+    "httpx>=0.28.0",
+    "psutil==7.2.2",
+    "python-dotenv==1.2.2",
+    "tqdm==4.67.3",
+    # CLI
+    "typer[all]>=0.15.0",
+    # Web server
+    "fastapi>=0.136.0",
+    "uvicorn[standard]>=0.44.0",
+    "python-multipart>=0.0.20",
+    "websockets>=14.0",
+]
+
+[project.optional-dependencies]
+gcp = [
+    "google-cloud-storage>=2.18.0",
+    "google-cloud-tasks>=2.16.0",
+    "google-cloud-firestore>=2.19.0",
+    "google-api-python-client>=2.170.0",
+    "google-auth-oauthlib>=1.3.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.25.0",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "pytest-timeout>=2.3.0",
+    "ruff>=0.9.0",
+    "mypy>=1.13.0",
+    "types-requests",
+    "types-PyYAML",
+    "pre-commit>=4.0.0",
+]
+unsloth = [
+    "unsloth>=2025.1.0",
+    "datasets>=3.2.0",
+    "trl>=0.13.0",
+    "bitsandbytes>=0.45.0",
+    "peft>=0.14.0",
+]
+
+[project.urls]
+Homepage = "https://redteamkitchen.com/cortex"
+Repository = "https://github.com/AlexiosBluffMara/cortex"
+Documentation = "https://github.com/AlexiosBluffMara/cortex#readme"
+"Bug Tracker" = "https://github.com/AlexiosBluffMara/cortex/issues"
+
+[project.scripts]
+cortex = "cli.main:app"
+
+[tool.setuptools.packages.find]
+include = ["cortex*", "hermes*", "cli*"]
+exclude = ["tests*", "webapp*", "scripts*", "configs*", "data*", "outputs*", "logs*"]
+
+# ---------------------------------------------------------------------------
+# Test runner
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--showlocals",
+    "--tb=short",
+]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "unit: fast unit tests with mocked dependencies",
+    "integration: integration tests touching local services",
+    "gpu: requires a CUDA-capable GPU",
+    "ollama: requires a running Ollama server with Gemma 4 models",
+    "tribe: requires TRIBE v2 weights downloaded locally",
+    "slow: tests that take >5 seconds",
+    "network: tests that hit external network",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:torch.*",
+    "ignore::DeprecationWarning:nilearn.*",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
+timeout = 60
+
+# ---------------------------------------------------------------------------
+# Linter
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+    "tribev2_src",
+    "outputs",
+    "data",
+    "webapp/node_modules",
+    "webapp/dist",
+]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",     # pycodestyle
+    "F",          # pyflakes
+    "I",          # isort
+    "B",          # bugbear
+    "C4",         # comprehensions
+    "UP",         # pyupgrade
+    "RUF",        # ruff-specific
+    "SIM",        # simplify
+    "PIE",        # misc lint
+    "TID",        # tidy imports
+    "ASYNC",      # async correctness
+]
+ignore = [
+    "E501",      # line length handled by formatter
+    "B008",      # function calls in defaults (typer uses this)
+    "B904",      # raise...from — many existing call sites swallow chaining intentionally
+    "B905",      # zip without strict= — not load-bearing in this codebase
+    "RUF012",    # mutable class attrs (dataclass-friendly)
+    "RUF002",    # ambiguous unicode in docstrings (we use × for resolution)
+    "RUF003",    # ambiguous unicode in comments
+    "SIM105",    # try/except/pass is fine for fire-and-forget cleanup
+    "SIM108",    # ternary preference
+    "UP042",     # str+Enum is a valid pattern; StrEnum migration is a separate task
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011", "B017", "ASYNC110", "F841"]
+"scripts/**" = ["E402"]
+# Hermes tool integrations wrap legacy sync code paths; documented async-correctness
+# violations are accepted until we migrate to anyio/trio Path equivalents.
+"hermes/tools/**" = ["ASYNC221", "ASYNC240"]
+# Analysis and visualization modules have legacy patterns we'll clean up post-hackathon.
+"cortex/analysis.py" = ["F821", "F841", "B007"]
+"cortex/visualize.py" = ["B007"]
+"cortex/ollama_client.py" = ["F841"]
+"cortex/gpu_scheduler.py" = ["B007"]
+"cortex/model_manager.py" = ["B007"]
+"cortex/gemma_vision.py" = ["E402"]
+"cortex/request_queue.py" = ["RUF006"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ---------------------------------------------------------------------------
+# Type checker
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+strict = false
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+no_implicit_optional = true
+check_untyped_defs = true
+ignore_missing_imports = true
+exclude = [
+    "tribev2_src",
+    "outputs",
+    "data",
+    "webapp",
+    "build",
+    "dist",
+]
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+
+# ---------------------------------------------------------------------------
+# Coverage
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+branch = true
+source = ["cortex", "hermes", "cli"]
+omit = ["tests/*", "scripts/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]

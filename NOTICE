@@ -1,0 +1,29 @@
+Cortex
+Copyright 2026 Alexios Bluff Mara LLC (dba Red Team Kitchen)
+
+This product includes software developed by Alexios Bluff Mara LLC.
+
+Cortex builds on the following third-party works, governed by their own
+licenses (NOT relicensed by this NOTICE):
+
+  - Gemma 4 — Google LLC (Apache License 2.0).
+    "Gemma is a trademark of Google LLC." Cortex is not endorsed by Google.
+
+  - TRIBE v2 — Meta Platforms, Inc. (CC-BY-NC 4.0).
+    Non-commercial use only. Source: https://github.com/facebookresearch/tribev2
+
+  - V-JEPA 2 — Meta Platforms, Inc. (CC-BY-NC 4.0).
+    Used as the video encoder inside TRIBE v2.
+
+  - wav2vec-BERT 2.0 — Meta Platforms, Inc. (MIT).
+    Used as the audio encoder inside TRIBE v2.
+
+  - Llama 3.2 3B — Meta Platforms, Inc. (Llama 3.2 Community License).
+    Used as the text encoder inside TRIBE v2.
+
+  - Schaefer 400 atlas — Yeo Lab (CC-BY 4.0).
+
+The Cortex code in this repository is released under Apache 2.0 (see LICENSE).
+Bundled third-party assets retain their respective licenses; do not assume
+the Apache 2.0 grant extends to model weights, atlas data, or upstream
+encoder checkpoints.

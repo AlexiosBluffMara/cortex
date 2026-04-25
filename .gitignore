@@ -1,0 +1,122 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Virtualenvs ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Test / coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# --- Type checkers ---
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+.jupyter/
+
+# --- Secrets / env ---
+.env
+.env.*
+!.env.example
+*.env
+.hf_token
+.discord_token
+.kaggle/
+credentials.json
+service_account*.json
+
+# --- Model weights / caches ---
+.cache/
+tribev2_cache/
+tribev2_weights/
+tribev2_src/
+*.ckpt
+*.safetensors
+*.gguf
+*.bin
+!webapp/public/networks.bin
+unsloth_compiled_cache/
+hf_cache/
+
+# --- Runtime data ---
+data/raw/
+data/processed/
+outputs/
+!outputs/.gitkeep
+logs/
+!logs/.gitkeep
+uploads/
+
+# --- Webapp build / deps ---
+webapp/node_modules/
+webapp/dist/
+webapp/.vite/
+webapp/__pycache__/
+
+# --- IDE / OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- Claude Code local state ---
+.claude/
+CLAUDE.local.md
+
+# --- Large media (test clips, demo content) ---
+assets/dl_*.mp4
+assets/dl_*.webm
+assets/test_*.mp4
+*.mp4
+*.mkv
+*.webm
+*.mov
+!tests/fixtures/**/*.mp4
+
+# --- Docker ---
+.docker/
+
+# --- Cloud / infra state ---
+.terraform/
+*.tfstate
+*.tfstate.*
+.cloudflared/
