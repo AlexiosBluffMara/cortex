@@ -88,6 +88,18 @@ bug — see *Bug fixes* below).
    the helper handles the mapping.
 6. **For 26B-A4B (MoE), avoid QLoRA**, use 16-bit LoRA. Does **not** apply to
    31B Dense or E4B.
+7. **`target_modules="all-linear"` is a silent no-op under QLoRA.** With
+   `load_in_4bit=True`, every linear layer becomes a `bitsandbytes.Linear4bit`
+   instance — *not* `nn.Linear`. peft's `"all-linear"` sentinel selects modules
+   by *type* (`isinstance(module, nn.Linear)`), so it finds zero matches in a
+   4-bit model. `get_peft_model` returns 0 trainable parameters, the unsloth
+   banner happily prints `Trainable parameters = 0 of 8.1B (0.00% trained)`,
+   and training proceeds with `grad_norm == 0.0` at every step. Loss never
+   moves and the model is byte-for-byte unchanged at the end. **Always pass
+   the explicit Daniel list** (`["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"]`)
+   which matches by module *name* and works for both `Linear` and `Linear4bit`.
+   `train_cortex.py` enforces a hard sanity gate (`trainable_params > 0`) right
+   after `get_peft_model` to fail fast if this regresses.
 
 ### Throughput claims (from Unsloth docs)
 
@@ -116,9 +128,9 @@ Inherited from Daniel's 31B notebook with E4B-appropriate adjustments. To be
 | Loader class                     | `FastModel` (text + tools, possibly multimodal)                  | We need vision+audio+text; Unsloth E4B-Vision/Audio show how |
 | Quantization                     | 4-bit base (QLoRA), keep BF16 LoRA adapters                      | Same as 31B                                                |
 | `max_length`                     | 8192                                                             | Longer context for narration tasks                         |
-| LoRA `r` / `lora_alpha`          | **32 / 32** — match Daniel's 31B                                 | Daniel's "all-linear" + r=32 wins over our prior r=16      |
+| LoRA `r` / `lora_alpha`          | **32 / 32** — match Daniel's 31B                                 | r=32 wins over our prior r=16                              |
 | LoRA `lora_dropout`              | 0                                                                | Daniel uses 0; we previously planned 0.05                  |
-| Target modules                   | `"all-linear"`                                                   | Cleaner than the explicit q/k/v/o/gate/up/down list        |
+| Target modules                   | **explicit list** `["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"]` | `"all-linear"` is a no-op under QLoRA — see Bug 7 below |
 | `per_device_train_batch_size`    | 4 (E4B is small enough)                                          | 31B used 1                                                 |
 | `gradient_accumulation_steps`    | 4 (effective batch 16)                                           | More throughput on a 5090 vs A100                          |
 | `max_grad_norm`                  | 0.3                                                              | Same                                                       |

@@ -35,6 +35,7 @@ import json
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -53,7 +54,18 @@ DEFAULT_CHAT_TEMPLATE = "gemma-4-thinking"
 DEFAULT_LORA_R = 32                 # Daniel: 32 (vs our prior plan of 16)
 DEFAULT_LORA_ALPHA = 32             # Daniel: 32 (alpha == r recommended)
 DEFAULT_LORA_DROPOUT = 0.0          # Daniel: 0
-DEFAULT_TARGET_MODULES = "all-linear"
+# IMPORTANT: pass an EXPLICIT list, not the string "all-linear".
+# In QLoRA mode (load_in_4bit=True) every linear layer becomes a
+# bnb.Linear4bit instance, NOT nn.Linear. peft's "all-linear" sentinel
+# matches by *type* (nn.Linear) and so finds zero modules in a 4-bit
+# model — get_peft_model returns 0 trainable params and training is a
+# no-op (loss stays flat, grad_norm == 0.0 forever). The explicit list
+# below matches by module *name*, which works for both Linear and
+# Linear4bit. Verified against Daniel Han-Chen's E4B notebook.
+DEFAULT_TARGET_MODULES: tuple[str, ...] = (
+    "q_proj", "k_proj", "v_proj", "o_proj",
+    "gate_proj", "up_proj", "down_proj",
+)
 DEFAULT_BIAS = "none"
 DEFAULT_RANDOM_STATE = 3407         # Unsloth signature seed
 DEFAULT_USE_RSLORA = False
@@ -122,7 +134,7 @@ class TrainConfig:
     lora_r: int = DEFAULT_LORA_R
     lora_alpha: int = DEFAULT_LORA_ALPHA
     lora_dropout: float = DEFAULT_LORA_DROPOUT
-    target_modules: str = DEFAULT_TARGET_MODULES
+    target_modules: Sequence[str] | str = DEFAULT_TARGET_MODULES
     bias: str = DEFAULT_BIAS
     random_state: int = DEFAULT_RANDOM_STATE
     use_rslora: bool = DEFAULT_USE_RSLORA
@@ -318,7 +330,7 @@ def run(config: TrainConfig) -> dict[str, Any]:
     os.environ.setdefault("UNSLOTH_RETURN_LOGITS", "1")
     import torch
     from datasets import Dataset
-    from transformers import DataCollatorForSeq2Seq
+    from transformers import DataCollatorForSeq2Seq, TrainerCallback
     from trl import SFTConfig, SFTTrainer
     # FastLanguageModel is the text-only path. The multimodal `FastModel`
     # expects an 'images' column even for text-only data, which fails our
@@ -336,8 +348,13 @@ def run(config: TrainConfig) -> dict[str, Any]:
         # Truncate any prior run so old data isn't mixed in
         metrics_path.write_text("", encoding="utf-8")
 
-    class _MetricsCallback:
-        """TRL/transformers TrainerCallback shim that writes metrics on every log."""
+    class _MetricsCallback(TrainerCallback):
+        """Writes per-log metrics to a JSONL file the supervisor can tail.
+
+        Inherits TrainerCallback for the full no-op surface — transformers
+        adds new hooks (e.g. `on_pre_optimizer_step` in 5.5) and we don't
+        want to break every release.
+        """
         def on_log(self, args, state, control, logs=None, **kwargs):
             if metrics_path is None or logs is None:
                 return
@@ -360,20 +377,6 @@ def run(config: TrainConfig) -> dict[str, Any]:
             except OSError:
                 pass
 
-        # No-op callbacks for the rest of the lifecycle
-        def on_init_end(self, *a, **k): pass
-        def on_train_begin(self, *a, **k): pass
-        def on_train_end(self, *a, **k): pass
-        def on_epoch_begin(self, *a, **k): pass
-        def on_epoch_end(self, *a, **k): pass
-        def on_step_begin(self, *a, **k): pass
-        def on_step_end(self, *a, **k): pass
-        def on_substep_end(self, *a, **k): pass
-        def on_evaluate(self, *a, **k): pass
-        def on_predict(self, *a, **k): pass
-        def on_save(self, *a, **k): pass
-        def on_prediction_step(self, *a, **k): pass
-
     # 1. Load base model in 4-bit (QLoRA) — Daniel Han-Chen's setup
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=config.base_model,
@@ -384,16 +387,50 @@ def run(config: TrainConfig) -> dict[str, Any]:
     tokenizer = get_chat_template(tokenizer, chat_template=config.chat_template)
 
     # 2. Wrap with LoRA adapters
+    # peft expects a list (not a tuple) for target_modules. Strings like
+    # "all-linear" pass through unchanged for non-quantized callers, but
+    # our default is the explicit Daniel list — see DEFAULT_TARGET_MODULES.
+    target_modules = (
+        list(config.target_modules)
+        if not isinstance(config.target_modules, str)
+        else config.target_modules
+    )
     model = FastLanguageModel.get_peft_model(
         model,
         r=config.lora_r,
         lora_alpha=config.lora_alpha,
         lora_dropout=config.lora_dropout,
-        target_modules=config.target_modules,
+        target_modules=target_modules,
         bias=config.bias,
         use_gradient_checkpointing=config.use_gradient_checkpointing,
         random_state=config.random_state,
         use_rslora=config.use_rslora,
+    )
+
+    # 2b. SANITY GATE — fail fast if LoRA wrap produced zero trainable params.
+    # This was the silent failure mode in production attempt #2: the unsloth
+    # banner printed "Trainable parameters = 0 of 8.1B (0.00% trained)" and
+    # the run plowed ahead for 110 steps with grad_norm=0.0 at every log,
+    # burning ~4 minutes of GPU on a no-op. We now refuse to enter
+    # trainer.train() until we've verified gradients can flow.
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total_params = sum(p.numel() for p in model.parameters())
+    if trainable_params == 0:
+        raise RuntimeError(
+            f"LoRA wrap produced 0 trainable parameters (out of {total_params:,}). "
+            f"target_modules={target_modules!r} matched no modules in the base model. "
+            f"In QLoRA mode (load_in_4bit=True) the linear layers are bnb.Linear4bit, "
+            f"NOT nn.Linear, so peft's 'all-linear' sentinel finds nothing — pass "
+            f"an explicit module-name list instead (e.g. ['q_proj','k_proj',...])."
+        )
+    summary["trainable_params"] = trainable_params
+    summary["total_params"] = total_params
+    summary["trainable_pct"] = round(100.0 * trainable_params / total_params, 4)
+    print(
+        f"[train_cortex] LoRA sanity check OK: "
+        f"{trainable_params:,} trainable / {total_params:,} total "
+        f"({100.0 * trainable_params / total_params:.4f}%)",
+        flush=True,
     )
 
     # 3. Pre-tokenize the dataset ourselves with the (multimodal) processor

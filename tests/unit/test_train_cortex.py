@@ -46,7 +46,15 @@ class TestVerifiedDefaults:
         assert c.lora_r == 32
         assert c.lora_alpha == 32
         assert c.lora_dropout == 0.0
-        assert c.target_modules == "all-linear"
+        # Hard pin: must be the explicit module-name list, NOT "all-linear".
+        # In QLoRA mode bnb.Linear4bit shadows nn.Linear so peft's
+        # "all-linear" sentinel finds zero modules → 0 trainable params →
+        # silent no-op training. Production attempt #2 burned ~4 minutes
+        # on this exact bug; this test exists to keep us out of that ditch.
+        assert tuple(c.target_modules) == (
+            "q_proj", "k_proj", "v_proj", "o_proj",
+            "gate_proj", "up_proj", "down_proj",
+        )
         assert c.bias == "none"
         assert c.random_state == 3407  # Unsloth signature seed
 
