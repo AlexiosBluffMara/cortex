@@ -124,7 +124,32 @@ class TestAnalyzeQualityFlags:
     def test_refusal_phrase_flagged(self, tmp_path: Path):
         path = tmp_path / "ds.jsonl"
         _write_dataset(path, [self._example(
-            answer="I'm sorry, I cannot help with that. " + "x " * 60,
+            answer="As an AI language model, I cannot help with that. " + "x " * 60,
+        )])
+        stats = analyze(path)
+        assert stats.refusal_hits == 1
+
+    def test_clinical_caveat_is_not_a_refusal(self, tmp_path: Path):
+        # Regression: "I cannot offer medical diagnoses" appears in 39% of
+        # the supervisor's first run because the system prompt instructs the
+        # model to *decline* diagnostics. That's compliance, not a refusal.
+        path = tmp_path / "ds.jsonl"
+        _write_dataset(path, [self._example(
+            answer=(
+                "The primary visual cortex (V1) is the entry point for visual "
+                "processing. " * 8 + "It is important to note that I cannot "
+                "offer medical diagnoses or treatment recommendations based on "
+                "this analysis. " * 4
+            ),
+            abbr="V1",
+        )])
+        stats = analyze(path)
+        assert stats.refusal_hits == 0  # not a real dodge
+
+    def test_pure_dodge_still_flagged(self, tmp_path: Path):
+        path = tmp_path / "ds.jsonl"
+        _write_dataset(path, [self._example(
+            answer="As an AI, I'm not able to help with brain analysis questions. " * 6,
         )])
         stats = analyze(path)
         assert stats.refusal_hits == 1

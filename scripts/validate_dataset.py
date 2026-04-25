@@ -36,15 +36,22 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-# Common LLM refusal / non-answer phrases. If we see these, the LLM dodged.
+# Real LLM dodge tells. Tuned to NOT flag legitimate clinical caveats — we
+# specifically tell the model in the system prompt to "decline medical
+# diagnosis", and earlier versions of this list (with bare "i cannot" /
+# "i don't have") flagged 38.7% of perfectly-good answers as refusals
+# because they correctly contained "I cannot offer medical diagnoses..."
+# Now we look for refusal *openers* and tells that an LLM has slipped its
+# persona, not domain-language hedges.
 _REFUSAL_PHRASES = (
-    "i'm sorry",
-    "i cannot",
-    "i can't",
     "as an ai",
     "as a language model",
-    "i don't have",
-    "i am unable",
+    "i'm sorry, but i",
+    "i'm not able to help",
+    "i'm unable to assist",
+    "i cannot fulfill",
+    "i cannot comply",
+    "this request goes against",
 )
 
 
