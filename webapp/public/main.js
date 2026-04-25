@@ -82,40 +82,105 @@ fillLight.position.set(-3, -1, -2);
 scene.add(fillLight);
 
 // ---------------------------------------------------------------------------
-// Brain mesh — STAND-IN. Replace this entire function when brain.glb arrives.
+// Brain mesh — procedural stand-in (better than a smooth sphere; not as good
+// as a real fsaverage cortical surface). Replace `buildBrainMesh()` when the
+// real brain.glb + Schaefer-400 lookup is dropped in. Everything else
+// (raycaster, time scrubber, network toggles) operates against the atlas
+// data structure and doesn't care about the mesh shape.
+//
+// The displacement is multi-octave sinusoidal noise computed once at build
+// time and baked into the BufferGeometry — no per-frame cost. Reads as
+// gyri/sulci silhouette without the heaviness of a real 100K-vertex mesh.
 // ---------------------------------------------------------------------------
 
 function buildBrainMesh() {
-    // Two slightly squashed hemispheres for a "cortex-ish" outer shell.
     const group = new THREE.Group();
     group.name = "brain-shell";
 
-    const geom = new THREE.SphereGeometry(1.0, 48, 32);
-    geom.scale(1.05, 0.85, 1.0);  // flatten dorsoventral to look more cortex-like
+    function _displaceForGyri(geom) {
+        // Multi-octave displacement along the surface normal. The frequencies
+        // and amplitudes are picked so the result reads as "wrinkly cortex"
+        // rather than "lumpy potato" — major sulci at f1, secondary at f2,
+        // texture at f3.
+        const positions = geom.attributes.position;
+        const normals = geom.attributes.normal;
+        const FREQS = [6.5, 13.0, 26.0];
+        const AMPS = [0.045, 0.022, 0.011];
 
-    const mat = new THREE.MeshStandardMaterial({
-        color: 0xc7c1d4,
-        metalness: 0.05,
-        roughness: 0.78,
+        for (let i = 0; i < positions.count; i++) {
+            const x = positions.getX(i);
+            const y = positions.getY(i);
+            const z = positions.getZ(i);
+            const nx = normals.getX(i);
+            const ny = normals.getY(i);
+            const nz = normals.getZ(i);
+
+            let d = 0;
+            for (let k = 0; k < 3; k++) {
+                const f = FREQS[k];
+                d += AMPS[k] * (
+                    Math.sin(x * f + k * 1.7) *
+                    Math.cos(y * f * 0.95 + k * 0.6) *
+                    Math.sin(z * f * 1.05 + k * 2.3)
+                );
+            }
+            positions.setXYZ(i, x + nx * d, y + ny * d, z + nz * d);
+        }
+        positions.needsUpdate = true;
+        geom.computeVertexNormals();
+        return geom;
+    }
+
+    function _makeHemisphere() {
+        // Subdivision level 5 → ~10,242 vertices, matching fsaverage5 density.
+        // Same vertex count TRIBE v2 outputs per hemisphere.
+        const geom = new THREE.IcosahedronGeometry(1.0, 5);
+        // Brain proportions: slightly elongated antero-posterior, narrower
+        // mediolateral, flattened dorsoventral.
+        geom.scale(1.05, 0.82, 1.15);
+        return _displaceForGyri(geom);
+    }
+
+    const corticalMaterial = new THREE.MeshStandardMaterial({
+        color: 0xd9c8d6,         // pinkish-grey brain tissue
+        metalness: 0.04,
+        roughness: 0.72,
         transparent: true,
-        opacity: 0.18,
+        opacity: 0.22,
         depthWrite: false,
         side: THREE.DoubleSide,
+        flatShading: false,
     });
 
-    const left = new THREE.Mesh(geom, mat);
-    left.position.set(-0.05, 0, 0);
-    const right = left.clone();
-    right.position.set(0.05, 0, 0);
+    const left = new THREE.Mesh(_makeHemisphere(), corticalMaterial);
+    left.position.set(-0.07, 0, 0);
 
-    // Faint sagittal divider so it reads as two hemispheres
-    const divider = new THREE.Mesh(
-        new THREE.PlaneGeometry(2.4, 1.8),
-        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.15, side: THREE.DoubleSide }),
-    );
-    divider.rotation.y = Math.PI / 2;
+    const right = new THREE.Mesh(_makeHemisphere(), corticalMaterial);
+    // Mirror right hemisphere across X for left-right asymmetry.
+    right.scale.x = -1;
+    right.position.set(0.07, 0, 0);
 
-    group.add(left, right, divider);
+    // Wireframe overlay — emphasizes the gyri/sulci texture.
+    const wireMat = new THREE.LineBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.06,
+    });
+    const leftWire = new THREE.LineSegments(new THREE.WireframeGeometry(left.geometry), wireMat);
+    leftWire.position.copy(left.position);
+    const rightWire = new THREE.LineSegments(new THREE.WireframeGeometry(right.geometry), wireMat);
+    rightWire.scale.x = -1;
+    rightWire.position.copy(right.position);
+
+    // Brain stem hint — small ovoid at the back-bottom-center, gives the
+    // silhouette a recognizable cortex-vs-stem distinction without modeling
+    // the cerebellum.
+    const stemGeom = new THREE.SphereGeometry(0.16, 24, 18);
+    stemGeom.scale(1.0, 1.4, 1.4);
+    const stem = new THREE.Mesh(stemGeom, corticalMaterial);
+    stem.position.set(0, -0.55, -0.05);
+
+    group.add(left, right, leftWire, rightWire, stem);
     return group;
 }
 
