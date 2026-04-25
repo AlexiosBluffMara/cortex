@@ -185,6 +185,7 @@ ignore = [
     "RUF012",    # mutable class attrs (dataclass-friendly)
     "RUF002",    # ambiguous unicode in docstrings (we use × for resolution)
     "RUF003",    # ambiguous unicode in comments
+    "SIM102",    # nested-if vs `and` — readability call, current style is fine
     "SIM105",    # try/except/pass is fine for fire-and-forget cleanup
     "SIM108",    # ternary preference
     "UP042",     # str+Enum is a valid pattern; StrEnum migration is a separate task

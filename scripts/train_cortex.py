@@ -146,6 +146,10 @@ class TrainConfig:
     gguf_quantization: str | None = None      # "q4_k_m", "q5_k_m", "bf16", or None
     write_modelfile: bool = False
     push_to_hub: bool = False
+    # Risk-mitigation modes
+    smoke_test: bool = False                  # tiny dataset + 1 epoch, ~3 min
+    metrics_file: Path | None = None          # JSONL of per-step metrics
+    max_train_examples: int | None = None     # cap dataset size at this many
 
     def __post_init__(self) -> None:
         # Hard invariant: Gemma 4 only.
@@ -274,16 +278,86 @@ def run(config: TrainConfig) -> dict[str, Any]:
         "output_dir": str(config.output_dir),
     }
 
+    # Smoke-test mode: tiny dataset + 1 epoch + tiny batch. ~3-5 min on a 5090.
+    # The whole point is to surface "the pipeline is broken" failures (bad
+    # imports, OOM at load, NaN loss, save failures) BEFORE we spend an hour
+    # on the real run. Overrides any conflicting flags.
+    if config.smoke_test:
+        examples = examples[:50]
+        smoke_overrides = {
+            "num_train_epochs": 1,
+            "per_device_train_batch_size": 2,
+            "gradient_accumulation_steps": 2,
+            "max_seq_length": 2048,
+            "logging_steps": 1,
+            "save_strategy": "no",   # don't checkpoint a smoke run
+            "max_train_examples": 50,
+        }
+        config = TrainConfig(**dict(config.__dict__, **smoke_overrides))
+        summary["smoke_test"] = True
+        summary["n_examples"] = len(examples)
+        print(f"[smoke] capped to {len(examples)} examples, 1 epoch, batch 2", file=sys.stderr)
+    elif config.max_train_examples is not None:
+        examples = examples[:config.max_train_examples]
+        summary["n_examples"] = len(examples)
+
     if config.dry_run:
         print(json.dumps(summary, indent=2), file=sys.stderr)
         return summary
 
     # --- Real training (heavy imports deferred so --dry-run stays light) ---
-    from unsloth import FastModel  # noqa: I001 — lazy import
-    from unsloth.chat_templates import get_chat_template
+    import torch
     from datasets import Dataset
     from trl import SFTConfig, SFTTrainer
-    import torch
+    from unsloth import FastModel
+    from unsloth.chat_templates import get_chat_template
+
+    # Live metrics callback: writes per-step loss/lr/vram to a JSONL file the
+    # supervisor can tail in real time. Failure to write is non-fatal — the
+    # training run is the load-bearing thing.
+    metrics_path = config.metrics_file
+    if metrics_path is not None:
+        metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        # Truncate any prior run so old data isn't mixed in
+        metrics_path.write_text("", encoding="utf-8")
+
+    class _MetricsCallback:
+        """TRL/transformers TrainerCallback shim that writes metrics on every log."""
+        def on_log(self, args, state, control, logs=None, **kwargs):
+            if metrics_path is None or logs is None:
+                return
+            import time as _time
+            record = {
+                "t": _time.time(),
+                "step": int(getattr(state, "global_step", 0)),
+                "epoch": float(getattr(state, "epoch", 0.0) or 0.0),
+                **{k: (float(v) if isinstance(v, (int, float)) else v) for k, v in logs.items()},
+            }
+            try:
+                if torch.cuda.is_available():
+                    record["vram_alloc_gb"] = round(torch.cuda.memory_allocated(0) / 1024**3, 2)
+                    record["vram_reserved_gb"] = round(torch.cuda.memory_reserved(0) / 1024**3, 2)
+            except Exception:
+                pass
+            try:
+                with metrics_path.open("a", encoding="utf-8") as fh:
+                    fh.write(json.dumps(record) + "\n")
+            except OSError:
+                pass
+
+        # No-op callbacks for the rest of the lifecycle
+        def on_init_end(self, *a, **k): pass
+        def on_train_begin(self, *a, **k): pass
+        def on_train_end(self, *a, **k): pass
+        def on_epoch_begin(self, *a, **k): pass
+        def on_epoch_end(self, *a, **k): pass
+        def on_step_begin(self, *a, **k): pass
+        def on_step_end(self, *a, **k): pass
+        def on_substep_end(self, *a, **k): pass
+        def on_evaluate(self, *a, **k): pass
+        def on_predict(self, *a, **k): pass
+        def on_save(self, *a, **k): pass
+        def on_prediction_step(self, *a, **k): pass
 
     # 1. Load base model in 4-bit (QLoRA) — Daniel Han-Chen's setup
     model, tokenizer = FastModel.from_pretrained(
@@ -334,16 +408,49 @@ def run(config: TrainConfig) -> dict[str, Any]:
         bf16=True,
         output_dir=str(config.output_dir),
         dataset_text_field="text",
-        max_seq_length=config.max_seq_length,
+        # trl 0.24+ renamed max_seq_length -> max_length
+        max_length=config.max_seq_length,
     )
+    callbacks = [_MetricsCallback()] if metrics_path is not None else []
+    # trl 0.24+ renamed `tokenizer` → `processing_class`
     trainer = SFTTrainer(
         model=model,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         train_dataset=dataset,
         args=sft_config,
+        callbacks=callbacks,
     )
-    train_result = trainer.train()
+
+    # Run training, catching CUDA OOM so we can emit a structured failure
+    # record before the process dies.
+    try:
+        train_result = trainer.train()
+    except torch.cuda.OutOfMemoryError as exc:
+        if metrics_path is not None:
+            try:
+                with metrics_path.open("a", encoding="utf-8") as fh:
+                    fh.write(json.dumps({
+                        "t": __import__("time").time(),
+                        "step": -1,
+                        "fatal": "cuda_oom",
+                        "msg": str(exc)[:500],
+                    }) + "\n")
+            except OSError:
+                pass
+        raise
+
     summary["train_loss"] = float(train_result.training_loss)
+    if metrics_path is not None:
+        try:
+            with metrics_path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps({
+                    "t": __import__("time").time(),
+                    "step": int(train_result.global_step),
+                    "final": True,
+                    "train_loss": float(train_result.training_loss),
+                }) + "\n")
+        except OSError:
+            pass
 
     # 5. Save LoRA adapters
     adapter_dir = config.output_dir / "lora"
@@ -423,6 +530,27 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument("--modelfile", dest="write_modelfile", action="store_true")
     p.add_argument("--push", dest="push_to_hub", action="store_true")
+    # Risk-mitigation flags
+    p.add_argument(
+        "--smoke-test",
+        action="store_true",
+        help="Tiny dataset (50 examples) + 1 epoch + batch 2 + max_seq 2048. "
+             "~3-5 min. Use to verify the pipeline before a full run.",
+    )
+    p.add_argument(
+        "--metrics-file",
+        type=Path,
+        default=None,
+        help="Append per-step JSONL metrics here (loss, lr, vram, ...). "
+             "The supervisor tails this for live monitoring.",
+    )
+    p.add_argument(
+        "--max-train-examples",
+        type=int,
+        default=None,
+        help="Cap dataset size at this many examples. Useful for incremental "
+             "scale-up: try 100, then 500, then full.",
+    )
 
     return p.parse_args(argv)
 
@@ -445,6 +573,9 @@ def main(argv: list[str] | None = None) -> int:
         gguf_quantization=args.gguf_quantization,
         write_modelfile=args.write_modelfile,
         push_to_hub=args.push_to_hub,
+        smoke_test=args.smoke_test,
+        metrics_file=args.metrics_file,
+        max_train_examples=args.max_train_examples,
     )
     run(config)
     return 0
