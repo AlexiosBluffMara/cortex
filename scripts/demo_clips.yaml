@@ -1,0 +1,49 @@
+# Curated demo clips for the Cortex hackathon submission.
+#
+# Source policy: official Google channels only — Google I/O keynotes,
+# Google DeepMind research videos, Gemma announcements, Year in Search.
+# These are public on YouTube under YouTube's standard license; using them
+# in a hackathon demo of a Gemma-built tool is on-brand and copyright-safe.
+#
+# Each clip is trimmed to <=`max_seconds` seconds before TRIBE inference
+# (TRIBE v2's hard cap is 50s, so we hold a 40-48s ceiling here).
+#
+# Edit this file (not the script) to add/remove clips. The fetcher reads
+# this YAML on every invocation; nothing is hard-coded.
+
+clips:
+  - id: deepmind-gemma-launch
+    url: https://www.youtube.com/watch?v=PLACEHOLDER_DEEPMIND_GEMMA
+    label: Google DeepMind — Gemma launch announcement
+    track: education
+    max_seconds: 40
+
+  - id: io-keynote-ai
+    url: https://www.youtube.com/watch?v=PLACEHOLDER_IO_AI_KEYNOTE
+    label: Google I/O — AI keynote opening
+    track: education
+    max_seconds: 45
+
+  - id: year-in-search
+    url: https://www.youtube.com/watch?v=PLACEHOLDER_YEAR_IN_SEARCH
+    label: Year in Search 2025
+    track: emotion
+    max_seconds: 48
+
+  - id: deepmind-protein-folding
+    url: https://www.youtube.com/watch?v=PLACEHOLDER_PROTEIN_FOLDING
+    label: AlphaFold — protein structure narrative
+    track: science
+    max_seconds: 45
+
+  - id: gemma-multimodal-demo
+    url: https://www.youtube.com/watch?v=PLACEHOLDER_GEMMA_MULTIMODAL
+    label: Gemma 4 multimodal demo
+    track: education
+    max_seconds: 35
+
+  - id: deepmind-music-generation
+    url: https://www.youtube.com/watch?v=PLACEHOLDER_DEEPMIND_MUSIC
+    label: DeepMind music generation showcase
+    track: arts
+    max_seconds: 40
