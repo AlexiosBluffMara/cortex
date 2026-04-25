@@ -100,6 +100,26 @@ bug — see *Bug fixes* below).
    which matches by module *name* and works for both `Linear` and `Linear4bit`.
    `train_cortex.py` enforces a hard sanity gate (`trainable_params > 0`) right
    after `get_peft_model` to fail fast if this regresses.
+8. **Unsloth must be imported BEFORE transformers, trl, and peft.** This is
+   the single most expensive bug we hit during the cortex hackathon
+   (production attempts #1–#4 burned ~10 min of GPU on it before we caught
+   it). Unsloth monkey-patches `transformers.Trainer` and `trl.SFTTrainer`
+   at *import time* to wire QLoRA-aware backward hooks into the LoRA layers.
+   If those modules are already imported when `import unsloth` runs, the
+   patches no-op silently. The pipeline then runs end-to-end without
+   errors: model loads, LoRA wraps with the right modules, forward pass
+   produces a real loss, the optimizer is constructed with the right
+   params — but every backward zeroes out before reaching the LoRA
+   adapters. `clip_grad_norm_()` returns `0.0` forever and the model
+   stays byte-for-byte unchanged across an entire run. **Unsloth literally
+   prints this warning on every load** (`WARNING: Unsloth should be
+   imported before [trl, transformers, peft] to ensure all optimizations
+   are applied`) — do not ignore it. Correct order:
+   `os.environ["UNSLOTH_RETURN_LOGITS"]="1"` → `import torch` →
+   `from unsloth import FastLanguageModel` → then transformers/trl/datasets.
+   Defense in depth: `train_cortex.py` aborts the run if the first metrics
+   log event reports `grad_norm == 0.0`. Standalone repro at 60s:
+   `python -m scripts.diagnose_lora_grad`.
 
 ### Throughput claims (from Unsloth docs)
 
