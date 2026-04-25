@@ -84,6 +84,21 @@ class GPUScheduler:
         self._tribe_model = None
         self._metrics = SwapMetrics()
         self._state_listeners: list[Callable[[GPUState], None]] = []
+        # Optional inference fallback (set via `set_inference_fallback`).
+        # Defaults to None — OOM keeps the existing behavior of cleaning up
+        # and re-raising. When set, OOM tries the fallback first before
+        # raising a CortexException.
+        self._inference_fallback: Any = None
+
+    def set_inference_fallback(self, fallback: Any) -> None:
+        """Register an InferenceFallback to use on local CUDA OOM.
+
+        The fallback is called only when (1) the local TRIBE inference raises
+        an OOM RuntimeError and (2) `fallback.available()` returns True. When
+        it succeeds, `run_brain_scan` returns the remote result; when it
+        fails, a `CortexException` is raised carrying the structured error.
+        """
+        self._inference_fallback = fallback
 
     @property
     def state(self) -> GPUState:
@@ -331,6 +346,29 @@ class GPUScheduler:
                 log.error("[gpu_scheduler] OOM during inference. Cleaning up...")
                 await loop.run_in_executor(None, self._unload_tribe_sync)
                 self._notify_state(GPUState.IDLE)
+
+                # Try the configured inference fallback (e.g. GCP A100) before
+                # giving up. If the fallback is unset or can't run, preserve
+                # the legacy behavior of re-raising the original OOM error so
+                # callers that don't know about CortexError still see a
+                # familiar exception.
+                fallback = self._inference_fallback
+                if fallback is not None and fallback.available():
+                    log.warning(
+                        "[gpu_scheduler] Routing to inference fallback %s",
+                        getattr(fallback, "name", "<unknown>"),
+                    )
+                    fallback_result = await fallback.submit(media_path)
+                    # Lazy-import to avoid a runtime dep when the fallback
+                    # module isn't installed in a minimal environment.
+                    from cortex.errors import CortexError, CortexException
+                    if isinstance(fallback_result, CortexError):
+                        raise CortexException(fallback_result)
+                    # Don't swap back to GEMMA here — we never loaded TRIBE
+                    # successfully, so VRAM is already free. Caller's next
+                    # narrate request will trigger ensure_gemma().
+                    return fallback_result
+
                 raise
             raise
 

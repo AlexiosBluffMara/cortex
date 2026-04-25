@@ -158,3 +158,111 @@ class TestStatusLine:
         assert "idle" in line
         assert "VRAM" in line
         assert "Swaps" in line
+
+
+# ---------------------------------------------------------------------------
+# OOM fallback
+# ---------------------------------------------------------------------------
+
+class TestOOMFallback:
+    """OOM during local inference should route to a configured fallback,
+    falling back gracefully to re-raising when no fallback is set.
+
+    All tests in this class use `mock_torch_cuda` because the OOM cleanup
+    path does a lazy `import torch` inside `_unload_tribe_sync` — without
+    the stub the test crashes during cleanup, before we observe the
+    behavior under test.
+    """
+
+    @pytest.mark.asyncio
+    async def test_oom_with_no_fallback_reraises_runtime_error(
+        self, scheduler, mock_pipeline, mock_nvidia_smi, mock_requests_post,
+        mock_torch_cuda,
+    ):
+        mock_nvidia_smi(free_mb=28000, used_mb=4000)
+        mock_pipeline.run_inference.side_effect = RuntimeError(
+            "CUDA out of memory. Tried to allocate 22 GB"
+        )
+        # No fallback configured (the default)
+        with pytest.raises(RuntimeError, match="out of memory"):
+            await scheduler.run_brain_scan("/tmp/x.mp4")
+        assert scheduler.metrics.oom_recoveries >= 1
+        assert scheduler.state is GPUState.IDLE
+
+    @pytest.mark.asyncio
+    async def test_oom_with_unavailable_fallback_still_reraises(
+        self, scheduler, mock_pipeline, mock_nvidia_smi, mock_requests_post,
+        mock_torch_cuda,
+    ):
+        from unittest.mock import AsyncMock as _AM
+        mock_nvidia_smi(free_mb=28000, used_mb=4000)
+        mock_pipeline.run_inference.side_effect = RuntimeError(
+            "CUDA out of memory."
+        )
+        # Fallback exists but unavailable (e.g. NullFallback) — preserve legacy
+        # behavior of re-raising the original RuntimeError.
+        fallback = MagicMock()
+        fallback.available = MagicMock(return_value=False)
+        fallback.submit = _AM()
+        scheduler.set_inference_fallback(fallback)
+        with pytest.raises(RuntimeError, match="out of memory"):
+            await scheduler.run_brain_scan("/tmp/x.mp4")
+        fallback.submit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_oom_with_available_fallback_returns_remote_result(
+        self, scheduler, mock_pipeline, mock_nvidia_smi, mock_requests_post,
+        mock_torch_cuda,
+    ):
+        from unittest.mock import AsyncMock as _AM
+
+        from cortex.gcp_inference import RemoteInferenceResult
+        mock_nvidia_smi(free_mb=28000, used_mb=4000)
+        mock_pipeline.run_inference.side_effect = RuntimeError(
+            "CUDA out of memory."
+        )
+        remote = RemoteInferenceResult(
+            preds_url="gs://b/x.npy",
+            top_rois=["V1", "FFA"],
+            peak_t=8,
+            seconds_elapsed=4.2,
+            job_id="JOB-001",
+        )
+        fallback = MagicMock()
+        fallback.name = "gcp_a100"
+        fallback.available = MagicMock(return_value=True)
+        fallback.submit = _AM(return_value=remote)
+        scheduler.set_inference_fallback(fallback)
+
+        result = await scheduler.run_brain_scan("/tmp/x.mp4")
+        assert result is remote
+        fallback.submit.assert_awaited_once_with("/tmp/x.mp4")
+        # OOM recovery counter still bumps because we did detect+clean
+        assert scheduler.metrics.oom_recoveries >= 1
+        # Scheduler state was reset to IDLE before the fallback call
+        assert scheduler.state is GPUState.IDLE
+
+    @pytest.mark.asyncio
+    async def test_oom_with_failing_fallback_raises_cortex_exception(
+        self, scheduler, mock_pipeline, mock_nvidia_smi, mock_requests_post,
+        mock_torch_cuda,
+    ):
+        from unittest.mock import AsyncMock as _AM
+
+        from cortex.errors import CortexError, CortexException, ErrorCode
+        mock_nvidia_smi(free_mb=28000, used_mb=4000)
+        mock_pipeline.run_inference.side_effect = RuntimeError("CUDA out of memory.")
+        err = CortexError(
+            code=ErrorCode.GCP_NETWORK_TIMEOUT,
+            message="GCP unreachable",
+            component="gcp_inference",
+        )
+        fallback = MagicMock()
+        fallback.name = "gcp_a100"
+        fallback.available = MagicMock(return_value=True)
+        fallback.submit = _AM(return_value=err)
+        scheduler.set_inference_fallback(fallback)
+
+        with pytest.raises(CortexException) as ei:
+            await scheduler.run_brain_scan("/tmp/x.mp4")
+        assert ei.value.error.code is ErrorCode.GCP_NETWORK_TIMEOUT
