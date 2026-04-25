@@ -114,11 +114,59 @@ python -m hermes.agent
 ### Test
 
 ```bash
-pytest                      # full suite
+pytest                      # full suite (263 tests, ~7s)
 pytest -m unit              # fast unit tests (no GPU/network)
 pytest -m "not slow"        # skip slow tests
 ruff check .                # lint
 mypy cortex hermes cli      # type-check
+```
+
+### Generate the synthetic neuroscience training dataset
+
+The fine-tune is trained on a 2,000-example synthetic neuro-QA dataset
+covering 20 brain regions across all 8 Yeo networks. The supervisor handles
+unattended multi-hour runs — it resumes if killed, retries failed examples,
+hits an Ollama health check between regions, and stops at a configurable
+deadline.
+
+```bash
+# Sensible defaults for an unattended overnight run against gemma4:e4b
+python -m scripts.generate_neuro_dataset \
+    --backend ollama:gemma4:e4b \
+    --n-per-family 20 \
+    --supervised \
+    --max-runtime-min 180 \
+    --output data/cortex_train.jsonl
+
+# Quality-check the result
+python -m scripts.validate_dataset --input data/cortex_train.jsonl
+# Wakes you up to data/dataset_quality_report.md with per-region distribution,
+# answer-length stats, region-mention rate, and a verdict block.
+```
+
+### Fine-tune
+
+```bash
+# Dry run — print resolved config and exit (no GPU work)
+python -m scripts.train_cortex --dry-run
+
+# Real run on the 5090 (after dataset is generated)
+python -m scripts.train_cortex \
+    --dataset data/cortex_train.jsonl \
+    --epochs 3 --merge --gguf q4_k_m --modelfile
+```
+
+Hyperparameters are pinned to Daniel Han-Chen's verified Gemma 4 31B Unsloth
+notebook (`r=32, alpha=32, all-linear, max_grad_norm=0.3, weight_decay=0.001,
+adamw_8bit, gemma-4-thinking chat template`). See [docs/unsloth.md](docs/unsloth.md)
+for the rationale, source pinning, and bug-fix gotchas.
+
+### Fetch demo content
+
+```bash
+# Edit scripts/demo_clips.yaml first to point at the YouTube IDs you want
+python -m scripts.fetch_demo_clips --output-dir assets/demo
+# Trims each clip to ≤50s (TRIBE's hard cap) and writes a manifest.json
 ```
 
 ---
@@ -127,13 +175,28 @@ mypy cortex hermes cli      # type-check
 
 ```
 cortex/
-├── cortex/                  # main package (GPU scheduler, queue, pipeline, errors)
+├── cortex/                  # main package: GPU scheduler, queue, pipeline,
+│                              errors, GCP fallback client
 ├── hermes/                  # Hermes Agent fork — tools + agent config
 ├── cli/                     # typer-based CLI
-├── webapp/                  # FastAPI + Vite + Three.js viewer
-├── tests/                   # pytest suite (unit + integration)
-├── scripts/                 # data prep, model pulls, benchmarks
-├── configs/                 # Ollama manifests, pipeline params
+├── webapp/                  # FastAPI + WebSocket + Three.js viewer
+├── gcp/                     # Cloud Run worker + Dockerfiles + Cloud Build
+├── scripts/
+│   ├── regions.py           # 20 brain regions across all 8 Yeo networks
+│   ├── templates.py         # 5 QA template families (per SPEC §8)
+│   ├── backends.py          # LLM backends: stub / ollama / anthropic
+│   ├── generate_neuro_dataset.py  # supervised dataset generator
+│   ├── validate_dataset.py  # quality checker → Markdown report
+│   ├── train_cortex.py      # Unsloth fine-tune (cortex-gemma-4-e4b)
+│   ├── fetch_demo_clips.py  # yt-dlp wrapper + curated YAML clip list
+│   └── demo_clips.yaml      # curated Google YouTube clip references
+├── docs/
+│   ├── unsloth.md           # verified hyperparameters + bug-fix notes
+│   ├── turboquant.md        # KV-cache quantization viability assessment
+│   ├── gcp.md               # GCP deployment runbook
+│   ├── kaggle_writeup.md    # Kaggle submission draft (~1,200 words)
+│   └── video_script.md      # 3-minute demo video shot list
+├── tests/                   # 263 unit + integration tests, all passing
 ├── SPEC.md                  # full technical specification
 ├── SPRINT_PLAN.md           # day-by-day hackathon sprint
 └── CLAUDE.md                # working notes for Claude Code
@@ -152,10 +215,11 @@ cortex/
 Deliverables (as required by the hackathon rules):
 
 - [x] Public GitHub repository (this one) — Apache 2.0
-- [ ] Live demo at `cortex.redteamkitchen.com` *(coming soon)*
-- [ ] Public HuggingFace model: `RedTeamKitchen/cortex-gemma-4-e4b` *(coming soon)*
-- [ ] 3-minute YouTube demo video *(coming soon)*
-- [ ] Kaggle write-up *(coming soon)*
+- [x] Kaggle write-up draft — see [docs/kaggle_writeup.md](docs/kaggle_writeup.md) (~1,200 words)
+- [x] Demo video shot list — see [docs/video_script.md](docs/video_script.md) (recording pending)
+- [ ] Live demo at `cortex.redteamkitchen.com` *(Cloud Run pending)*
+- [ ] Public HuggingFace model: `RedTeamKitchen/cortex-gemma-4-e4b` *(post-fine-tune)*
+- [ ] 3-minute YouTube demo video *(record after the fine-tune lands)*
 
 ---
 
