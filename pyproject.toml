@@ -204,6 +204,7 @@ ignore = [
 "cortex/model_manager.py" = ["B007"]
 "cortex/gemma_vision.py" = ["E402"]
 "cortex/request_queue.py" = ["RUF006"]
+"webapp/server.py" = ["RUF006"]
 
 [tool.ruff.format]
 quote-style = "double"

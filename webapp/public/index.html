@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="Cortex — multimodal brain-response analysis with Gemma 4 + TRIBE v2." />
+    <title>Cortex · Brain-response analysis</title>
+    <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand">
+            <span class="brand-mark">⌬</span>
+            <span class="brand-name">Cortex</span>
+        </div>
+        <div class="status" id="status">
+            <span class="dot" id="status-dot" aria-hidden="true"></span>
+            <span class="status-text" id="status-text">Connecting…</span>
+        </div>
+    </header>
+
+    <main class="layout">
+        <section class="panel viewer">
+            <div id="three-root" class="three-root" aria-label="3D brain visualization placeholder"></div>
+            <div class="overlay" id="viewer-overlay">
+                <p>Upload a clip to begin. The cortex will render here while TRIBE v2 runs and Gemma narrates.</p>
+            </div>
+        </section>
+
+        <aside class="panel sidebar">
+            <h2 class="panel-title">Submit a scan</h2>
+            <form id="scan-form" class="scan-form">
+                <label class="field">
+                    <span>Media file (≤50 MB, ≤50 s)</span>
+                    <input type="file" name="file" id="scan-file" accept="video/*,audio/*,image/*" required />
+                </label>
+                <label class="field">
+                    <span>Narration tier (0 toddler · 6 researcher)</span>
+                    <input type="range" name="tier" id="scan-tier" min="0" max="6" value="1" />
+                    <output id="tier-display">1</output>
+                </label>
+                <button type="submit" id="scan-submit">Analyze</button>
+            </form>
+
+            <h2 class="panel-title">Pipeline events</h2>
+            <ol id="event-log" class="event-log" aria-live="polite"></ol>
+        </aside>
+    </main>
+
+    <footer class="footer">
+        <span>
+            Cortex by <a href="https://redteamkitchen.com" rel="noopener">Alexios Bluff Mara LLC</a>.
+            Apache 2.0. Gemma is a trademark of Google LLC.
+        </span>
+    </footer>
+
+    <script type="module" src="/assets/main.js"></script>
+</body>
+</html>
