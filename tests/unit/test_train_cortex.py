@@ -65,7 +65,12 @@ class TestVerifiedDefaults:
         assert c.warmup_ratio == 0.03
         assert c.optim == "adamw_8bit"
         assert c.lr_scheduler_type == "cosine"
-        assert c.use_gradient_checkpointing == "unsloth"
+        # Pinned to True (vanilla pytorch GC), NOT "unsloth" (smart offload).
+        # The smart offload mode uses global state in unsloth_zoo that
+        # silently zeroes LoRA gradients on first SFTTrainer step. Production
+        # attempt #4 burned ~3 min on this exact bug; we pay ~2-3 GB extra
+        # VRAM to keep training reliable.
+        assert c.use_gradient_checkpointing is True
 
     def test_e4b_5090_safe_overrides(self):
         # Updated after measuring real VRAM peaks on the 5090 in smoke

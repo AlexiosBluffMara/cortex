@@ -210,13 +210,17 @@ def stage_smoke(*, dataset: Path, output_dir: Path, log: _Logger) -> SmokeResult
     OOM at load, NaN loss, save failures) in 5 minutes instead of 45.
     """
     smoke_dir = output_dir.parent / f"{output_dir.name}-smoke"
-    log.info(f"smoke: 50 examples → {smoke_dir}")
+    smoke_metrics = smoke_dir.parent / f"{smoke_dir.name}-metrics.jsonl"
+    log.info(f"smoke: 50 examples → {smoke_dir} (metrics: {smoke_metrics.name})")
     t0 = time.time()
     cmd = [
         sys.executable, "-m", "scripts.train_cortex",
         "--smoke-test",
         "--dataset", str(dataset),
         "--output-dir", str(smoke_dir),
+        # Required so the in-process metrics callback runs and the
+        # no-op-training detector (grad_norm==0 abort) actually fires.
+        "--metrics-file", str(smoke_metrics),
     ]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=900, check=False)

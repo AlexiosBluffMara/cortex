@@ -70,7 +70,15 @@ DEFAULT_BIAS = "none"
 DEFAULT_RANDOM_STATE = 3407         # Unsloth signature seed
 DEFAULT_USE_RSLORA = False
 DEFAULT_LOFTQ_CONFIG: Any = None
-DEFAULT_USE_GRADIENT_CHECKPOINTING = "unsloth"  # long-context aware
+# Use vanilla pytorch checkpointing (`True`), NOT unsloth's smart offload
+# ("unsloth"). The smart offload uses module-level global state
+# (BACKWARD_PASS, CPU_INDEX, CPU_BUFFERS in unsloth_zoo/gradient_checkpointing.py)
+# that gets corrupted on the first SFTTrainer step in our QLoRA pipeline,
+# causing grads to be retrieved from a stale CPU buffer (yielding zeros)
+# and the entire training loop becomes a silent no-op (grad_norm=0 forever).
+# Vanilla checkpointing costs ~2-3 GB more VRAM but is reliable. Production
+# attempt #4 caught this — see the diagnose_lora_grad.py probe.
+DEFAULT_USE_GRADIENT_CHECKPOINTING = True
 
 # Training — measured peak VRAM at batch=2, max_seq=2048 was 31.7/31.8 GB
 # on the 5090 (smoke test 11). batch=1 leaves comfortable headroom; effective
@@ -138,7 +146,7 @@ class TrainConfig:
     bias: str = DEFAULT_BIAS
     random_state: int = DEFAULT_RANDOM_STATE
     use_rslora: bool = DEFAULT_USE_RSLORA
-    use_gradient_checkpointing: str = DEFAULT_USE_GRADIENT_CHECKPOINTING
+    use_gradient_checkpointing: bool | str = DEFAULT_USE_GRADIENT_CHECKPOINTING
 
     # Training
     per_device_train_batch_size: int = DEFAULT_PER_DEVICE_TRAIN_BATCH_SIZE
@@ -322,22 +330,28 @@ def run(config: TrainConfig) -> dict[str, Any]:
         return summary
 
     # --- Real training (heavy imports deferred so --dry-run stays light) ---
-    # Unsloth optimizes by not returning logits (since causal-LM training
-    # only needs the loss). trl 0.22's compute_loss reads outputs.logits for
-    # entropy computation, so we have to opt back into logits explicitly via
-    # this env var BEFORE importing unsloth or instantiating the trainer.
+    # CRITICAL IMPORT ORDER: unsloth MUST be imported BEFORE transformers and
+    # trl. Unsloth monkey-patches transformers.Trainer + trl SFTTrainer at
+    # import time to wire QLoRA-aware backward hooks into the LoRA layers.
+    # If transformers/trl are already imported when unsloth loads, the patches
+    # silently no-op — the trainer runs, the forward pass works, but
+    # `clip_grad_norm_()` returns 0.0 forever because the LoRA adapter
+    # gradients never propagate. Production attempts #1-#4 burned ~10 min of
+    # GPU on this exact bug. Diagnose with: python -m scripts.diagnose_lora_grad
+    #
+    # Order: env var → torch → unsloth → transformers/trl/datasets.
     import os
     os.environ.setdefault("UNSLOTH_RETURN_LOGITS", "1")
-    import torch
-    from datasets import Dataset
-    from transformers import DataCollatorForSeq2Seq, TrainerCallback
-    from trl import SFTConfig, SFTTrainer
+    import torch  # noqa: F401  (must precede unsloth)
     # FastLanguageModel is the text-only path. The multimodal `FastModel`
     # expects an 'images' column even for text-only data, which fails our
     # ShareGPT-format dataset. Gemma 4 E4B's text-only fine-tune is the
     # right path for cortex-gemma-4-e4b.
-    from unsloth import FastLanguageModel
+    from unsloth import FastLanguageModel  # MUST come before transformers/trl
     from unsloth.chat_templates import get_chat_template
+    from datasets import Dataset
+    from transformers import DataCollatorForSeq2Seq, TrainerCallback
+    from trl import SFTConfig, SFTTrainer
 
     # Live metrics callback: writes per-step loss/lr/vram to a JSONL file the
     # supervisor can tail in real time. Failure to write is non-fatal — the
@@ -354,7 +368,16 @@ def run(config: TrainConfig) -> dict[str, Any]:
         Inherits TrainerCallback for the full no-op surface — transformers
         adds new hooks (e.g. `on_pre_optimizer_step` in 5.5) and we don't
         want to break every release.
+
+        Also ABORTS the run if the first metrics event reports grad_norm==0
+        — that's the fingerprint of a no-op training loop (gradients aren't
+        reaching LoRA adapters). Catching it after one log event (~10 steps)
+        saves us from burning 30+ minutes on a silently-broken run.
         """
+        def __init__(self) -> None:
+            self._n_logged = 0
+            self._zero_grad_norm_streak = 0
+
         def on_log(self, args, state, control, logs=None, **kwargs):
             if metrics_path is None or logs is None:
                 return
@@ -376,6 +399,41 @@ def run(config: TrainConfig) -> dict[str, Any]:
                     fh.write(json.dumps(record) + "\n")
             except OSError:
                 pass
+
+            # Abort if grad_norm stays at 0 — production attempts #2 and #3
+            # both burned multiple minutes on no-op runs; never again.
+            grad_norm = logs.get("grad_norm")
+            if grad_norm is not None:
+                self._n_logged += 1
+                if float(grad_norm) == 0.0:
+                    self._zero_grad_norm_streak += 1
+                else:
+                    self._zero_grad_norm_streak = 0
+                # First log event with grad_norm==0 is enough to fail.
+                # We refuse to keep training when we know gradients aren't
+                # flowing.
+                if self._zero_grad_norm_streak >= 1 and self._n_logged == 1:
+                    msg = (
+                        f"Training is a no-op: grad_norm=0.0 at step "
+                        f"{record['step']} (loss={logs.get('loss', '?')}). "
+                        f"Gradients are not reaching the LoRA adapters. "
+                        f"Common causes: dataset_text_field set on a "
+                        f"pre-tokenized dataset; gradient checkpointing "
+                        f"severing the graph; or peft target_modules "
+                        f"matching no modules in QLoRA mode."
+                    )
+                    if metrics_path is not None:
+                        try:
+                            with metrics_path.open("a", encoding="utf-8") as fh:
+                                fh.write(json.dumps({
+                                    "t": _time.time(),
+                                    "step": record["step"],
+                                    "fatal": "no_op_training",
+                                    "msg": msg,
+                                }) + "\n")
+                        except OSError:
+                            pass
+                    raise RuntimeError(f"[train_cortex] {msg}")
 
     # 1. Load base model in 4-bit (QLoRA) — Daniel Han-Chen's setup
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -432,6 +490,16 @@ def run(config: TrainConfig) -> dict[str, Any]:
         f"({100.0 * trainable_params / total_params:.4f}%)",
         flush=True,
     )
+    # NOTE: unsloth 2026.4.8 + transformers 5.5 have a *display* bug where
+    # the trainer banner prints "Trainable parameters = 0 of <total> (0.00%)"
+    # even when LoRA is correctly attached. This is purely cosmetic — the
+    # actual optimizer sees the adapter parameters and trains them. Trust
+    # this gate (which uses requires_grad), not the unsloth banner.
+    print(
+        "[train_cortex] NB: unsloth's banner may print 'Trainable parameters = 0' "
+        "due to a known display bug in 2026.4.8; the count above is authoritative.",
+        flush=True,
+    )
 
     # 3. Pre-tokenize the dataset ourselves with the (multimodal) processor
     # in text-only mode. We bypass trl's `_collate_language_modeling` data
@@ -478,14 +546,21 @@ def run(config: TrainConfig) -> dict[str, Any]:
         seed=config.random_state,
         bf16=True,
         output_dir=str(config.output_dir),
-        dataset_text_field="text",
+        # IMPORTANT: do NOT pass dataset_text_field. Our `_format` step above
+        # has already produced input_ids/attention_mask/labels. When trl 0.22
+        # sees `dataset_text_field` set, it re-routes through its internal
+        # tokenization+collation pipeline (which expects strings), and the
+        # result is a no-op training loop where loss is computed but
+        # gradients never reach the LoRA adapters (clip_grad_norm_ logs
+        # 0.0 every step). Production attempt #3 burned ~3 min on this exact
+        # bug; the diagnose_lora_grad.py probe confirms grad_norm > 0 only
+        # when this field is unset. Pre-tokenized fast path it is.
         # trl 0.24+ renamed max_seq_length -> max_length
         max_length=config.max_seq_length,
         # trl 0.22+ inspects the model's forward() signature and drops any
-        # dataset column not in it. Our pre-formatted "text" column survives
-        # because we pass dataset_text_field="text", but the metadata + id
-        # + conversations columns get filtered. Disabling that filter keeps
-        # the dataset intact and lets the trainer use the "text" column.
+        # dataset column not in it. Our pre-tokenized columns survive only
+        # if we disable that filter; otherwise input_ids/labels get stripped
+        # and the trainer ends up with an empty batch.
         remove_unused_columns=False,
     )
     callbacks = [_MetricsCallback()] if metrics_path is not None else []
