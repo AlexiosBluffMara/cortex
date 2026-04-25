@@ -1,0 +1,83 @@
+steps:
+  # 1. Build the lightweight webapp image (no GPU).
+  - id: build-webapp
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag=gcr.io/$PROJECT_ID/cortex-webapp:$COMMIT_SHA
+      - --tag=gcr.io/$PROJECT_ID/cortex-webapp:latest
+      - --file=gcp/Dockerfile.webapp
+      - --cache-from=gcr.io/$PROJECT_ID/cortex-webapp:latest
+      - .
+    waitFor: ['-']
+
+  # 2. Build the TRIBE worker image (CUDA 12.8, ~6 GB).
+  - id: build-tribe-worker
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag=gcr.io/$PROJECT_ID/cortex-tribe-worker:$COMMIT_SHA
+      - --tag=gcr.io/$PROJECT_ID/cortex-tribe-worker:latest
+      - --file=gcp/Dockerfile.tribe-worker
+      - --cache-from=gcr.io/$PROJECT_ID/cortex-tribe-worker:latest
+      - .
+    waitFor: ['-']
+
+  # 3. Push both.
+  - id: push-webapp
+    name: gcr.io/cloud-builders/docker
+    args: ['push', '--all-tags', 'gcr.io/$PROJECT_ID/cortex-webapp']
+    waitFor: ['build-webapp']
+
+  - id: push-tribe-worker
+    name: gcr.io/cloud-builders/docker
+    args: ['push', '--all-tags', 'gcr.io/$PROJECT_ID/cortex-tribe-worker']
+    waitFor: ['build-tribe-worker']
+
+  # 4. Deploy webapp to Cloud Run (no GPU).
+  - id: deploy-webapp
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - cortex-webapp
+      - --image=gcr.io/$PROJECT_ID/cortex-webapp:$COMMIT_SHA
+      - --region=us-central1
+      - --memory=1Gi
+      - --cpu=1
+      - --port=8765
+      - --allow-unauthenticated
+      - --set-env-vars=OLLAMA_URL=https://ollama.redteamkitchen.com
+      - --set-secrets=GCP_INFERENCE_TOKEN=gcp-inference-token:latest
+    waitFor: ['push-webapp']
+
+  # 5. Deploy TRIBE worker to Cloud Run with GPU.
+  - id: deploy-tribe-worker
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - cortex-tribe-worker
+      - --image=gcr.io/$PROJECT_ID/cortex-tribe-worker:$COMMIT_SHA
+      - --region=us-central1
+      - --gpu=1
+      - --gpu-type=nvidia-l4
+      - --memory=16Gi
+      - --cpu=4
+      - --no-cpu-throttling
+      - --max-instances=2
+      - --port=8080
+      - --no-allow-unauthenticated
+      - --set-secrets=GCP_INFERENCE_TOKEN=gcp-inference-token:latest,HF_TOKEN=hf-token:latest
+    waitFor: ['push-tribe-worker']
+
+# Cloud Build won't push images marked here; we explicitly push above.
+images: []
+
+options:
+  machineType: E2_HIGHCPU_8
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 2400s   # 40 minutes — building the CUDA worker image is slow

@@ -1,0 +1,95 @@
+# Cortex TRIBE worker — Cloud Run / Compute Engine A100 image.
+#
+# Hosts the inference API at gcp/cloud_run/inference_api.py. Loads TRIBE v2
+# weights at startup and serves /infer + /infer/{id} + /healthz over HTTPS.
+#
+# Hardware target: NVIDIA A100 40GB (a2-highgpu-1g) with CUDA 12.8.
+# Cloud Run jobs in `gpu` mode have a 60-minute hard ceiling, which is fine
+# for 50-second TRIBE inferences (~70s each on A100). For longer-running
+# campaigns use a Compute Engine MIG with the same image.
+#
+# Build:
+#   gcloud builds submit --tag gcr.io/$PROJECT/cortex-tribe-worker \
+#     -f gcp/Dockerfile.tribe-worker .
+# Deploy (Cloud Run, GPU):
+#   gcloud run deploy cortex-tribe-worker \
+#     --image gcr.io/$PROJECT/cortex-tribe-worker \
+#     --region us-central1 \
+#     --gpu 1 --gpu-type nvidia-l4 \
+#     --memory 16Gi --cpu 4 \
+#     --no-cpu-throttling \
+#     --max-instances 2 \
+#     --no-allow-unauthenticated \
+#     --port 8080 \
+#     --set-secrets GCP_INFERENCE_TOKEN=gcp-inference-token:latest \
+#     --set-secrets HF_TOKEN=hf-token:latest
+#
+# Note: A100 on Cloud Run is in preview. If your project doesn't have access,
+# deploy to Compute Engine instead (see docs/gcp.md).
+
+FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04 AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3.11 \
+        python3.11-venv \
+        python3-pip \
+        git \
+        ffmpeg \
+        ca-certificates \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# PyTorch first — the cu128 wheel is large and benefits from being in its
+# own layer so other dep changes don't invalidate it.
+RUN pip install --index-url https://download.pytorch.org/whl/cu128 \
+    "torch>=2.10.0" "torchvision>=0.25.0"
+
+# TRIBE v2 source is gitignored from this repo (CC-BY-NC 4.0 weights). Clone
+# it at build time so the worker has it.
+RUN git clone --depth 1 https://github.com/facebookresearch/tribev2.git /opt/tribev2 \
+    && pip install --no-deps -e /opt/tribev2
+
+# Cortex deps — pinned exactly to pyproject.toml
+COPY pyproject.toml ./
+RUN pip install \
+        exca==0.5.22 neuralset==0.0.2 neuraltrain==0.0.2 \
+        x-transformers==1.27.20 einops==0.8.2 pyyaml==6.0.3 \
+        transformers==5.5.4 huggingface_hub==1.11.0 safetensors==0.7.0 \
+        tokenizers==0.22.2 soundfile==0.13.1 julius==0.2.7 \
+        langdetect==1.0.9 spacy==3.8.13 \
+        nilearn==0.13.1 nibabel==5.4.2 numpy==2.4.4 scipy==1.17.1 \
+        scikit-learn==1.8.0 scikit-image==0.26.0 pandas==3.0.2 pyarrow==23.0.1 \
+        matplotlib==3.10.8 seaborn==0.13.2 pillow==11.3.0 \
+        moviepy==2.2.1 imageio-ffmpeg==0.6.0 \
+        requests==2.33.1 httpx>=0.28.0 psutil==7.2.2 python-dotenv==1.2.2 \
+        tqdm==4.67.3 \
+        fastapi>=0.136.0 uvicorn[standard]>=0.44.0 python-multipart>=0.0.20 \
+        websockets>=14.0
+
+# Cortex code itself
+COPY cortex/ ./cortex/
+COPY gcp/ ./gcp/
+
+# TRIBE weights are NOT bundled — fetch from HF at first inference using
+# HF_TOKEN, cached to /app/tribev2_weights so subsequent requests reuse them.
+ENV TRIBE_WEIGHTS_DIR=/app/tribev2_weights \
+    PORT=8080 \
+    OLLAMA_FLASH_ATTENTION=1
+
+EXPOSE 8080
+
+# Cloud Run uses /healthz; surface it via uvicorn so the platform's liveness
+# probe sees a live worker.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl --fail --silent --show-error http://localhost:${PORT}/healthz || exit 1
+
+CMD ["sh", "-c", "exec uvicorn gcp.cloud_run.inference_api:app --host 0.0.0.0 --port ${PORT}"]

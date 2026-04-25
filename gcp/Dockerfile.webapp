@@ -1,0 +1,78 @@
+# Cortex webapp — Cloud Run image.
+#
+# Hosts the FastAPI app at webapp/server.py. No GPU. Talks to the local 5090
+# via Cloudflare Tunnel for normal inference, or the GCP A100 worker via
+# `cortex.gcp_inference.GCPInferenceFallback` for OOM fallback.
+#
+# Build:
+#   gcloud builds submit --tag gcr.io/$PROJECT/cortex-webapp -f gcp/Dockerfile.webapp .
+# Deploy:
+#   gcloud run deploy cortex-webapp \
+#     --image gcr.io/$PROJECT/cortex-webapp \
+#     --region us-central1 \
+#     --port 8765 \
+#     --memory 1Gi --cpu 1 \
+#     --allow-unauthenticated \
+#     --set-env-vars OLLAMA_URL=https://ollama.redteamkitchen.com,GCP_INFERENCE_ENDPOINT=https://cortex-tribe-xxx.run.app \
+#     --set-secrets GCP_INFERENCE_TOKEN=gcp-inference-token:latest
+
+FROM python:3.11-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /build
+
+# System deps (FFmpeg for media validation only — no GPU libs in this image)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ffmpeg \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml ./
+COPY cortex/ ./cortex/
+COPY hermes/ ./hermes/
+COPY cli/ ./cli/
+COPY webapp/ ./webapp/
+
+# Webapp doesn't need TRIBE deps (it talks to either the local 5090 or the GCP
+# worker). Install only what FastAPI + Cortex's lighter modules need.
+RUN pip install \
+        fastapi>=0.136.0 \
+        uvicorn[standard]>=0.44.0 \
+        python-multipart>=0.0.20 \
+        websockets>=14.0 \
+        httpx>=0.28.0 \
+        requests==2.33.1 \
+        python-dotenv==1.2.2 \
+        numpy==2.4.4 \
+        pandas==3.0.2 \
+        nilearn==0.13.1
+
+# Final image
+FROM python:3.11-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8765
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 1000 cortex
+
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin/uvicorn /usr/local/bin/uvicorn
+COPY --from=builder --chown=cortex:cortex /build /app
+
+USER cortex
+WORKDIR /app
+
+EXPOSE 8765
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/api/health', timeout=4)" || exit 1
+
+CMD ["sh", "-c", "exec uvicorn webapp.server:app --host 0.0.0.0 --port ${PORT}"]

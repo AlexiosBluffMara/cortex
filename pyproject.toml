@@ -205,6 +205,7 @@ ignore = [
 "cortex/gemma_vision.py" = ["E402"]
 "cortex/request_queue.py" = ["RUF006"]
 "webapp/server.py" = ["RUF006"]
+"gcp/cloud_run/inference_api.py" = ["RUF006"]
 
 [tool.ruff.format]
 quote-style = "double"
