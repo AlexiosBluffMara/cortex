@@ -77,6 +77,9 @@ hf_cache/
 # --- Runtime data ---
 data/raw/
 data/processed/
+data/*.log
+data/*.jsonl
+data/cortex_train*.jsonl
 outputs/
 !outputs/.gitkeep
 logs/

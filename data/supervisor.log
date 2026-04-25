@@ -1,8 +1,0 @@
-{"t": 1777129094.5980775, "level": "INFO", "msg": "resume: loaded 5 existing IDs from C:\\Users\\soumi\\AppData\\Local\\Temp\\pytest-of-soumi\\pytest-36\\test_supervised_flag_enables_r0\\cli.jsonl", "existing": 5}
-{"t": 1777129094.5985787, "level": "INFO", "msg": "generation finished", "written": 0, "skipped_existing": 5, "skipped_failed": 0, "elapsed_s": 0.0}
-{"t": 1777129129.7675984, "level": "INFO", "msg": "resume: loaded 5 existing IDs from C:\\Users\\soumi\\AppData\\Local\\Temp\\pytest-of-soumi\\pytest-37\\test_supervised_flag_enables_r0\\cli.jsonl", "existing": 5}
-{"t": 1777129129.768095, "level": "INFO", "msg": "generation finished", "written": 0, "skipped_existing": 5, "skipped_failed": 0, "elapsed_s": 0.0}
-{"t": 1777129137.2771351, "level": "INFO", "msg": "resume: loaded 5 existing IDs from C:\\Users\\soumi\\AppData\\Local\\Temp\\pytest-of-soumi\\pytest-38\\test_supervised_flag_enables_r0\\cli.jsonl", "existing": 5}
-{"t": 1777129137.2771351, "level": "INFO", "msg": "generation finished", "written": 0, "skipped_existing": 5, "skipped_failed": 0, "elapsed_s": 0.0}
-{"t": 1777129167.2013834, "level": "INFO", "msg": "resume: loaded 5 existing IDs from C:\\Users\\soumi\\AppData\\Local\\Temp\\pytest-of-soumi\\pytest-39\\test_supervised_flag_enables_r0\\cli.jsonl", "existing": 5}
-{"t": 1777129167.2018893, "level": "INFO", "msg": "generation finished", "written": 0, "skipped_existing": 5, "skipped_failed": 0, "elapsed_s": 0.0}
