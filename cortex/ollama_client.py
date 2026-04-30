@@ -9,8 +9,8 @@ Key behavior:
   - Chain-of-thought MODE: separate streaming endpoint for Discord thread output.
 
 Model capability matrix (confirmed on Ollama 0.21.0, RTX 5090):
-  gemma4:e2b          vision=YES  audio=NO  (audio requires llama.cpp)
-  gemma4:e4b          vision=YES  audio=NO
+  gemma4:e2b          vision=YES  audio=NO  (Ollama doesn't expose native audio input)
+  gemma4:e4b          vision=YES  audio=NO  (audio handled via local Whisper-tiny → text)
   gemma4:e4b-it-q8_0  vision=YES  audio=NO
   gemma4:26b          vision=YES  audio=NO  (MoE — 26B total, ~4B active/token)
   gemma4:31b          vision=YES  audio=NO

@@ -66,12 +66,8 @@ def _apply_blackwell_opts(model) -> None:
     except AttributeError:
         log.warning('[pipeline] cuDNN SDPA API not available in this PyTorch build')
 
-    try:
-        if hasattr(model, 'to'):
-            model.to(dtype=torch.bfloat16)
-            log.info('[pipeline] Model cast to BF16')
-    except Exception as exc:
-        log.warning('[pipeline] BF16 cast failed: %s', exc)
+    # TRIBE v2 internal ops don't support BF16; keep the model in FP32.
+    log.info('[pipeline] Model kept in FP32 (TribeModel BF16 unsupported)')
 
     global _compiled
     if not _compiled:
@@ -116,9 +112,8 @@ def load_model():
     _model = TribeModel.from_pretrained(
         checkpoint_dir=str(config.WEIGHTS_DIR),
         cache_folder=str(config.CACHE_DIR),
+        device="cuda",
     )
-
-    _model = _model.cuda()
 
     load_s = time.time() - t0
     log.info('[pipeline] TRIBE v2 loaded in %.1fs', load_s)
@@ -182,13 +177,20 @@ def _schaefer_rois(preds: np.ndarray) -> tuple[pd.DataFrame, list[str]]:
     return df, top
 
 
+_VIDEO_EXTS = {'.mp4', '.avi', '.mkv', '.mov', '.webm',
+               '.ts', '.m4v', '.3gp', '.ogv', '.flv', '.wmv', '.divx', '.gif'}
+_AUDIO_EXTS = {'.wav', '.mp3', '.flac', '.ogg', '.m4a',
+               '.aac', '.wma', '.opus', '.ac3', '.aiff', '.aif'}
+_TEXT_EXTS  = {'.txt', '.md', '.srt', '.vtt'}
+
+
 def _build_events(model, media_path: Path) -> pd.DataFrame:
     suffix = media_path.suffix.lower()
-    if suffix in {'.mp4', '.avi', '.mkv', '.mov', '.webm'}:
+    if suffix in _VIDEO_EXTS:
         return model.get_events_dataframe(video_path=str(media_path))
-    if suffix in {'.wav', '.mp3', '.flac', '.ogg', '.m4a'}:
+    if suffix in _AUDIO_EXTS:
         return model.get_events_dataframe(audio_path=str(media_path))
-    if suffix == '.txt':
+    if suffix in _TEXT_EXTS:
         return model.get_events_dataframe(text_path=str(media_path))
     raise ValueError(f'Unsupported media type: {suffix}')
 
@@ -205,9 +207,7 @@ def run_inference(media_path: Path | str) -> InferenceResult:
 
     events_df = _build_events(model, media_path)
 
-    autocast_ctx = torch.autocast('cuda', dtype=torch.bfloat16, enabled=True)
-
-    with torch.inference_mode(), autocast_ctx:
+    with torch.inference_mode():
         preds, _segments = model.predict(events=events_df)
 
     preds   = np.asarray(preds, dtype=np.float32)
@@ -241,7 +241,7 @@ def run_inference_text_only(text: str) -> InferenceResult:
         t0       = time.time()
         events_df = model.get_events_dataframe(text_path=str(tmp_txt))
 
-        with torch.inference_mode(), torch.autocast('cuda', dtype=torch.bfloat16):
+        with torch.inference_mode():
             preds, _segments = model.predict(events=events_df)
 
         preds   = np.asarray(preds, dtype=np.float32)
@@ -259,7 +259,7 @@ def run_inference_text_only(text: str) -> InferenceResult:
             peak_t=peak_t,
             events_df=events_df,
             seconds_elapsed=elapsed,
-            model_dtype='bf16',
+            model_dtype='fp32',
         )
     finally:
         tmp_txt.unlink(missing_ok=True)

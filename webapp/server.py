@@ -46,18 +46,25 @@ from cortex.errors import (
     file_too_large,
     invalid_file_type,
 )
+from cortex.analysis import analyse
 from cortex.gpu_scheduler import GPUScheduler, GPUState, get_scheduler
 from cortex.logger import log
+from cortex import media_gate as _media_gate, prompts as _prompts, tiers as _tiers
 from cortex.request_queue import RequestQueue, RequestType, get_queue
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-ALLOWED_VIDEO = {".mp4", ".mkv", ".webm", ".mov", ".avi"}
-ALLOWED_AUDIO = {".mp3", ".wav", ".flac", ".ogg", ".m4a"}
-ALLOWED_IMAGE = {".jpg", ".jpeg", ".png", ".webp"}
-ALLOWED_EXTS = ALLOWED_VIDEO | ALLOWED_AUDIO | ALLOWED_IMAGE
+ALLOWED_VIDEO    = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".gif",
+                    ".ts", ".m4v", ".3gp", ".ogv", ".flv", ".wmv", ".divx"}
+ALLOWED_AUDIO    = {".mp3", ".wav", ".flac", ".ogg", ".m4a",
+                    ".aac", ".wma", ".opus", ".ac3", ".aiff", ".aif"}
+ALLOWED_IMAGE    = {".jpg", ".jpeg", ".png", ".webp",
+                    ".bmp", ".tiff", ".tif", ".heic", ".heif", ".avif"}
+ALLOWED_TEXT     = {".txt", ".md", ".srt", ".vtt"}
+ALLOWED_DOCUMENT = {".html", ".htm", ".pdf"}
+ALLOWED_EXTS     = ALLOWED_VIDEO | ALLOWED_AUDIO | ALLOWED_IMAGE | ALLOWED_TEXT | ALLOWED_DOCUMENT
 MAX_UPLOAD_MB = 50
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 
@@ -283,6 +290,53 @@ def create_app(
         return record
 
     # -----------------------------------------------------------------------
+    # Re-narrate an existing scan at a different tier
+    # -----------------------------------------------------------------------
+
+    @app.post("/api/scan/{scan_id}/narrate")
+    async def re_narrate(scan_id: str, tier: int = 1) -> dict[str, Any]:
+        record = await app.state.registry.get(scan_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail=f"Scan not found: {scan_id}")
+        if record.get("status") != "complete":
+            raise HTTPException(status_code=409, detail="Scan not complete yet")
+
+        tier = max(0, min(6, tier))
+
+        # Rebuild brain context from the stored TRIBE result (top_rois + peak_t)
+        # We don't have the InferenceResult object anymore, so we craft a minimal
+        # brain_context string from what was persisted.
+        top_rois = record.get("top_rois") or []
+        peak_t   = record.get("peak_t")
+
+        brain_ctx_lines = []
+        if top_rois:
+            brain_ctx_lines.append(f"top_rois: {top_rois[:6]}")
+        if peak_t is not None:
+            brain_ctx_lines.append(f"peak_t: {peak_t}")
+        brain_ctx = "\n".join(brain_ctx_lines) or "No detailed brain context available."
+
+        label        = record.get("filename", scan_id)
+        user_prompt  = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
+        system_prompt= _prompts.ALL_TIER_SYSTEMS[tier]
+
+        narration = await _queue.submit(
+            request_type=RequestType.NARRATE,
+            payload={
+                "prompt":      user_prompt,
+                "system":      system_prompt,
+                "tier":        tier,
+                "num_predict": _tiers._TIER_NUM_PREDICT[tier],
+                "temperature": _tiers._TIER_TEMPERATURE[tier],
+            },
+            priority=0,
+            source="webui-renarrate",
+        )
+
+        await app.state.registry.update(scan_id, narration=narration, tier=tier)
+        return {"ok": True, "narration": narration, "tier": tier}
+
+    # -----------------------------------------------------------------------
     # Atlas + simulated BOLD (drives the Three.js viewer)
     # -----------------------------------------------------------------------
 
@@ -343,6 +397,38 @@ def create_app(
         }
 
     # -----------------------------------------------------------------------
+    # Text-only scan submission
+    # -----------------------------------------------------------------------
+
+    @app.post("/api/text-scan")
+    async def submit_text_scan(
+        text: str = Form(...),
+        tier: int = Form(default=1, ge=0, le=6),
+        source: str = Form(default="webui"),
+    ) -> JSONResponse:
+        if not text.strip():
+            return JSONResponse({"error": "empty text"}, status_code=400)
+        scan_id = uuid.uuid4().hex[:12]
+        await app.state.registry.put(
+            scan_id,
+            {
+                "id": scan_id,
+                "status": "queued",
+                "filename": "<text stimulus>",
+                "tier": tier,
+                "source": source,
+                "text": text.strip()[:1000],
+            },
+        )
+        asyncio.create_task(
+            _run_text_scan_background(app, scan_id, text.strip()[:1000], tier, source)
+        )
+        await app.state.hub.broadcast(
+            {"type": "scan_queued", "scan_id": scan_id, "filename": "<text stimulus>"}
+        )
+        return JSONResponse({"ok": True, "scan_id": scan_id, "status": "queued"}, status_code=202)
+
+    # -----------------------------------------------------------------------
     # WebSocket
     # -----------------------------------------------------------------------
 
@@ -388,6 +474,161 @@ def create_app(
 # Background scan runner
 # ---------------------------------------------------------------------------
 
+_IMAGE_EXTS    = {'.jpg', '.jpeg', '.png', '.webp', '.gif',
+                  '.bmp', '.tiff', '.tif', '.heic', '.heif', '.avif'}
+_DOCUMENT_EXTS = {'.html', '.htm', '.pdf'}
+_TEXT_EXTS     = {'.txt', '.md', '.srt', '.vtt'}   # routed through TRIBE text path
+
+
+def _extract_document_text(path: Path) -> str:
+    """Extract plain text from HTML or PDF for Gemma context."""
+    suffix = path.suffix.lower()
+    if suffix in {'.html', '.htm'}:
+        raw = path.read_text(encoding='utf-8', errors='replace')
+        import html.parser
+        class _S(html.parser.HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self._parts, self._skip = [], False
+            def handle_starttag(self, tag, attrs):
+                if tag in ('script', 'style', 'head', 'nav', 'footer'):
+                    self._skip = True
+            def handle_endtag(self, tag):
+                if tag in ('script', 'style', 'head', 'nav', 'footer'):
+                    self._skip = False
+            def handle_data(self, data):
+                if not self._skip and data.strip():
+                    self._parts.append(data.strip())
+        s = _S()
+        s.feed(raw)
+        return ' '.join(s._parts)[:4000]
+    if suffix == '.pdf':
+        try:
+            import fitz
+            doc = fitz.open(str(path))
+            return ' '.join(page.get_text() for page in doc).strip()[:4000]
+        except ImportError:
+            pass
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(str(path))
+            return ' '.join(p.extract_text() or '' for p in reader.pages)[:4000]
+        except ImportError:
+            pass
+        return f"[PDF document: {path.name} — no PDF library available for text extraction]"
+    return path.read_text(encoding='utf-8', errors='replace')[:4000]
+
+
+async def _run_image_scan_background(
+    app: FastAPI,
+    scan_id: str,
+    media_path: str,
+    tier: int,
+    source: str,
+) -> None:
+    """Image scan: Gemma vision describes the image, then Gemma narrates neural correlates."""
+    queue: RequestQueue = app.state.queue
+    registry: ScanRegistry = app.state.registry
+    hub: WebSocketHub = app.state.hub
+
+    async def _emit(phase: str, **extra: Any) -> None:
+        await hub.broadcast({"type": "scan_progress", "scan_id": scan_id, "phase": phase, **extra})
+        await registry.update(scan_id, status=phase)
+
+    try:
+        await _emit("narrating")
+
+        loop = asyncio.get_event_loop()
+        desc = await loop.run_in_executor(
+            None, lambda: _media_gate.classify_image(Path(media_path))
+        )
+        brain_ctx = (
+            f"Input modality: image\n"
+            f"Visual description: {desc.short_description()}\n\n"
+            "No fMRI scan was performed. Based on cognitive neuroscience knowledge, "
+            "describe the brain regions and networks expected to activate when a person "
+            "views this image."
+        )
+        label = Path(media_path).name
+        user_prompt   = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
+        system_prompt = _prompts.ALL_TIER_SYSTEMS[max(0, min(6, tier))]
+
+        narration = await queue.submit(
+            request_type=RequestType.NARRATE,
+            payload={
+                "prompt":      user_prompt,
+                "system":      system_prompt,
+                "tier":        tier,
+                "num_predict": _tiers._TIER_NUM_PREDICT[tier],
+                "temperature": _tiers._TIER_TEMPERATURE[tier],
+            },
+            priority=0 if source == "webui" else 5,
+            source=source,
+        )
+
+        await registry.update(scan_id, status="complete", narration=narration, top_rois=None, peak_t=None)
+        await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
+        log.info("[webapp] image scan %s complete", scan_id)
+
+    except Exception as exc:
+        err = CortexError(code=ErrorCode.INFERENCE_FAILED, message=str(exc), component="webapp.image_scan")
+        await registry.update(scan_id, status="failed", error=err.to_dict())
+        await hub.broadcast({"type": "scan_failed", "scan_id": scan_id, "error": err.to_dict()})
+        log.error("[webapp] image scan %s failed: %s", scan_id, exc)
+
+
+async def _run_document_scan_background(
+    app: FastAPI,
+    scan_id: str,
+    media_path: str,
+    tier: int,
+    source: str,
+) -> None:
+    """Document scan: extract text, then Gemma narrates expected neural correlates."""
+    queue: RequestQueue = app.state.queue
+    registry: ScanRegistry = app.state.registry
+    hub: WebSocketHub = app.state.hub
+
+    async def _emit(phase: str, **extra: Any) -> None:
+        await hub.broadcast({"type": "scan_progress", "scan_id": scan_id, "phase": phase, **extra})
+        await registry.update(scan_id, status=phase)
+
+    try:
+        await _emit("narrating")
+        loop = asyncio.get_event_loop()
+        text = await loop.run_in_executor(None, lambda: _extract_document_text(Path(media_path)))
+        label = Path(media_path).name
+        brain_ctx = (
+            f"Input modality: document\nFilename: {label}\n"
+            f"Extracted content: \"{text}\"\n\n"
+            "No fMRI scan was performed. Based on cognitive neuroscience knowledge, "
+            "describe the brain regions and networks expected to activate when a person "
+            "reads or engages with this content."
+        )
+        user_prompt   = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
+        system_prompt = _prompts.ALL_TIER_SYSTEMS[max(0, min(6, tier))]
+        narration = await queue.submit(
+            request_type=RequestType.NARRATE,
+            payload={
+                "prompt":      user_prompt,
+                "system":      system_prompt,
+                "tier":        tier,
+                "num_predict": _tiers._TIER_NUM_PREDICT[tier],
+                "temperature": _tiers._TIER_TEMPERATURE[tier],
+            },
+            priority=0 if source == "webui" else 5,
+            source=source,
+        )
+        await registry.update(scan_id, status="complete", narration=narration, top_rois=None, peak_t=None)
+        await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
+        log.info("[webapp] document scan %s complete", scan_id)
+    except Exception as exc:
+        err = CortexError(code=ErrorCode.INFERENCE_FAILED, message=str(exc), component="webapp.doc_scan")
+        await registry.update(scan_id, status="failed", error=err.to_dict())
+        await hub.broadcast({"type": "scan_failed", "scan_id": scan_id, "error": err.to_dict()})
+        log.error("[webapp] document scan %s failed: %s", scan_id, exc)
+
+
 async def _run_scan_background(
     app: FastAPI,
     scan_id: str,
@@ -396,6 +637,12 @@ async def _run_scan_background(
     source: str,
 ) -> None:
     """Run a brain scan in the background and stream progress to WebSocket clients."""
+    suffix = Path(media_path).suffix.lower()
+    if suffix in _IMAGE_EXTS:
+        return await _run_image_scan_background(app, scan_id, media_path, tier, source)
+    if suffix in _DOCUMENT_EXTS:
+        return await _run_document_scan_background(app, scan_id, media_path, tier, source)
+
     queue: RequestQueue = app.state.queue
     registry: ScanRegistry = app.state.registry
     hub: WebSocketHub = app.state.hub
@@ -413,12 +660,25 @@ async def _run_scan_background(
             source=source,
         )
         await _emit("narrating")
+
+        # Build full brain context so Gemma gets real data, not a generic prompt.
+        loop = asyncio.get_event_loop()
+        brain_ctx = await loop.run_in_executor(
+            None,
+            lambda: analyse(result, harvard_oxford=False, juelich=False).gemma_context(),
+        )
+        label = Path(media_path).name
+        user_prompt  = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
+        system_prompt = _prompts.ALL_TIER_SYSTEMS[max(0, min(6, tier))]
+
         narration = await queue.submit(
             request_type=RequestType.NARRATE,
             payload={
-                "prompt": "Narrate the brain response.",
-                "system": "Be educational and accurate.",
-                "tier": tier,
+                "prompt":      user_prompt,
+                "system":      system_prompt,
+                "tier":        tier,
+                "num_predict": _tiers._TIER_NUM_PREDICT[tier],
+                "temperature": _tiers._TIER_TEMPERATURE[tier],
             },
             priority=0 if source == "webui" else 5,
             source=source,
@@ -446,6 +706,61 @@ async def _run_scan_background(
             {"type": "scan_failed", "scan_id": scan_id, "error": err.to_dict()}
         )
         log.error("[webapp] scan %s failed: %s", scan_id, exc)
+
+
+# ---------------------------------------------------------------------------
+# Text-only scan (no TRIBE inference — Gemma predicts neural correlates from text)
+# ---------------------------------------------------------------------------
+
+async def _run_text_scan_background(
+    app: FastAPI,
+    scan_id: str,
+    text: str,
+    tier: int,
+    source: str,
+) -> None:
+    queue: RequestQueue = app.state.queue
+    registry: ScanRegistry = app.state.registry
+    hub: WebSocketHub = app.state.hub
+
+    async def _emit(phase: str, **extra: Any) -> None:
+        await hub.broadcast({"type": "scan_progress", "scan_id": scan_id, "phase": phase, **extra})
+        await registry.update(scan_id, status=phase)
+
+    try:
+        await _emit("narrating")
+
+        brain_ctx = (
+            f'Input modality: text\nContent: "{text}"\n\n'
+            "No fMRI scan was performed. Based on cognitive neuroscience knowledge, "
+            "describe the brain regions and networks expected to activate when a person "
+            "reads, thinks about, or experiences this stimulus."
+        )
+        user_prompt   = _prompts.TIER_USER_TEMPLATE.format(label="text stimulus", brain_context=brain_ctx)
+        system_prompt = _prompts.ALL_TIER_SYSTEMS[max(0, min(6, tier))]
+
+        narration = await queue.submit(
+            request_type=RequestType.NARRATE,
+            payload={
+                "prompt":      user_prompt,
+                "system":      system_prompt,
+                "tier":        tier,
+                "num_predict": _tiers._TIER_NUM_PREDICT[tier],
+                "temperature": _tiers._TIER_TEMPERATURE[tier],
+            },
+            priority=0 if source == "webui" else 5,
+            source=source,
+        )
+
+        await registry.update(scan_id, status="complete", narration=narration, top_rois=None, peak_t=None)
+        await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
+        log.info("[webapp] text scan %s complete", scan_id)
+
+    except Exception as exc:
+        err = CortexError(code=ErrorCode.INFERENCE_FAILED, message=str(exc), component="webapp.text_scan")
+        await registry.update(scan_id, status="failed", error=err.to_dict())
+        await hub.broadcast({"type": "scan_failed", "scan_id": scan_id, "error": err.to_dict()})
+        log.error("[webapp] text scan %s failed: %s", scan_id, exc)
 
 
 # Default app instance (used by `uvicorn webapp.server:app`)

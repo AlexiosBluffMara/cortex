@@ -238,9 +238,10 @@ class RequestQueue:
 
         elif rt == RequestType.NARRATE:
             await self._scheduler.ensure_gemma()
+            from cortex import tiers as _t
             from cortex.ollama_client import generate
-            tier_model_map = {0: "gemma4:e4b", 1: "gemma4:26b", 2: "gemma4:31b"}
-            model = tier_model_map.get(payload.get("tier", 0), "gemma4:e4b")
+            tier_idx = max(0, min(6, payload.get("tier", 0)))
+            model = _t._TIER_MODEL_MAP[tier_idx]
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(
                 None,

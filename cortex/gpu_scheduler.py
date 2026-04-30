@@ -120,7 +120,7 @@ class GPUScheduler:
                 fn(new_state)
             except Exception:
                 pass
-        log.info("[gpu_scheduler] %s → %s", old.value, new_state.value)
+        log.info("[gpu_scheduler] %s -> %s", old.value, new_state.value)
 
     # -- VRAM monitoring --
 
@@ -266,7 +266,7 @@ class GPUScheduler:
         self._metrics.total_swap_time_s += elapsed
         self._metrics.last_swap_time_s = elapsed
         self._notify_state(GPUState.TRIBE_ACTIVE)
-        log.info("[gpu_scheduler] GEMMA → TRIBE complete in %.1fs", elapsed)
+        log.info("[gpu_scheduler] GEMMA -> TRIBE complete in %.1fs", elapsed)
 
     async def _swap_tribe_to_gemma(self) -> None:
         """Full swap: unload TRIBE → wait for VRAM → warm Gemma E4B."""
@@ -289,7 +289,7 @@ class GPUScheduler:
         self._metrics.total_swap_time_s += elapsed
         self._metrics.last_swap_time_s = elapsed
         self._notify_state(GPUState.GEMMA_ACTIVE)
-        log.info("[gpu_scheduler] TRIBE → GEMMA complete in %.1fs", elapsed)
+        log.info("[gpu_scheduler] TRIBE -> GEMMA complete in %.1fs", elapsed)
 
     # -- Public interface --
 

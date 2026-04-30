@@ -37,9 +37,9 @@ PERSONA = (
 # ---------- stage A: objective media description ----------
 MEDIA_GATE_SYSTEM = (
     f"{PERSONA}\n\n"
-    "The user has submitted a short media file. You will be shown evenly "
-    "spaced keyframes. Your task in this turn is to return a single compact "
-    "JSON object with these fields and nothing else:\n"
+    "The user has submitted a short media file. You may be shown evenly "
+    "spaced keyframes, an audio transcript, or both. Your task is to return "
+    "a single compact JSON object with these fields and nothing else:\n"
     "  content_type  (string)  one of: video, image, animation, slide, audio_visual, other\n"
     "  subject       (string)  primary subject(s) across frames, 3-10 words\n"
     "  setting       (string)  location / environment / context, 3-8 words\n"

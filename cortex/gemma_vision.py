@@ -1,8 +1,14 @@
-"""Frame extraction for Gemma vision calls.
+"""Frame extraction and audio transcription for Gemma multimodal calls.
 
 The actual Ollama call for video description lives in `media_gate.py`,
-since it shares the same JSON-mode classify call. This module is kept
-only for the ffmpeg keyframe helper.
+since it shares the same JSON-mode classify call. This module provides:
+  - extract_keyframes()      — ffmpeg JPEG keyframe helper
+  - extract_audio_segment()  — ffmpeg 16 kHz mono WAV helper
+  - transcribe_audio()       — local Whisper-tiny ASR (openai/whisper-tiny via transformers)
+
+Note: Ollama does not expose native audio input for Gemma 4 yet. Audio
+understanding is achieved by transcribing locally and injecting the
+transcript into Gemma's text prompt alongside the visual keyframes.
 """
 from __future__ import annotations
 
@@ -73,3 +79,51 @@ def extract_keyframes(video_path: Path, n: int = 4, out_dir: Path | None = None)
             continue
         frames.append(out)
     return frames
+
+
+def extract_audio_segment(
+    media_path: Path,
+    max_secs: float = 30.0,
+    out_dir: Path | None = None,
+) -> Path | None:
+    """Extract up to max_secs of audio as 16 kHz mono WAV. Returns None on failure."""
+    out_dir = out_dir or config.OUT_DIR / "audio"
+    out_dir.mkdir(exist_ok=True)
+    out_wav = out_dir / f"audio_{media_path.stem}.wav"
+    ffmpeg = _require_ffmpeg()
+    result = subprocess.run(
+        [ffmpeg, "-y", "-i", str(media_path),
+         "-t", str(max_secs),
+         "-ar", "16000", "-ac", "1",
+         "-f", "wav", str(out_wav)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        creationflags=_NOWWIN,
+    )
+    if result.returncode != 0 or not out_wav.exists() or out_wav.stat().st_size < 1000:
+        return None
+    return out_wav
+
+
+_whisper_pipe = None
+
+
+def transcribe_audio(wav_path: Path, max_chars: int = 600) -> str:
+    """Transcribe a WAV file with whisper-tiny. Returns transcript or empty string on failure."""
+    global _whisper_pipe
+    try:
+        if _whisper_pipe is None:
+            import torch
+            from transformers import pipeline as hf_pipeline
+            device = 0 if torch.cuda.is_available() else -1
+            _whisper_pipe = hf_pipeline(
+                "automatic-speech-recognition",
+                model="openai/whisper-tiny",
+                device=device,
+            )
+        result = _whisper_pipe(str(wav_path), chunk_length_s=30)
+        text = (result.get("text") or "").strip()
+        return text[:max_chars] if len(text) > max_chars else text
+    except Exception as exc:
+        print(f"[gemma_vision] Whisper transcription failed: {exc}")
+        return ""

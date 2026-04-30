@@ -3,10 +3,491 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="color-scheme" content="dark light" />
+    <meta name="color-scheme" content="dark" />
     <meta name="description" content="Cortex — multimodal brain-response analysis with Gemma 4 + TRIBE v2." />
     <title>Cortex · Brain-response analysis</title>
-    <link rel="stylesheet" href="/assets/style.css" />
+    <style>
+        /* ── Reset & base ── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg: #0d0e14;
+            --surface: #13151f;
+            --surface2: #1a1d2b;
+            --border: #252838;
+            --accent: #5b8def;
+            --accent2: #7c6ff7;
+            --text: #dde3f0;
+            --muted: #6b738f;
+            --positive: #ef5f5f;   /* hot = activation */
+            --negative: #5f9eef;   /* cool = deactivation */
+            --good: #3ecf8e;
+            --radius: 10px;
+            --topbar: 52px;
+        }
+        html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; }
+
+        /* ── Topbar ── */
+        .topbar {
+            position: fixed; top: 0; left: 0; right: 0; height: var(--topbar);
+            background: var(--surface); border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; padding: 0 18px; gap: 16px;
+            z-index: 100;
+        }
+        .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; letter-spacing: 0.03em; }
+        .brand-mark { font-size: 20px; color: var(--accent); }
+        .status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-left: auto; }
+        .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+        .dot.connected { background: var(--good); box-shadow: 0 0 6px var(--good); }
+
+        /* GPU badge */
+        #gpu-badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
+        #gpu-badge.active { color: var(--good); border-color: var(--good); }
+
+        /* Pipeline tabs in topbar */
+        .pipeline-tabs {
+            display: flex; gap: 2px;
+            background: var(--surface2); border-radius: 8px; padding: 3px;
+            margin: 0 12px;
+        }
+        .pipeline-tab {
+            padding: 5px 14px; border-radius: 6px; border: none;
+            background: transparent; color: var(--muted);
+            font-size: 11px; font-weight: 600; cursor: pointer;
+            transition: all .15s; white-space: nowrap; letter-spacing: 0.03em;
+        }
+        .pipeline-tab:hover:not(.active) { color: var(--text); }
+        .pipeline-tab.active { background: var(--surface); color: var(--text); }
+        .pipeline-tab[data-pipeline="local"].active { color: var(--good); }
+        .pipeline-tab[data-pipeline="cloud"].active { color: var(--accent); }
+        .pipeline-tab[data-pipeline="cost"].active { color: var(--accent2); }
+
+        /* ── Main layout: 3 columns ── */
+        .layout {
+            display: grid;
+            grid-template-columns: clamp(200px, 22vw, 280px) 1fr clamp(220px, 24vw, 300px);
+            grid-template-rows: 1fr;
+            height: calc(100dvh - var(--topbar));
+            margin-top: var(--topbar);
+        }
+
+        /* ── Left panel: submit + events ── */
+        .panel-left {
+            background: var(--surface); border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; overflow: hidden;
+            min-height: 0; min-width: 0;
+        }
+        .panel-section { padding: 16px; border-bottom: 1px solid var(--border); }
+        .panel-title { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+
+        .scan-form { display: flex; flex-direction: column; gap: 10px; }
+        .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+        .field input[type=file] { font-size: 12px; color: var(--text); }
+        .field input[type=range] { width: 100%; accent-color: var(--accent); }
+        .tier-row { display: flex; align-items: center; gap: 8px; }
+        .tier-label { font-size: 11px; color: var(--muted); }
+        #tier-display { font-size: 13px; font-weight: 600; color: var(--accent); min-width: 18px; text-align: right; }
+        #scan-submit {
+            background: var(--accent); color: #fff; border: none; border-radius: var(--radius);
+            padding: 9px 0; font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: opacity .15s;
+        }
+        #scan-submit:hover { opacity: .85; }
+        #scan-submit:disabled { opacity: .4; cursor: default; }
+
+        .event-log { list-style: none; font-size: 11px; color: var(--muted); overflow-y: auto; flex: 1; padding: 10px 16px; }
+        .event-log li { padding: 3px 0; border-bottom: 1px solid var(--border); line-height: 1.5; }
+        .event-log li:last-child { color: var(--text); }
+        .event-ts { cursor: pointer; opacity: 0.7; font-variant-numeric: tabular-nums; transition: opacity 0.15s; }
+        .event-ts:hover { opacity: 1; text-decoration: underline dotted; }
+
+        /* ── Centre: 3D viewer ── */
+        .panel-centre {
+            position: relative; display: flex; flex-direction: column; overflow: hidden;
+            min-height: 0; min-width: 0;
+        }
+
+        #three-root { flex: 1; min-height: 0; min-width: 0; cursor: grab; }
+        #three-root:active { cursor: grabbing; }
+
+        /* Pipeline mode badge (in brain viewer centre-bottom) */
+        .pipeline-badge {
+            position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+            font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 99px;
+            border: 1px solid var(--border); background: rgba(13,14,20,.85);
+            backdrop-filter: blur(6px); white-space: nowrap; letter-spacing: 0.04em;
+            pointer-events: none; z-index: 10;
+        }
+        .pipeline-badge.local { color: var(--good); border-color: var(--good); }
+        .pipeline-badge.cloud { color: var(--accent); border-color: var(--accent); }
+
+        /* View presets toolbar */
+        .view-toolbar {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 4px; background: rgba(13,14,20,.82); backdrop-filter: blur(8px);
+            border: 1px solid var(--border); border-radius: 8px; padding: 4px 6px;
+        }
+        .view-btn {
+            font-size: 10px; padding: 3px 8px; border-radius: 5px; border: none;
+            background: transparent; color: var(--muted); cursor: pointer; transition: background .12s, color .12s;
+        }
+        .view-btn:hover { background: var(--surface2); color: var(--text); }
+
+        /* Hemisphere toggle */
+        .hemi-toolbar {
+            position: absolute; top: 10px; right: 10px;
+            display: flex; gap: 4px; background: rgba(13,14,20,.82); backdrop-filter: blur(8px);
+            border: 1px solid var(--border); border-radius: 8px; padding: 4px 6px;
+        }
+        .hemi-btn {
+            font-size: 10px; padding: 3px 10px; border-radius: 5px; border: 1px solid transparent;
+            background: transparent; color: var(--muted); cursor: pointer; transition: all .12s;
+        }
+        .hemi-btn.active { background: var(--surface2); color: var(--text); border-color: var(--border); }
+
+        /* Colorbar */
+        .colorbar-wrap {
+            position: absolute; bottom: 100px; left: 12px;
+            display: flex; flex-direction: column; align-items: center; gap: 3px;
+        }
+        .colorbar-label { font-size: 9px; color: var(--muted); }
+        .colorbar {
+            width: 12px; height: 100px; border-radius: 4px;
+            background: linear-gradient(to bottom, #ef5f5f, #f5f5f5 50%, #5f9eef);
+            border: 1px solid var(--border);
+        }
+
+        /* Region tooltip */
+        #region-tooltip {
+            position: absolute; pointer-events: none; display: none;
+            background: rgba(13,14,20,.92); border: 1px solid var(--border);
+            border-radius: 8px; padding: 8px 12px; font-size: 12px;
+            max-width: 220px; z-index: 50;
+        }
+        #region-tooltip .tt-name { font-weight: 600; color: var(--text); }
+        #region-tooltip .tt-meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
+        #region-tooltip .tt-z { font-size: 13px; font-weight: 700; margin-top: 4px; }
+
+        /* Playback bar */
+        .playback-bar {
+            padding: 8px 14px; background: var(--surface);
+            border-top: 1px solid var(--border);
+            display: flex; align-items: center; gap: 10px;
+        }
+        #play-toggle {
+            width: 28px; height: 28px; border-radius: 50%; border: none;
+            background: var(--accent); color: #fff; cursor: pointer; font-size: 10px;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        #time-scrubber { flex: 1; accent-color: var(--accent); cursor: pointer; }
+        #time-scrubber:disabled { opacity: .35; cursor: default; }
+        #time-label { font-size: 12px; color: var(--muted); white-space: nowrap; min-width: 56px; text-align: right; }
+
+        /* Network toggles */
+        .network-bar {
+            padding: 6px 14px; background: var(--surface); border-top: 1px solid var(--border);
+            display: flex; flex-wrap: wrap; gap: 6px;
+        }
+        .net-toggle { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); cursor: pointer; }
+        .net-toggle input { accent-color: currentColor; cursor: pointer; }
+        .net-toggle:hover { color: var(--text); }
+
+        /* Overlay */
+        #viewer-overlay {
+            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            background: rgba(13,14,20,.7); backdrop-filter: blur(4px);
+            font-size: 14px; color: var(--muted); text-align: center; padding: 24px;
+            pointer-events: none;
+        }
+        #viewer-overlay.hidden { display: none; }
+
+        /* ── Right panel: narration ── */
+        .panel-right {
+            background: var(--surface); border-left: 1px solid var(--border);
+            display: flex; flex-direction: column; overflow: hidden;
+            min-height: 0; min-width: 0;
+        }
+
+        .narration-header {
+            padding: 14px 18px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 10px;
+        }
+        .narration-model-badge {
+            font-size: 10px; padding: 2px 8px; border-radius: 99px;
+            background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+            margin-left: auto;
+        }
+
+        .tier-selector { display: flex; gap: 4px; flex-wrap: wrap; padding: 10px 18px; border-bottom: 1px solid var(--border); }
+        .tier-pill {
+            font-size: 10px; padding: 3px 9px; border-radius: 99px;
+            border: 1px solid var(--border); background: transparent; color: var(--muted);
+            cursor: pointer; transition: all .12s;
+        }
+        .tier-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+        /* Run cost badge */
+        .run-cost-badge {
+            margin: 0 18px 0; padding: 6px 12px; border-radius: 8px;
+            background: var(--surface2); border: 1px solid var(--border);
+            font-size: 11px; display: flex; gap: 16px; justify-content: center;
+        }
+        .run-cost-badge.hidden { display: none; }
+        .cost-local-val { color: var(--good); font-weight: 600; }
+        .cost-cloud-val { color: var(--accent); font-weight: 600; }
+
+        .narration-body {
+            flex: 1; overflow-y: auto; padding: 20px 20px 16px;
+            display: flex; flex-direction: column; gap: 16px;
+        }
+
+        .narration-text {
+            font-size: 15px; line-height: 1.75; color: var(--text);
+            font-weight: 400;
+        }
+        .narration-placeholder {
+            font-size: 14px; color: var(--muted); text-align: center; margin: auto;
+        }
+
+        /* ROI breakdown */
+        .roi-section { border-top: 1px solid var(--border); padding-top: 14px; }
+        .roi-section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 10px; }
+        .roi-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+        .roi-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .roi-name { font-size: 11px; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .roi-bar-wrap { width: 60px; height: 4px; background: var(--surface2); border-radius: 2px; flex-shrink: 0; }
+        .roi-bar { height: 100%; border-radius: 2px; background: var(--accent); }
+
+        /* Peak stat */
+        .stat-row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; flex: 1; min-width: 80px; }
+        .stat-val { font-size: 18px; font-weight: 700; color: var(--text); }
+        .stat-key { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+        /* Footer */
+        .footer { display: none; }
+
+        /* Mobile-only elements — hidden by default on desktop */
+        #mobile-brain-canvas { display: none; }
+
+        /* ── Input mode tabs ── */
+        .mode-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .mode-tab {
+            flex: 1;
+            padding: 11px 0;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            border: none;
+            background: transparent;
+            color: var(--muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            transition: color .12s;
+        }
+        .mode-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .mode-tab:hover:not(.active) { color: var(--text); }
+
+        /* ── Mode panels ── */
+        .mode-panel { display: none; padding: 14px 16px; flex-direction: column; gap: 10px; }
+        .mode-panel.active { display: flex; }
+
+        /* Camera */
+        .camera-wrap {
+            width: 100%; aspect-ratio: 4/3;
+            background: #000; border-radius: 8px; overflow: hidden;
+        }
+        .camera-wrap video, .camera-wrap canvas {
+            width: 100%; height: 100%; object-fit: cover; display: block;
+        }
+
+        /* Voice */
+        #voice-vis {
+            width: 100%; height: 52px; display: block;
+            background: var(--surface2); border-radius: 8px;
+        }
+        .voice-info-row {
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        #voice-state-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
+        .voice-timer-text { font-size: 24px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+
+        /* Text */
+        #text-input {
+            width: 100%; background: var(--surface2);
+            border: 1px solid var(--border); border-radius: 8px;
+            color: var(--text); font-size: 13px; line-height: 1.65;
+            padding: 10px 12px; resize: vertical; font-family: inherit; min-height: 112px;
+        }
+        #text-input:focus { outline: none; border-color: var(--accent); }
+        #text-input::placeholder { color: var(--muted); }
+
+        /* Shared action row (secondary buttons inside a mode) */
+        .mode-actions { display: flex; gap: 8px; }
+        .mode-actions button {
+            flex: 1; padding: 8px 0; font-size: 11px; font-weight: 600;
+            border-radius: 8px; border: 1px solid var(--border);
+            background: var(--surface2); color: var(--text);
+            cursor: pointer; transition: background .12s;
+        }
+        .mode-actions button:hover:not(:disabled) { background: var(--border); }
+        .mode-actions button.danger { background: var(--positive); border-color: var(--positive); color: #fff; }
+
+        /* Primary submit button (each mode has one) */
+        .submit-btn {
+            background: var(--accent); color: #fff; border: none;
+            border-radius: var(--radius); padding: 9px 0;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: opacity .15s; width: 100%;
+        }
+        .submit-btn:hover { opacity: .85; }
+        .submit-btn:disabled { opacity: .4; cursor: default; }
+
+        /* Tier section (shared, sits below mode panels) */
+        .tier-section { padding: 12px 16px 10px; border-top: 1px solid var(--border); flex-shrink: 0; }
+
+        /* Cost layout */
+        .cost-layout {
+            position: fixed; top: var(--topbar); left: 0; right: 0; bottom: 0;
+            display: grid; grid-template-columns: 1fr 1fr;
+            overflow: hidden;
+        }
+        .cost-layout.hidden { display: none; }
+        .cost-panel {
+            padding: 28px 32px; overflow-y: auto;
+            border-right: 1px solid var(--border);
+        }
+        .cost-panel-right { border-right: none; }
+        .cost-panel-header {
+            display: flex; align-items: baseline; gap: 10px; margin-bottom: 24px;
+            border-bottom: 1px solid var(--border); padding-bottom: 16px;
+        }
+        .cost-icon { font-size: 20px; }
+        .cost-panel-header h2 { font-size: 18px; font-weight: 700; }
+        .cost-subtitle { font-size: 11px; color: var(--muted); margin-left: auto; }
+        .cost-stats-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;
+        }
+        .cost-stat-card {
+            background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+            padding: 14px 16px;
+        }
+        .cost-stat-val { font-size: 18px; font-weight: 700; color: var(--text); }
+        .cost-stat-key { font-size: 10px; color: var(--muted); margin-top: 4px; }
+        .highlight-local .cost-stat-val { color: var(--good); }
+        .highlight-cloud .cost-stat-val { color: var(--accent); }
+        .cost-formula {
+            font-size: 11px; color: var(--muted); margin-bottom: 16px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .cost-formula code { background: var(--surface2); padding: 3px 8px; border-radius: 4px; font-size: 11px; }
+        .cost-formula-label { color: var(--muted); font-weight: 600; }
+        .cost-history-table {
+            width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px;
+        }
+        .cost-history-table th {
+            text-align: left; padding: 6px 8px; color: var(--muted); font-weight: 700;
+            text-transform: uppercase; letter-spacing: .06em; font-size: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        .cost-history-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); color: var(--text); }
+        .cost-history-table tr:last-child td { border-bottom: none; }
+        .cost-breakdown-list { margin-bottom: 20px; }
+        .cost-breakdown-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px;
+        }
+        .cost-breakdown-row:last-child { border-bottom: none; }
+        .cost-breakdown-val { font-weight: 600; color: var(--text); }
+        .total-row { font-weight: 700; }
+        .total-row .cost-breakdown-val { color: var(--accent); font-size: 14px; }
+
+        /* ════════════════════════════════════════════════
+           MOBILE CLOUD UI  (≤ 768 px)
+           Single-column: narration first, input below.
+           No Three.js canvas — 2D network donut instead.
+           ════════════════════════════════════════════════ */
+        @media (max-width: 768px) {
+            /* Hide pipeline tabs & GPU badge — always cloud on mobile */
+            .pipeline-tabs { display: none; }
+            #gpu-badge { display: none; }
+            .brand-name { font-size: 13px; }
+            .status { font-size: 11px; }
+
+            /* Stack panels vertically, narration on top */
+            .layout {
+                display: flex;
+                flex-direction: column;
+                height: calc(100dvh - var(--topbar));
+                overflow: hidden;
+            }
+            .panel-left {
+                order: 2;
+                flex: 0 0 44vh;
+                border-right: none;
+                border-top: 1px solid var(--border);
+                min-height: 0;
+                overflow: hidden;
+            }
+            .panel-centre { display: none; }
+            .panel-right {
+                order: 1;
+                flex: 1;
+                border-left: none;
+                min-height: 0;
+                display: flex;
+                flex-direction: column;
+            }
+            /* Cost layout mobile */
+            .cost-layout { grid-template-columns: 1fr; overflow-y: auto; }
+            .cost-panel { border-right: none; border-bottom: 1px solid var(--border); }
+
+            /* 2D mobile brain canvas */
+            #mobile-brain-canvas {
+                display: block;
+                width: 100%;
+                height: 180px;
+                flex-shrink: 0;
+                border-top: 1px solid var(--border);
+                background: var(--bg);
+            }
+
+            /* Show mobile cloud pill */
+            .mobile-cloud-pill { display: inline-flex !important; }
+
+            /* Bigger, comfy narration text */
+            .narration-text { font-size: 16px; line-height: 1.82; }
+            .narration-body { padding: 14px 16px 6px; gap: 10px; }
+            .narration-header { padding: 10px 14px; }
+
+            /* Tier pills: horizontal scroll, no wrap */
+            .tier-selector {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+                padding: 8px 12px;
+            }
+            .tier-selector::-webkit-scrollbar { display: none; }
+            .tier-pill { white-space: nowrap; flex-shrink: 0; }
+
+            /* Compact left-panel controls */
+            .tier-section { padding: 7px 12px 5px; }
+            .event-log { font-size: 10px; }
+            .panel-section { padding: 10px 12px; }
+            .panel-title { margin-bottom: 8px; }
+            .submit-btn { padding: 12px 0; font-size: 14px; border-radius: 12px; }
+            .run-cost-badge { flex-direction: column; gap: 3px; text-align: center; margin: 0 12px 6px; }
+
+            /* Mode tabs fill width */
+            .mode-tab { font-size: 9px; padding: 10px 0; }
+        }
+    </style>
 </head>
 <body>
     <header class="topbar">
@@ -14,77 +495,269 @@
             <span class="brand-mark">⌬</span>
             <span class="brand-name">Cortex</span>
         </div>
+        <nav class="pipeline-tabs">
+            <button class="pipeline-tab active" data-pipeline="local">⚡ Local</button>
+            <button class="pipeline-tab" data-pipeline="cloud">☁ Cloud</button>
+            <button class="pipeline-tab" data-pipeline="cost">$ Cost</button>
+        </nav>
+        <span id="gpu-badge">GPU: idle</span>
         <div class="status" id="status">
-            <span class="dot" id="status-dot" aria-hidden="true"></span>
-            <span class="status-text" id="status-text">Connecting…</span>
+            <span class="dot" id="status-dot"></span>
+            <span id="status-text">Connecting…</span>
         </div>
     </header>
 
-    <main class="layout">
-        <section class="panel viewer">
-            <div id="three-root" class="three-root" aria-label="3D brain visualization"></div>
+    <div class="layout">
+        <!-- ── Left: input modes + log ── -->
+        <aside class="panel-left">
 
-            <aside class="sidebar" id="region-sidebar" aria-live="polite">
-                <p>Click a region to inspect. Drag the time slider to replay BOLD activations.</p>
-            </aside>
-
-            <div class="overlay" id="viewer-overlay">
-                <p>Upload a clip to begin. The cortex will animate as TRIBE v2 runs and Gemma narrates.</p>
+            <!-- Mode selector tabs -->
+            <div class="mode-tabs">
+                <button class="mode-tab active" data-mode="file">File</button>
+                <button class="mode-tab" data-mode="camera">Camera</button>
+                <button class="mode-tab" data-mode="voice">Voice</button>
+                <button class="mode-tab" data-mode="text">Text</button>
             </div>
 
-            <div class="viewer-controls">
-                <div class="control-row">
-                    <label class="control-label" for="time-scrubber">Time</label>
-                    <button
-                        type="button"
-                        id="play-toggle"
-                        class="play-toggle"
-                        aria-label="Play / pause time scrubber"
-                        title="Play / pause"
-                    >▶</button>
-                    <input
-                        type="range"
-                        id="time-scrubber"
-                        class="time-scrubber"
-                        min="0"
-                        max="99"
-                        value="0"
-                        step="1"
-                        disabled
-                        aria-label="BOLD timepoint scrubber"
-                    />
-                    <output id="time-scrubber-label" class="control-value">t = 0.0s</output>
+            <!-- File upload -->
+            <div class="mode-panel active" id="mode-file">
+                <form id="scan-form" class="scan-form">
+                    <label class="field">
+                        <span>Video, audio, or image (≤50 MB)</span>
+                        <input type="file" name="file" id="scan-file"
+                               accept="video/*,audio/*,image/*,.txt,.md,.srt,.vtt,.html,.htm,.pdf" required />
+                    </label>
+                    <button type="submit" id="scan-submit" class="submit-btn">Analyze</button>
+                </form>
+            </div>
+
+            <!-- Camera capture -->
+            <div class="mode-panel" id="mode-camera">
+                <div class="camera-wrap">
+                    <video id="camera-video" autoplay playsinline muted></video>
+                    <canvas id="camera-canvas" hidden></canvas>
                 </div>
-                <div id="network-toggles" class="network-toggles" aria-label="Toggle brain networks"></div>
+                <div class="mode-actions">
+                    <button id="camera-open-btn">Open camera</button>
+                    <button id="camera-capture-btn" hidden>Capture</button>
+                    <button id="camera-retake-btn" hidden>Retake</button>
+                </div>
+                <button id="camera-submit-btn" class="submit-btn" hidden>Analyze photo</button>
+            </div>
+
+            <!-- Voice recording -->
+            <div class="mode-panel" id="mode-voice">
+                <canvas id="voice-vis" width="288" height="52"></canvas>
+                <div class="voice-info-row">
+                    <span id="voice-state-label">Ready to record</span>
+                    <span id="voice-timer" class="voice-timer-text">0:00</span>
+                </div>
+                <div class="mode-actions">
+                    <button id="voice-record-btn">Record</button>
+                    <button id="voice-stop-btn" hidden>Stop</button>
+                </div>
+                <button id="voice-submit-btn" class="submit-btn" hidden>Analyze recording</button>
+            </div>
+
+            <!-- Text input -->
+            <div class="mode-panel" id="mode-text">
+                <label class="field">
+                    <span>Describe a thought or stimulus</span>
+                    <textarea id="text-input" rows="7"
+                        placeholder="e.g. watching fireworks, solving a maths problem, listening to jazz…"></textarea>
+                </label>
+                <button id="text-submit-btn" class="submit-btn">Analyze text</button>
+            </div>
+
+            <!-- Narration tier (shared across all modes) -->
+            <div class="tier-section">
+                <p class="panel-title">Narration tier</p>
+                <div class="tier-row">
+                    <span class="tier-label">0 toddler</span>
+                    <input type="range" id="scan-tier" min="0" max="6" value="4" />
+                    <span class="tier-label">6 researcher</span>
+                </div>
+                <output id="tier-display">4</output>
+            </div>
+
+            <!-- Event log -->
+            <div class="panel-section" style="flex:1;display:flex;flex-direction:column;overflow:hidden;border-bottom:none;">
+                <p class="panel-title">Pipeline events</p>
+                <ol id="event-log" class="event-log"></ol>
+            </div>
+
+        </aside>
+
+        <!-- ── Centre: 3D viewer ── -->
+        <section class="panel-centre">
+            <div id="three-root"></div>
+
+            <!-- Pipeline mode badge -->
+            <div id="pipeline-badge" class="pipeline-badge local">⚡ Local · RTX 5090</div>
+
+            <!-- View preset buttons -->
+            <div class="view-toolbar">
+                <button class="view-btn" data-view="anterior">Ant</button>
+                <button class="view-btn" data-view="posterior">Post</button>
+                <button class="view-btn" data-view="left">L Lat</button>
+                <button class="view-btn" data-view="right">R Lat</button>
+                <button class="view-btn" data-view="superior">Sup</button>
+                <button class="view-btn" data-view="inferior">Inf</button>
+            </div>
+
+            <!-- Hemisphere toggle -->
+            <div class="hemi-toolbar">
+                <button class="hemi-btn active" data-hemi="both">Both</button>
+                <button class="hemi-btn" data-hemi="left">LH</button>
+                <button class="hemi-btn" data-hemi="right">RH</button>
+            </div>
+
+            <!-- Colorbar -->
+            <div class="colorbar-wrap">
+                <span class="colorbar-label">+z</span>
+                <div class="colorbar"></div>
+                <span class="colorbar-label">−z</span>
+            </div>
+
+            <!-- Region hover tooltip -->
+            <div id="region-tooltip">
+                <div class="tt-name" id="tt-name"></div>
+                <div class="tt-meta" id="tt-meta"></div>
+                <div class="tt-z" id="tt-z"></div>
+            </div>
+
+            <!-- Playback bar -->
+            <div class="playback-bar">
+                <button id="play-toggle" aria-label="Play / pause">▶</button>
+                <input type="range" id="time-scrubber" min="0" max="99" value="0" step="1" disabled />
+                <span id="time-label">t = 0.0 s</span>
+            </div>
+
+            <!-- Network toggles -->
+            <div id="network-bar" class="network-bar"></div>
+
+            <!-- Upload prompt overlay -->
+            <div id="viewer-overlay">
+                <div>
+                    <div style="font-size:32px;margin-bottom:10px;opacity:.4">⌬</div>
+                    <div>Submit a media file to begin.<br><span style="font-size:12px;opacity:.6">TRIBE v2 will predict cortical BOLD responses. Gemma will narrate.</span></div>
+                </div>
             </div>
         </section>
 
-        <aside class="panel sidebar-right">
-            <h2 class="panel-title">Submit a scan</h2>
-            <form id="scan-form" class="scan-form">
-                <label class="field">
-                    <span>Media file (≤50 MB, ≤50 s)</span>
-                    <input type="file" name="file" id="scan-file" accept="video/*,audio/*,image/*" required />
-                </label>
-                <label class="field">
-                    <span>Narration tier (0 toddler · 6 researcher)</span>
-                    <input type="range" name="tier" id="scan-tier" min="0" max="6" value="1" />
-                    <output id="tier-display">1</output>
-                </label>
-                <button type="submit" id="scan-submit">Analyze</button>
-            </form>
+        <!-- ── Right: narration + ROIs ── -->
+        <aside class="panel-right">
+            <div class="narration-header">
+                <p class="panel-title" style="margin:0">Gemma narration</p>
+                <!-- Mobile-only cloud badge -->
+                <span class="mobile-cloud-pill" style="display:none; align-items:center; gap:5px; font-size:10px; font-weight:600; color:var(--accent); padding:2px 8px; border-radius:99px; border:1px solid var(--accent); background:rgba(91,141,239,.1);">☁ Cloud</span>
+                <span class="narration-model-badge" id="narration-model">—</span>
+            </div>
 
-            <h2 class="panel-title">Pipeline events</h2>
-            <ol id="event-log" class="event-log" aria-live="polite"></ol>
+            <div class="tier-selector" id="tier-pills">
+                <button class="tier-pill" data-tier="0">Toddler</button>
+                <button class="tier-pill" data-tier="1">Grandparent</button>
+                <button class="tier-pill" data-tier="2">General</button>
+                <button class="tier-pill" data-tier="3">High school</button>
+                <button class="tier-pill active" data-tier="4">College</button>
+                <button class="tier-pill" data-tier="5">Clinician</button>
+                <button class="tier-pill" data-tier="6">Researcher</button>
+            </div>
+
+            <div id="run-cost-badge" class="run-cost-badge hidden"></div>
+
+            <div class="narration-body" id="narration-body">
+                <p class="narration-placeholder">Run a scan to see Gemma's analysis.</p>
+            </div>
+
+            <!-- Mobile-only 2D network canvas (hidden on desktop via CSS default, shown via media query) -->
+            <canvas id="mobile-brain-canvas"></canvas>
         </aside>
-    </main>
+    </div>
 
-    <footer class="footer">
-        <span>
-            Cortex by <a href="https://redteamkitchen.com" rel="noopener">Alexios Bluff Mara LLC</a>.
-            Apache 2.0. Gemma is a trademark of Google LLC.
-        </span>
-    </footer>
+    <!-- Cost comparison layout (shown when $ Cost tab is active) -->
+    <div id="cost-layout" class="cost-layout hidden">
+        <div class="cost-panel">
+            <div class="cost-panel-header">
+                <span class="cost-icon">⚡</span>
+                <h2>Local Pipeline</h2>
+                <span class="cost-subtitle">RTX 5090 · Gemma 4 E4B · TRIBE v2 local</span>
+            </div>
+            <div class="cost-stats-grid">
+                <div class="cost-stat-card">
+                    <div class="cost-stat-val" id="lc-power">575 W</div>
+                    <div class="cost-stat-key">GPU TDP estimate</div>
+                </div>
+                <div class="cost-stat-card">
+                    <div class="cost-stat-val" id="lc-rate">$0.15 / kWh</div>
+                    <div class="cost-stat-key">electricity rate</div>
+                </div>
+                <div class="cost-stat-card highlight-local">
+                    <div class="cost-stat-val" id="lc-avg">—</div>
+                    <div class="cost-stat-key">avg ¢ per run</div>
+                </div>
+                <div class="cost-stat-card">
+                    <div class="cost-stat-val" id="lc-total">—</div>
+                    <div class="cost-stat-key">total ¢ this session</div>
+                </div>
+            </div>
+            <div class="cost-formula">
+                <span class="cost-formula-label">Formula:</span>
+                <code>W × seconds ÷ 3600 ÷ 1000 × rate × 100</code>
+            </div>
+            <table class="cost-history-table" id="local-history-table">
+                <thead><tr><th>Scan</th><th>File</th><th>TRIBE (s)</th><th>Gemma (s)</th><th>¢</th></tr></thead>
+                <tbody id="local-history-body"></tbody>
+            </table>
+        </div>
+        <div class="cost-panel cost-panel-right">
+            <div class="cost-panel-header">
+                <span class="cost-icon">☁</span>
+                <h2>Cloud Pipeline</h2>
+                <span class="cost-subtitle">Vertex AI · Gemma 4 27B · TRIBE v2 cloud GPU</span>
+            </div>
+            <div class="cost-stats-grid">
+                <div class="cost-stat-card">
+                    <div class="cost-stat-val">A100 GPU</div>
+                    <div class="cost-stat-key">cloud inference</div>
+                </div>
+                <div class="cost-stat-card">
+                    <div class="cost-stat-val">$3.67 / hr</div>
+                    <div class="cost-stat-key">A100 on-demand rate</div>
+                </div>
+                <div class="cost-stat-card highlight-cloud">
+                    <div class="cost-stat-val" id="cc-avg">~3.1 ¢</div>
+                    <div class="cost-stat-key">avg ¢ per run (est.)</div>
+                </div>
+                <div class="cost-stat-card">
+                    <div class="cost-stat-val" id="cc-total">—</div>
+                    <div class="cost-stat-key">projected ¢ this session</div>
+                </div>
+            </div>
+            <div class="cost-breakdown-list">
+                <div class="cost-breakdown-row">
+                    <span>TRIBE inference (cloud A100, ~30s)</span>
+                    <span class="cost-breakdown-val">≈ 3.06 ¢</span>
+                </div>
+                <div class="cost-breakdown-row">
+                    <span>Gemma 4 27B input (~600 tok)</span>
+                    <span class="cost-breakdown-val">≈ 0.021 ¢</span>
+                </div>
+                <div class="cost-breakdown-row">
+                    <span>Gemma 4 27B output (~400 tok)</span>
+                    <span class="cost-breakdown-val">≈ 0.042 ¢</span>
+                </div>
+                <div class="cost-breakdown-row total-row">
+                    <span>Total per run</span>
+                    <span class="cost-breakdown-val">≈ 3.12 ¢</span>
+                </div>
+            </div>
+            <table class="cost-history-table" id="cloud-history-table">
+                <thead><tr><th>Scan</th><th>File</th><th>Local ¢</th><th>Cloud ¢ (est.)</th><th>Savings</th></tr></thead>
+                <tbody id="cloud-history-body"></tbody>
+            </table>
+        </div>
+    </div>
 
     <script type="module" src="/assets/main.js"></script>
 </body>
