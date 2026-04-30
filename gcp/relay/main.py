@@ -27,9 +27,14 @@ GCP_PROJECT     = os.environ["GCP_PROJECT"]
 GEMINI_KEY      = os.environ.get("GEMINI_API_KEY", "")
 # Google OAuth client ID — set in Cloud Run env vars after creating in GCP Console
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
-# Gemini fallback model — override with GEMINI_MODEL env var on Cloud Run
-# Options: gemini-2.5-flash (default), gemini-3.1-flash-preview, gemini-3.1-flash-lite-preview
-GEMINI_MODEL     = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+# Gemini fallback model — override with GEMINI_MODEL env var on Cloud Run without redeploy
+# Gemini 3 / 3.1 model lineup (April 2026):
+#   gemini-3.1-flash-preview      Frontier-class Flash; fast + capable; free tier (reduced quota) — DEFAULT
+#   gemini-3.1-flash-lite-preview Budget Flash; cheapest + fastest; free tier (reduced quota)
+#   gemini-3.1-pro-preview        Most capable; complex agentic tasks; PAID-ONLY (no free tier)
+#   gemini-3-flash                Previous stable Flash; $0.50/$3.00 per 1M tok; free tier
+# Note: 2.5 family is legacy/deprecated — avoid for new work.
+GEMINI_MODEL     = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-preview")
 # Domains allowed to submit scans (pipe-separated: "philanthropytraders.com|redteamkitchen.com")
 ALLOWED_DOMAINS = set(os.environ.get("ALLOWED_DOMAINS", "philanthropytraders.com,redteamkitchen.com").split(","))
 MAX_MB          = 50
@@ -276,15 +281,12 @@ async def get_narrations(scan_id: str):
 async def _gemini_narration(filename: str) -> dict:
     """Gemini fallback narration when local Gemma 4 (RTX 5090) is unavailable.
 
-    Model choice guide (April 2026 — update GEMINI_MODEL env var to override):
-      gemini-2.5-flash          Best price-performance; stable production; ~$0.50/$3.00 per 1M tok
-      gemini-3.1-flash-preview  Latest frontier Flash; faster, slightly more capable; preview pricing
-      gemini-3.1-flash-lite-preview  Budget option; fastest; ~$0.25/$1.50 per 1M tok
-      gemini-2.5-pro            Advanced reasoning; $2.00-$4.00 / $12.00-$18.00 per 1M tok; NO free tier
-      gemini-3.1-pro-preview    Most capable; complex agentic tasks; paid-only
-
-    Default: gemini-2.5-flash — stable, cost-effective, free tier available (reduced quota).
-    Set GEMINI_MODEL env var on Cloud Run to override without a redeploy.
+    Model choice guide (April 2026 — set GEMINI_MODEL env var on Cloud Run to override):
+      gemini-3.1-flash-preview      DEFAULT — frontier Flash; best speed+quality; free tier (reduced)
+      gemini-3.1-flash-lite-preview Cheapest option; ~$0.25/$1.50 per 1M tok; free tier (reduced)
+      gemini-3.1-pro-preview        Most capable; paid-only (no free tier); complex multi-step reasoning
+      gemini-3-flash                Previous stable Flash; $0.50/$3.00 per 1M tok; free tier
+    Note: 2.5 family is legacy — avoid for new work.
     """
 
     Generates 4 persona narrations — Alex (American), Jordan (Student),
