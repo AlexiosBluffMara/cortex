@@ -670,6 +670,24 @@ def create_app(
                 raise HTTPException(status_code=404, detail="Viewer not built")
             return FileResponse(str(index_html))
 
+    # AdSense / SEO files served regardless of PUBLIC_DIR
+    from fastapi.responses import PlainTextResponse
+
+    @app.get("/ads.txt")
+    async def ads_txt() -> PlainTextResponse:
+        return PlainTextResponse(
+            "google.com, pub-7794155680942670, DIRECT, f08c47fec0942fa0\n",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    @app.get("/robots.txt")
+    async def robots_txt() -> PlainTextResponse:
+        return PlainTextResponse(
+            "User-agent: *\nAllow: /\nUser-agent: Mediapartners-Google\nAllow: /\n"
+            "Sitemap: https://cortex.redteamkitchen.com/sitemap.xml\n",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
     return app
 
 
