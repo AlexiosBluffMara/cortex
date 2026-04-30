@@ -300,10 +300,8 @@ async def _gemini_narration(filename: str) -> dict:
       gemini-3.1-flash-lite-preview Cheapest option; ~$0.25/$1.50 per 1M tok; free tier (reduced)
       gemini-3.1-pro-preview        Most capable; paid-only (no free tier); complex multi-step reasoning
       gemini-3-flash                Previous stable Flash; $0.50/$3.00 per 1M tok; free tier
-    Note: 2.5 family is legacy — avoid for new work.
-    """
-
-    Generates 4 persona narrations — Alex (American), Jordan (Student),
+    Note: 2.5 family is legacy -- avoid for new work.
+    Generates 4 persona narrations: Alex (American), Jordan (Student),
     Dr. Maya Chen (Neurosurgeon), Atlas (ML Engineer).
     """
     if not GEMINI_KEY:
