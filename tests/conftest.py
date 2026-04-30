@@ -176,3 +176,9 @@ def mock_pipeline(monkeypatch: pytest.MonkeyPatch):
 def event_loop_policy():
     """Override pytest-asyncio's event loop policy to a clean one per test."""
     return asyncio.DefaultEventLoopPolicy()
+
+
+def pytest_collection_modifyitems(config, items):
+    for item in items:
+        if "e2e" in item.keywords:
+            item.add_marker(pytest.mark.skip(reason="e2e requires running server"))

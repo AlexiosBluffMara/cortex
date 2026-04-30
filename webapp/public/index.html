@@ -6,25 +6,46 @@
     <meta name="color-scheme" content="dark" />
     <meta name="description" content="Cortex — multimodal brain-response analysis with Gemma 4 + TRIBE v2." />
     <title>Cortex · Brain-response analysis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         /* ── Reset & base ── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
-            --bg: #0d0e14;
-            --surface: #13151f;
-            --surface2: #1a1d2b;
-            --border: #252838;
-            --accent: #5b8def;
-            --accent2: #7c6ff7;
-            --text: #dde3f0;
-            --muted: #6b738f;
-            --positive: #ef5f5f;   /* hot = activation */
-            --negative: #5f9eef;   /* cool = deactivation */
-            --good: #3ecf8e;
-            --radius: 10px;
+            /*
+             * Brand palette: ISU cardinal as the single accent. Activation +
+             * deactivation keep their semantic blue/red because the brain's
+             * diverging colormap needs both poles distinct from the chrome
+             * accent (otherwise red activation would visually merge with red
+             * accent UI elements and the user couldn't tell them apart).
+             */
+            --bg: #0a0b0e;
+            --surface: #14151c;
+            --surface2: #1c1e28;
+            --border: #262834;
+            --border-strong: #383a47;
+
+            /* ISU Cardinal — single brand accent */
+            --accent: #CE1126;
+            --accent2: #ee2d3f;
+            --accent-deep: #9c0d1d;
+
+            --text: #f0f2f6;
+            --muted: #8b8d96;
+
+            /* Diverging activation colormap (kept blue/red so activation is
+               visually distinct from the cardinal brand chrome) */
+            --positive: #ff3a25;   /* hot = activation */
+            --negative: #1f5cff;   /* cool = deactivation */
+
+            --good: #4ad596;       /* connection status */
+
+            --radius: 12px;
             --topbar: 52px;
         }
-        html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; }
+        html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: "Inter", ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+        body, button, input, select { font-feature-settings: "ss01", "cv11"; }
 
         /* ── Topbar ── */
         .topbar {
@@ -77,7 +98,7 @@
             min-height: 0; min-width: 0;
         }
         .panel-section { padding: 16px; border-bottom: 1px solid var(--border); }
-        .panel-title { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+        .panel-title { font-size: 11px; font-family: "Outfit", sans-serif; font-weight: 600; letter-spacing: -0.01em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
 
         .scan-form { display: flex; flex-direction: column; gap: 10px; }
         .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
@@ -94,7 +115,7 @@
         #scan-submit:hover { opacity: .85; }
         #scan-submit:disabled { opacity: .4; cursor: default; }
 
-        .event-log { list-style: none; font-size: 11px; color: var(--muted); overflow-y: auto; flex: 1; padding: 10px 16px; }
+        .event-log { list-style: none; font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--muted); overflow-y: auto; flex: 1; padding: 10px 16px; }
         .event-log li { padding: 3px 0; border-bottom: 1px solid var(--border); line-height: 1.5; }
         .event-log li:last-child { color: var(--text); }
         .event-ts { cursor: pointer; opacity: 0.7; font-variant-numeric: tabular-nums; transition: opacity 0.15s; }
@@ -161,11 +182,13 @@
             position: absolute; pointer-events: none; display: none;
             background: rgba(13,14,20,.92); border: 1px solid var(--border);
             border-radius: 8px; padding: 8px 12px; font-size: 12px;
+            font-family: "Inter", sans-serif;
             max-width: 220px; z-index: 50;
         }
         #region-tooltip .tt-name { font-weight: 600; color: var(--text); }
         #region-tooltip .tt-meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
         #region-tooltip .tt-z { font-size: 13px; font-weight: 700; margin-top: 4px; }
+        #region-tooltip .tt-func { font-size: 10px; color: rgba(139,141,150,0.7); margin-top: 3px; }
 
         /* Playback bar */
         .playback-bar {
@@ -241,12 +264,30 @@
         }
 
         .narration-text {
-            font-size: 15px; line-height: 1.75; color: var(--text);
-            font-weight: 400;
+            font-family: "Inter", sans-serif; font-size: 13px; line-height: 1.75;
+            color: var(--text); font-weight: 400;
         }
         .narration-placeholder {
-            font-size: 14px; color: var(--muted); text-align: center; margin: auto;
+            font-family: "Inter", sans-serif; font-size: 13px;
+            color: var(--muted); text-align: center; margin: auto;
         }
+        .narration-tier { display: none; }
+        .narration-tier.active-tier { display: block; }
+
+        /* Narration tabs */
+        .narration-tabs {
+            display: flex; gap: 2px; padding: 8px 18px 0;
+            border-bottom: 1px solid var(--border); flex-shrink: 0;
+        }
+        .narr-tab {
+            padding: 6px 14px; font-size: 11px; font-weight: 600;
+            border: none; border-bottom: 2px solid transparent;
+            background: transparent; color: var(--muted);
+            cursor: pointer; margin-bottom: -1px;
+            transition: color .12s, border-color .12s;
+        }
+        .narr-tab:hover:not(.active) { color: var(--text); }
+        .narr-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
         /* ROI breakdown */
         .roi-section { border-top: 1px solid var(--border); padding-top: 14px; }
@@ -347,6 +388,39 @@
         }
         .submit-btn:hover { opacity: .85; }
         .submit-btn:disabled { opacity: .4; cursor: default; }
+
+        /* Drop zone */
+        .drop-zone {
+            position: relative; border: 1.5px dashed var(--border-strong);
+            border-radius: 10px; padding: 18px 12px; text-align: center;
+            cursor: pointer; transition: border-color .15s, background .15s;
+            background: var(--surface2);
+        }
+        .drop-zone:hover, .drop-zone.drag-over {
+            border-color: var(--accent); background: rgba(206,17,38,.06);
+        }
+        .drop-icon { font-size: 20px; margin-bottom: 6px; color: var(--muted); }
+        .drop-label { font-size: 12px; color: var(--text); font-weight: 500; }
+        .drop-types { font-size: 10px; color: var(--muted); margin-top: 3px; }
+        .drop-input {
+            position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+        }
+        .drop-selected {
+            margin-top: 8px; font-size: 11px; color: var(--text);
+            display: flex; align-items: center; gap: 6px; justify-content: center;
+        }
+        .drop-selected .file-chip {
+            background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+            padding: 2px 8px; font-size: 10px; color: var(--muted);
+        }
+        .drop-selected.hidden { display: none; }
+
+        /* Input preview */
+        .input-preview { margin-top: 6px; border-radius: 8px; overflow: hidden; }
+        .input-preview.hidden { display: none; }
+        .input-preview img, .input-preview video {
+            width: 100%; max-height: 120px; object-fit: cover; display: block; border-radius: 8px;
+        }
 
         /* Tier section (shared, sits below mode panels) */
         .tier-section { padding: 12px 16px 10px; border-top: 1px solid var(--border); flex-shrink: 0; }
@@ -461,7 +535,7 @@
             .mobile-cloud-pill { display: inline-flex !important; }
 
             /* Bigger, comfy narration text */
-            .narration-text { font-size: 16px; line-height: 1.82; }
+            .narration-text { font-size: 15px; line-height: 1.82; }
             .narration-body { padding: 14px 16px 6px; gap: 10px; }
             .narration-header { padding: 10px 14px; }
 
@@ -521,14 +595,15 @@
 
             <!-- File upload -->
             <div class="mode-panel active" id="mode-file">
-                <form id="scan-form" class="scan-form">
-                    <label class="field">
-                        <span>Video, audio, or image (≤50 MB)</span>
-                        <input type="file" name="file" id="scan-file"
-                               accept="video/*,audio/*,image/*,.txt,.md,.srt,.vtt,.html,.htm,.pdf" required />
-                    </label>
-                    <button type="submit" id="scan-submit" class="submit-btn">Analyze</button>
-                </form>
+                <div id="drop-zone" class="drop-zone">
+                    <div class="drop-icon">⬆</div>
+                    <div class="drop-label">Drop a file or click to browse</div>
+                    <div class="drop-types">Video · Audio · Image · PDF · Text</div>
+                    <input type="file" id="scan-file" name="file" accept="video/*,audio/*,image/*,.txt,.md,.srt,.vtt,.html,.htm,.pdf" class="drop-input" />
+                    <div id="drop-selected" class="drop-selected hidden"></div>
+                </div>
+                <div id="input-preview" class="input-preview hidden"></div>
+                <button type="button" id="scan-submit" class="submit-btn" disabled>Analyze</button>
             </div>
 
             <!-- Camera capture -->
@@ -619,10 +694,14 @@
                 <span class="colorbar-label">−z</span>
             </div>
 
+            <!-- Colormap legend canvas -->
+            <canvas id="colormap-canvas" width="36" height="160" style="position:absolute;left:12px;bottom:90px;pointer-events:none;z-index:10;"></canvas>
+
             <!-- Region hover tooltip -->
             <div id="region-tooltip">
                 <div class="tt-name" id="tt-name"></div>
                 <div class="tt-meta" id="tt-meta"></div>
+                <div class="tt-func" id="tt-func"></div>
                 <div class="tt-z" id="tt-z"></div>
             </div>
 
@@ -654,20 +733,18 @@
                 <span class="narration-model-badge" id="narration-model">—</span>
             </div>
 
-            <div class="tier-selector" id="tier-pills">
-                <button class="tier-pill" data-tier="0">Toddler</button>
-                <button class="tier-pill" data-tier="1">Grandparent</button>
-                <button class="tier-pill" data-tier="2">General</button>
-                <button class="tier-pill" data-tier="3">High school</button>
-                <button class="tier-pill active" data-tier="4">College</button>
-                <button class="tier-pill" data-tier="5">Clinician</button>
-                <button class="tier-pill" data-tier="6">Researcher</button>
+            <div class="narration-tabs">
+                <button class="narr-tab" data-narr="general">General</button>
+                <button class="narr-tab active" data-narr="college">College</button>
+                <button class="narr-tab" data-narr="clinical">Clinical</button>
             </div>
 
             <div id="run-cost-badge" class="run-cost-badge hidden"></div>
 
             <div class="narration-body" id="narration-body">
-                <p class="narration-placeholder">Run a scan to see Gemma's analysis.</p>
+                <div id="narration-general" class="narration-tier hidden"><p class="narration-placeholder">Generating…</p></div>
+                <div id="narration-college" class="narration-tier active-tier"><p class="narration-placeholder">Run a scan to see Gemma's analysis.</p></div>
+                <div id="narration-clinical" class="narration-tier hidden"><p class="narration-placeholder">Generating…</p></div>
             </div>
 
             <!-- Mobile-only 2D network canvas (hidden on desktop via CSS default, shown via media query) -->
@@ -759,6 +836,6 @@
         </div>
     </div>
 
-    <script type="module" src="/assets/main.js"></script>
+    <script type="module" src="/assets/main.js?v=20260430-isu3"></script>
 </body>
 </html>

@@ -25,6 +25,7 @@ const narrationModel= document.getElementById("narration-model");
 const tooltip       = document.getElementById("region-tooltip");
 const ttName        = document.getElementById("tt-name");
 const ttMeta        = document.getElementById("tt-meta");
+const ttFunc        = document.getElementById("tt-func");
 const ttZ           = document.getElementById("tt-z");
 
 // ---------------------------------------------------------------------------
@@ -234,32 +235,53 @@ async function loadBrainMesh() {
 }
 
 // ---------------------------------------------------------------------------
-// BOLD painting — high-contrast diverging colormap.
+// BOLD painting — high-contrast diverging colormap with adaptive scale.
 //
-// Cool side  (z<0):  pale lilac → saturated cobalt          (#e6d6d8 → #1f5cff)
-// Neutral    (z=0):  base mauve                             (matches BASE)
-// Warm side  (z>0):  pale → saturated coral / hot orange    (#e6d6d8 → #ff3a25)
-//
-// Stronger saturation than v1 so the activation reads on a wide-shot of
-// the cortex without needing a closeup. Range clamps a touch tighter
-// (z/2.5 instead of z/3.0) to keep mid-z values visually present.
+// `_zScale` is set per-frame from the actual data range so even small-magnitude
+// scans (typical TRIBE z-scores are 0.3 – 1.5) saturate the full hot/cool
+// range. Cool side  (z<0):  base → cobalt #1f5cff. Warm side  (z>0):  base →
+// hot orange #ff3a25. Saturation is gamma-curved (pow 0.6) so mid-range values
+// don't look like a thin pastel wash — they read on a wide-shot.
 // ---------------------------------------------------------------------------
+let _zScale = 1.0;     // updated by setZScaleForFrame(row); fallback = 1.0
+
+function setZScaleForFrame(rowAbsMax) {
+    // Map the frame's max(|z|) onto t=1.0. Floor at 0.3 so a flat-ish
+    // frame doesn't hyper-amplify noise; cap at 4.0 so a single outlier
+    // can't dim the rest. Soft EMA so timesteps don't flicker brightness.
+    const target = Math.max(0.3, Math.min(4.0, rowAbsMax));
+    _zScale = _zScale * 0.5 + target * 0.5;
+}
+
 function zToRGB(z) {
-    const t = Math.max(-1, Math.min(1, z / 2.5));
-    if (t >= 0) {
-        // base → hot orange/red
+    const raw = z / Math.max(0.0001, _zScale);
+    const t = Math.max(-1, Math.min(1, raw));
+    const sign = t >= 0 ? 1 : -1;
+    // Gamma curve (pow 0.6) lifts mid-range values toward saturation.
+    const m = Math.pow(Math.abs(t), 0.6);
+    if (sign >= 0) {
+        // base mauve → hot orange/red (#ff3a25)
         return [
             1.00,
-            0.84 - t * 0.62,    // 0.84 → 0.22
-            0.85 - t * 0.71,    // 0.85 → 0.14
+            0.84 - m * 0.62,
+            0.85 - m * 0.71,
         ];
     }
-    const u = -t;
     return [
-        0.90 - u * 0.78,        // 0.90 → 0.12
-        0.84 - u * 0.48,        // 0.84 → 0.36
-        0.85 + u * 0.15,        // 0.85 → 1.00
+        0.90 - m * 0.78,
+        0.84 - m * 0.48,
+        0.85 + m * 0.15,         // → cobalt #1f5cff
     ];
+}
+
+function _absMaxOf(arr, off, len) {
+    let m = 0;
+    const end = off + len;
+    for (let i = off; i < end; i++) {
+        const v = arr[i] < 0 ? -arr[i] : arr[i];
+        if (v > m) m = v;
+    }
+    return m;
 }
 
 function paintFrame(t) {
@@ -267,6 +289,14 @@ function paintFrame(t) {
     const row = st.boldTrace.bold[t];
     if (!row) return;
     timeLabel.textContent = `t = ${(t * st.boldTrace.tr_seconds).toFixed(1)} s`;
+
+    // Per-frame auto-scale on the per-region BOLD too (fallback path)
+    let absMax = 0;
+    for (let i = 0; i < row.length; i++) {
+        const v = row[i] < 0 ? -row[i] : row[i];
+        if (v > absMax) absMax = v;
+    }
+    setZScaleForFrame(absMax);
 
     // Mobile: skip expensive 20484-vertex CPU paint, use 2D canvas only
     if (isMobile) { drawMobileFrame(t); return; }
@@ -301,18 +331,28 @@ scrubber.addEventListener("input", () => {
     const v = +scrubber.value;
     if (st.boldVertex) paintVertexFrame(v);
     else if (st.boldTrace) paintFrame(v);
+    drawColormapLegend();
 });
 
 function setPlaying(on) {
     if (on) {
         if (st.playTimer) return;
         playBtn.textContent = "⏸";
+        const nT = st.boldVertex
+            ? st.boldVertex.n_t
+            : (st.boldTrace ? st.boldTrace.n_t : null);
+        if (!nT) { playBtn.textContent = "▶"; return; }
+        const tr = st.boldVertex
+            ? (st.boldVertex.tr_seconds ?? 0.5)
+            : (st.boldTrace?.tr_seconds ?? 0.5);
+        const interval = Math.max(33, tr * 1000);
         st.playTimer = setInterval(() => {
-            if (!st.boldTrace) return;
-            const v = (+scrubber.value + 1) % (+scrubber.max + 1);
+            const v = (+scrubber.value + 1) % nT;
             scrubber.value = v;
-            paintFrame(v);
-        }, 100);
+            if (st.boldVertex) paintVertexFrame(v);
+            else paintFrame(v);
+            drawColormapLegend();
+        }, interval);
     } else {
         clearInterval(st.playTimer);
         st.playTimer = null;
@@ -320,6 +360,41 @@ function setPlaying(on) {
     }
 }
 playBtn.addEventListener("click", () => setPlaying(!st.playTimer));
+
+// ---------------------------------------------------------------------------
+// Colormap legend
+// ---------------------------------------------------------------------------
+function drawColormapLegend() {
+    const cvs = document.getElementById("colormap-canvas");
+    if (!cvs) return;
+    const ctx = cvs.getContext("2d");
+    const W = cvs.width, H = cvs.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // Gradient bar: bottom = cobalt blue, middle = mauve, top = hot orange
+    const barX = 0, barW = 14, barH = H - 30, barY = 14;
+    const grad = ctx.createLinearGradient(0, barY, 0, barY + barH);
+    grad.addColorStop(0,   "#ff3a25");
+    grad.addColorStop(0.5, "#e6d6d8");
+    grad.addColorStop(1,   "#1f5cff");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, barH, 3);
+    ctx.fill();
+
+    // Tick labels at −2σ … +2σ positions using _zScale
+    const ticks = [2, 1, 0, -1, -2];
+    ctx.font = '11px "JetBrains Mono", monospace';
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    for (const sigma of ticks) {
+        const t = (2 - sigma) / 4;   // 0=top(+2σ), 1=bottom(−2σ)
+        const y = barY + t * barH;
+        const val = (sigma * _zScale).toFixed(1);
+        ctx.fillText(val, barW + 3, y);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Hover tooltip via raycasting against brain surface
@@ -361,6 +436,7 @@ renderer.domElement.addEventListener("mousemove", e => {
 
     ttName.textContent = name.replace(/^7Networks_[LR]H_/, "");
     ttMeta.textContent = netLabel;
+    if (ttFunc) ttFunc.textContent = YEO7_FUNC[netKey] ?? "";
     ttZ.textContent    = zStr;
     ttZ.style.color    = zColor;
     tooltip.style.display = "block";
@@ -368,6 +444,19 @@ renderer.domElement.addEventListener("mousemove", e => {
     tooltip.style.top     = `${e.clientY + 8}px`;
 });
 renderer.domElement.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
+
+// ---------------------------------------------------------------------------
+// Yeo-7 one-line functional descriptions (for tooltip)
+// ---------------------------------------------------------------------------
+const YEO7_FUNC = {
+    Vis:         "Visual processing",
+    SomMot:      "Sensory & motor",
+    DorsAttn:    "Spatial attention",
+    SalVentAttn: "Salience & reorienting",
+    Limbic:      "Memory & emotion",
+    Cont:        "Cognitive control",
+    Default:     "Rest, social, self-referential",
+};
 
 // ---------------------------------------------------------------------------
 // Network toggles — built from Schaefer-400 Yeo-7 keys in vertex_labels
@@ -524,9 +613,18 @@ const TIER_MODELS = [
     "Gemma 4 26B","Gemma 4 31B","Gemma 4 31B",
 ];
 
+function _setNarrationText(divId, text, isPlaceholder) {
+    const el = document.getElementById(divId);
+    if (!el) return;
+    const p = document.createElement("p");
+    p.className = isPlaceholder ? "narration-placeholder" : "narration-text";
+    p.textContent = text;
+    el.innerHTML = "";
+    el.appendChild(p);
+}
+
 function renderNarration(result) {
     st.scanResult = result;
-    narrationBody.innerHTML = "";
     narrationModel.textContent = TIER_MODELS[result.tier ?? st.tier] ?? "Gemma 4";
 
     if (result.status === "complete" && result.seconds_elapsed != null) {
@@ -535,6 +633,14 @@ function renderNarration(result) {
         recordRun(result.id || st.scanId, st.lastFilename || 'unknown', tribeSec, gemmaSec);
         st.narrationStartTime = null;
     }
+
+    // Rebuild stat row and ROI section inside narration-body before the tier divs
+    // We inject these before #narration-general so they appear above tabs content.
+    // Locate the stat-row placeholder we may have already put in body.
+    const existingStats = narrationBody.querySelector(".stat-row");
+    if (existingStats) existingStats.remove();
+    const existingRoi = narrationBody.querySelector(".roi-section");
+    if (existingRoi) existingRoi.remove();
 
     if (result.peak_t != null || result.top_rois?.length) {
         const row = document.createElement("div");
@@ -545,16 +651,31 @@ function renderNarration(result) {
         if (result.top_rois?.length) {
             row.innerHTML += `<div class="stat"><div class="stat-val">${result.top_rois.length}</div><div class="stat-key">Top ROIs</div></div>`;
         }
-        narrationBody.appendChild(row);
+        narrationBody.insertBefore(row, narrationBody.firstChild);
     }
 
-    const p = document.createElement("p");
-    p.className = result.narration ? "narration-text" : "narration-placeholder";
-    p.textContent = result.narration ?? (
-        result.status === "complete"   ? "No narration generated." :
-        result.status === "narrating"  ? "Gemma is narrating…"     : "TRIBE v2 running…"
-    );
-    narrationBody.appendChild(p);
+    // Populate narration tier divs
+    if (result.narrations && typeof result.narrations === "object") {
+        const tierMap = { 3: "general", 4: "college", 5: "clinical" };
+        for (const [tier, divSuffix] of Object.entries(tierMap)) {
+            const text = result.narrations[tier] ?? result.narrations[+tier];
+            if (text) {
+                _setNarrationText(`narration-${divSuffix}`, text, false);
+            } else {
+                _setNarrationText(`narration-${divSuffix}`, "Not available for this tier.", true);
+            }
+        }
+    } else {
+        // Backwards compat: single narration field → college tab
+        const fallbackText = result.narration ?? (
+            result.status === "complete"  ? "No narration generated." :
+            result.status === "narrating" ? "Gemma is narrating…"     : "TRIBE v2 running…"
+        );
+        const isPlaceholder = !result.narration;
+        _setNarrationText("narration-college",  fallbackText, isPlaceholder);
+        _setNarrationText("narration-general",  "Generating…", true);
+        _setNarrationText("narration-clinical", "Generating…", true);
+    }
 
     if (result.top_rois?.length) {
         const sec = document.createElement("div");
@@ -579,6 +700,21 @@ function renderNarration(result) {
 }
 
 // ---------------------------------------------------------------------------
+// Narration tabs
+// ---------------------------------------------------------------------------
+document.querySelectorAll(".narr-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+        document.querySelectorAll(".narr-tab").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        const key = btn.dataset.narr;
+        ["general", "college", "clinical"].forEach(k => {
+            const el = document.getElementById(`narration-${k}`);
+            if (el) el.classList.toggle("active-tier", k === key);
+        });
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Tier pills
 // ---------------------------------------------------------------------------
 function setTierPill(tier) {
@@ -595,7 +731,7 @@ document.querySelectorAll(".tier-pill").forEach(btn => {
         const tier = +btn.dataset.tier;
         setTierPill(tier);
         if (st.scanId && st.scanResult?.status === "complete") {
-            narrationBody.innerHTML = `<p class="narration-placeholder">Requesting tier-${tier} narration…</p>`;
+            _setNarrationText("narration-college", `Requesting tier-${tier} narration…`, true);
             try {
                 const r = await fetch(`/api/scan/${st.scanId}/narrate?tier=${tier}`, { method: "POST" });
                 if (!r.ok) throw new Error();
@@ -616,6 +752,16 @@ tierInput.addEventListener("input", () => setTierPill(+tierInput.value));
 async function loadBoldForScan(scanId) {
     // Prefer the real per-vertex (T x 20484) trace if the scan has it on disk.
     // Falls back to the 50-region simulate endpoint when the .npy is missing.
+    //
+    // Initial frame: prefer scan_result.peak_t (the visually-impressive moment)
+    // so that direct-link viewers (?scan=<id>) open ON the activation peak
+    // rather than on a near-zero opening frame.
+    const pickInitialFrame = (nT) => {
+        const peak = st.scanResult?.peak_t;
+        if (Number.isInteger(peak) && peak >= 0 && peak < nT) return peak;
+        return Math.max(0, Math.min(nT - 1, (nT * 0.55) | 0));   // mid-clip default
+    };
+
     try {
         const r = await fetch(`/api/scan/${encodeURIComponent(scanId)}/bold-vertex?n_t=100`);
         if (r.ok) {
@@ -628,9 +774,11 @@ async function loadBoldForScan(scanId) {
                 st.boldTrace  = null;       // disable per-region path
                 scrubber.disabled = false;
                 scrubber.max      = String(nT - 1);
-                scrubber.value    = "0";
-                paintVertexFrame(0);
-                appendEvent(`BOLD: ${nT} TRs × ${nV} vertices (per-vertex)`, "complete");
+                const f0 = pickInitialFrame(nT);
+                scrubber.value    = String(f0);
+                paintVertexFrame(f0);
+                drawColormapLegend();
+                appendEvent(`BOLD: ${nT} TRs × ${nV} vertices (per-vertex), opened at t=${f0}`, "complete");
                 return;
             }
             appendEvent("per-vertex shape mismatch — falling back", "warning");
@@ -647,10 +795,12 @@ async function loadBoldForScan(scanId) {
         st.boldVertex = null;
         scrubber.disabled = false;
         scrubber.max   = String(trace.n_t - 1);
-        scrubber.value = "0";
-        paintFrame(0);
-        if (isMobile) drawMobileFrame(0);
-        appendEvent(`BOLD: ${trace.n_t} TRs × ${trace.n_regions} regions (simulated)`, "complete");
+        const f0 = pickInitialFrame(trace.n_t);
+        scrubber.value = String(f0);
+        paintFrame(f0);
+        drawColormapLegend();
+        if (isMobile) drawMobileFrame(f0);
+        appendEvent(`BOLD: ${trace.n_t} TRs × ${trace.n_regions} regions (simulated), opened at t=${f0}`, "complete");
     } catch (err) {
         appendEvent(`BOLD load failed: ${err.message}`, "failed");
     }
@@ -670,6 +820,11 @@ function paintVertexFrame(t) {
 
     const filterActive = st.activeNetworks.size > 0;
     const rowOff = tt * n_vert;
+
+    // Per-frame auto-scale: read the row's dynamic range so even small
+    // activations paint at full saturation on camera.
+    const row = data.subarray(rowOff, rowOff + n_vert);
+    setZScaleForFrame(_absMaxOf(data, rowOff, n_vert));
 
     for (const [mesh, offset] of [[st.meshLH, 0], [st.meshRH, st.lhVertCount]]) {
         if (!mesh) continue;
@@ -751,16 +906,27 @@ function onWs(msg) {
             loadBoldForScan(msg.scan_id);
             loadScanResult(msg.scan_id);
             break;
+        case "scan_narrations_ready":
+            if (msg.narrations) {
+                renderNarration({ narrations: msg.narrations });
+                appendEvent(`narrations ready (general · college · clinical)`, "complete");
+            }
+            break;
         case "scan_failed":
             appendEvent(`scan failed: ${msg.error?.message ?? "?"}`, "failed");
             overlay.classList.add("hidden");
-            narrationBody.innerHTML = `<p class="narration-placeholder" style="color:var(--positive)">Scan failed.</p>`;
+            _setNarrationText("narration-college", "Scan failed.", true);
             break;
     }
 }
 
 function showOverlay(phase) {
+    // Don't reappear on top of an auto-loaded scan — direct-link viewers
+    // shouldn't get a "Queued…" splash painted over a brain that's already
+    // animating. The IIFE at the bottom of this file sets st.urlScanLocked.
+    if (st.urlScanLocked) return;
     overlay.classList.remove("hidden");
+    overlay.style.display = "";
     if (phase === "narrating") st.narrationStartTime = Date.now();
     const msgs = {
         queued:    "Queued — waiting for GPU…",
@@ -907,7 +1073,31 @@ function showRunCostBadge(localC, cloudC) {
 // ---------------------------------------------------------------------------
 async function submitMediaFile(file, { btnEl, resetLabel } = {}) {
     if (btnEl) { btnEl.disabled = true; btnEl.textContent = "Submitting…"; }
-    narrationBody.innerHTML = `<p class="narration-placeholder">Scan accepted — awaiting results…</p>`;
+
+    // Show input preview in file mode
+    const previewEl = document.getElementById("input-preview");
+    if (previewEl && file) {
+        previewEl.innerHTML = "";
+        previewEl.classList.remove("hidden");
+        const url = URL.createObjectURL(file);
+        if (file.type.startsWith("video/")) {
+            const vid = document.createElement("video");
+            vid.src = url; vid.muted = true; vid.controls = false;
+            vid.autoplay = true; vid.loop = true; vid.playsInline = true;
+            previewEl.appendChild(vid);
+        } else if (file.type.startsWith("image/")) {
+            const img = document.createElement("img");
+            img.src = url; img.alt = "preview";
+            previewEl.appendChild(img);
+        } else {
+            previewEl.classList.add("hidden");
+        }
+    }
+
+    // Reset narration tier divs to "pending" state
+    _setNarrationText("narration-general",  "Generating…", true);
+    _setNarrationText("narration-college",  "Scan accepted — awaiting results…", true);
+    _setNarrationText("narration-clinical", "Generating…", true);
 
     const fd = new FormData();
     fd.append("file",   file);
@@ -933,14 +1123,70 @@ async function submitMediaFile(file, { btnEl, resetLabel } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// File upload form
+// Drop zone + file upload wiring
 // ---------------------------------------------------------------------------
-document.getElementById("scan-form").addEventListener("submit", async e => {
-    e.preventDefault();
-    const fileInput = document.getElementById("scan-file");
-    if (!fileInput.files?.length) return;
-    await submitMediaFile(fileInput.files[0], { btnEl: submitBtn, resetLabel: "Analyze" });
-});
+(function wireDropZone() {
+    const dropZone   = document.getElementById("drop-zone");
+    const fileInput  = document.getElementById("scan-file");
+    const dropSel    = document.getElementById("drop-selected");
+
+    if (!dropZone || !fileInput) return;
+
+    function applyFile(file) {
+        if (!file) return;
+        submitBtn.disabled = false;
+        if (dropSel) {
+            dropSel.classList.remove("hidden");
+            const ext = file.name.split(".").pop().toUpperCase();
+            dropSel.innerHTML = `<span>${esc(file.name)}</span><span class="file-chip">${esc(ext)}</span>`;
+        }
+        // Preview for images/video shown inline
+        const previewEl = document.getElementById("input-preview");
+        if (previewEl) {
+            previewEl.innerHTML = "";
+            previewEl.classList.remove("hidden");
+            const url = URL.createObjectURL(file);
+            if (file.type.startsWith("video/")) {
+                const vid = document.createElement("video");
+                vid.src = url; vid.muted = true; vid.controls = false;
+                vid.autoplay = true; vid.loop = true; vid.playsInline = true;
+                previewEl.appendChild(vid);
+            } else if (file.type.startsWith("image/")) {
+                const img = document.createElement("img");
+                img.src = url; img.alt = "preview";
+                previewEl.appendChild(img);
+            } else {
+                previewEl.classList.add("hidden");
+            }
+        }
+    }
+
+    fileInput.addEventListener("change", () => {
+        if (fileInput.files?.length) applyFile(fileInput.files[0]);
+    });
+
+    dropZone.addEventListener("dragover", e => {
+        e.preventDefault();
+        dropZone.classList.add("drag-over");
+    });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+    dropZone.addEventListener("drop", e => {
+        e.preventDefault();
+        dropZone.classList.remove("drag-over");
+        const file = e.dataTransfer?.files?.[0];
+        if (file) {
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            fileInput.files = dt.files;
+            applyFile(file);
+        }
+    });
+
+    submitBtn.addEventListener("click", async () => {
+        if (!fileInput.files?.length) return;
+        await submitMediaFile(fileInput.files[0], { btnEl: submitBtn, resetLabel: "Analyze" });
+    });
+})();
 
 // ---------------------------------------------------------------------------
 // Input mode tabs
@@ -1162,7 +1408,7 @@ textSubmitBtn?.addEventListener("click", async () => {
 
     textSubmitBtn.disabled     = true;
     textSubmitBtn.textContent  = "Submitting…";
-    narrationBody.innerHTML    = `<p class="narration-placeholder">Analyzing text stimulus…</p>`;
+    _setNarrationText("narration-college", "Analyzing text stimulus…", true);
 
     const fd = new FormData();
     fd.append("text",   text);
@@ -1275,25 +1521,39 @@ window.paintVertexFrame = paintVertexFrame;
 
 // URL param: ?scan=<id> auto-loads that scan AND flips the UI out of the
 // upload-prompt empty state so the brain becomes visible without any clicks.
+//
+// Belt + suspenders: classList AND inline style, AND a re-hide on every
+// data-load completion (some WS messages can re-show the overlay otherwise).
 (function autoLoadFromUrl() {
     try {
         const params = new URLSearchParams(window.location.search);
         const scanId = params.get("scan");
         if (!scanId) return;
 
-        // Hide the "Submit a media file to begin" overlay so the mesh shows
-        const ov = document.getElementById("viewer-overlay");
-        if (ov) ov.classList.add("hidden");
+        const forceHide = () => {
+            const ov = document.getElementById("viewer-overlay");
+            if (!ov) return;
+            ov.classList.add("hidden");
+            ov.style.display = "none";
+        };
+        forceHide();
 
+        // Lock the overlay against showOverlay() reopening it.
+        st.urlScanLocked = true;
         st.scanId = scanId;
         appendEvent(`auto-loading scan ${scanId} from URL`, "complete");
 
-        // Wait one frame so the WS connect + initial mesh load can settle,
-        // then trigger both data loads. paintVertexFrame is called by
-        // loadBoldForScan once the buffer is ready.
+        // Wait a frame so the WS + initial mesh load can settle, then load.
         setTimeout(() => {
+            forceHide();
             try { loadScanResult(scanId); } catch (e) { console.warn("loadScanResult failed:", e); }
-            try { loadBoldForScan(scanId);  } catch (e) { console.warn("loadBoldForScan failed:",  e); }
+            try { loadBoldForScan(scanId).then(forceHide).catch(forceHide); }
+            catch (e) { console.warn("loadBoldForScan failed:",  e); }
         }, 250);
+
+        // Belt + suspenders #2: a brief watchdog that re-hides the overlay
+        // for the first 5 s in case any later async path tries to show it.
+        let n = 0;
+        const watchdog = setInterval(() => { forceHide(); if (++n > 50) clearInterval(watchdog); }, 100);
     } catch (e) { /* no-op */ }
 })();

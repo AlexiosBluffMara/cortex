@@ -1,241 +1,78 @@
-# Cortex
+# Cortex — TRIBE v2 Brain Foundation Model + Gemma 4
 
-> Watch a video. See your brain light up. Hear it explained in plain English.
+> Submit a video clip. Watch 20,484 cortical vertices light up in real-time. Hear it explained at your level.
 
-**Cortex** is a multimodal brain-response analysis system that combines [Gemma 4](https://ai.google.dev/gemma) with Meta's TRIBE v2 brain foundation model to predict and explain cortical activation in response to video, audio, or text stimuli — running locally on a single RTX 5090 via [Ollama](https://ollama.com), with cloud failover to GCP.
+Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma-4-good-hackathon) (Health & Sciences track) and the [Nous Research + Kimi Hackathon](https://....) (Creative track).
 
-Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma-4-good-hackathon) (Health & Sciences track).
+## What it does
 
----
+1. Upload a video, audio clip, image, or text (≤ 50 MB, ≤ ~2 min practical)
+2. **TRIBE v2** predicts cortical BOLD responses at 20,484 fsaverage5 vertices × 2 Hz
+3. **Gemma 4** interprets the activation at three audience levels simultaneously:
+   - **General** — high-school register, no jargon
+   - **College** — large-scale networks, functional anatomy
+   - **Clinical** — Yeo-7 networks, laterality, peak timing, clinical framing
+4. Interactive **Three.js viewer** animates the per-vertex activation in real-time
 
-## What Cortex does
+Runs fully local on an RTX 5090 — no cloud, no API keys.
 
-1. You upload a short video, audio clip, or piece of text (≤50 seconds).
-2. **Gemma 4 E4B** (multimodal) describes the content and gates copyright/safety.
-3. **TRIBE v2** predicts your cortex's BOLD response — 20,484 vertices over time.
-4. **Gemma 4** translates the raw activation into plain-English narration at the requested expertise tier (toddler → researcher).
-5. An interactive **Three.js cortex viewer** shows the activation in 3D, with click-to-inspect region details.
+## Model limits
 
-The two models cannot coexist on 32 GB of VRAM, so Cortex ships a [GPU priority scheduler](cortex/gpu_scheduler.py) that swaps them deterministically with OOM recovery, swap metrics, and fallback routing.
+| Parameter | Value |
+|---|---|
+| TRIBE v2 TR | 0.5 s (2 Hz BOLD) |
+| Timepoint mapping | t = N → N × 0.5 s |
+| Hemodynamic lag | 5 s pre-applied |
+| Surface | fsaverage5, 20,484 vertices |
+| Training pool | 25 subjects (group-averaged; not diagnostic) |
+| Practical max clip | ~120 s (~240 timepoints × 20,484 × 4B = ~20 MB/scan) |
+| Gemma tier model | E4B (fast), 26B MoE (standard), 31B dense (expert) |
+| Gemma context | 4 K – 32 K tokens depending on tier |
 
----
+**t=7 means 3.5 s into the prediction. t=11 means 5.5 s.** Peak activation around t=7–14 (3.5–7 s) is typical for visual stimuli with the 5 s HRF lag already corrected.
 
 ## Architecture
 
 ```
-                 ┌────────────────────────────────────────────────────────┐
-                 │  Hermes Agent (orchestrator)                           │
-                 │  brain_scan │ narrate │ visualize │ describe_input     │
-                 └─────────┬──────────────────────────────────────────────┘
-                           │
-                  ┌────────▼─────────┐
-                  │  RequestQueue    │  priority queue, GPU-aware routing
-                  │  (cortex/        │  fallback to external LLM if TRIBE
-                  │   request_queue) │  is hogging the GPU
-                  └────────┬─────────┘
-                           │
-                  ┌────────▼──────────┐
-                  │  GPUScheduler     │  state machine: IDLE / GEMMA_ACTIVE /
-                  │  (cortex/         │  TRIBE_ACTIVE / SWAPPING
-                  │   gpu_scheduler)  │  with metrics + state listeners
-                  └─┬───────────────┬─┘
-                    │               │
-        ┌───────────▼──┐    ┌───────▼─────────┐
-        │ Ollama       │    │ TRIBE v2        │
-        │ Gemma 4 E4B/ │    │ V-JEPA 2 +      │
-        │ 26B/31B      │    │ wav2vec-BERT +  │
-        │ (multimodal) │    │ Llama-3.2-3B    │
-        └──────────────┘    └─────────────────┘
-
-         ┌──────────────────────────────────────────┐
-         │  Web UI (FastAPI + Vite + Three.js)      │
-         │  Cloudflare Tunnel → 5090 desktop         │
-         │  GCP Cloud Run for static + cold start   │
-         └──────────────────────────────────────────┘
+  Upload → media_gate (Gemma multimodal description)
+        → TRIBE v2 pipeline (V-JEPA2 vision + wav2vec audio + Llama text)
+        → BrainAnalysis (Schaefer-400 / Yeo-7 parcellation)
+        → Gemma narrate × 3 tiers (general / college / clinical)
+        → WebSocket broadcast → Three.js viewer (per-vertex animation)
 ```
 
-See [SPEC.md](SPEC.md) for the complete technical specification and [SPRINT_PLAN.md](SPRINT_PLAN.md) for the day-by-day plan to the May 18, 2026 hackathon deadline.
-
----
+GPU scheduler: IDLE → GEMMA_ACTIVE → TRIBE_ACTIVE — eviction-driven, with OOM recovery. The two models cannot coexist on 32 GB VRAM.
 
 ## Quickstart
 
-### Prerequisites
-
-- **Hardware**: RTX 5090 (32 GB) or any CUDA GPU ≥ 24 GB; 64 GB RAM recommended.
-- **Software**: Python 3.11+, [Ollama](https://ollama.com/download), FFmpeg, git, Node.js 20+ (for the webapp).
-- **Models**: Pull Gemma 4 from Ollama (see below). TRIBE v2 weights are downloaded separately.
-
-### Install
-
 ```bash
-# 1. Clone
 git clone https://github.com/AlexiosBluffMara/cortex.git
 cd cortex
-
-# 2. Python env (kept on C: for speed on Windows)
-python -m venv .venv
-source .venv/Scripts/activate   # or `.venv\Scripts\activate` on PowerShell
-
-# 3. Blackwell-compatible PyTorch (cu128)
-pip install --index-url https://download.pytorch.org/whl/cu128 torch torchvision
-
-# 4. Cortex itself
-pip install -e ".[dev]"
-
-# 5. TRIBE v2 source + weights (separate, CC-BY-NC 4.0 — non-commercial only)
-git clone https://github.com/facebookresearch/tribev2.git tribev2_src
-pip install --no-deps -e tribev2_src
-# Weights: see tribev2_src/README for the HuggingFace download
-
-# 6. Pull Gemma 4 models (NO Gemma 3 fallback)
+uv venv C:/Users/soumi/cortex/.venv
+source C:/Users/soumi/cortex/.venv/Scripts/activate
+uv pip install -e ".[dev]"
 ollama pull gemma4:e4b
-ollama pull gemma4:26b
-ollama pull gemma4:31b
-
-# 7. Configure
-cp .env.example .env
-# edit .env to set your local paths and tokens
+uvicorn webapp.server:app --host 0.0.0.0 --port 8765 --reload
+# open http://localhost:8765
 ```
 
-### Run
+## Tests
 
 ```bash
-# CLI: analyze a single clip
-cortex analyze ./assets/sample.mp4 --tier 2
-
-# Web UI (FastAPI + Three.js viewer)
-uvicorn webapp.server:app --host 0.0.0.0 --port 8765
-
-# Hermes Agent (autonomous orchestration)
-python -m hermes.agent
+pytest tests/ -v                    # unit tests (no GPU needed)
+pytest tests/ -v -m "not e2e"      # exclude e2e (need running server)
+pytest tests/e2e/ -m e2e           # e2e (requires uvicorn running)
 ```
 
-### Test
+## Production readiness checklist
 
-```bash
-pytest                      # full suite (263 tests, ~7s)
-pytest -m unit              # fast unit tests (no GPU/network)
-pytest -m "not slow"        # skip slow tests
-ruff check .                # lint
-mypy cortex hermes cli      # type-check
-```
+- [ ] Replace in-memory ScanRegistry with Redis + TTL
+- [ ] Add auth (API key middleware or OAuth)
+- [ ] Rate-limit uploads per IP
+- [ ] Add Prometheus metrics on inference latency
+- [ ] Cloudflare Tunnel or nginx TLS termination for the public endpoint
+- [ ] TRIBE v2 is group-averaged (25 subjects): not a personal diagnostic tool — add disclaimer to UI
 
-### Generate the synthetic neuroscience training dataset
+## License
 
-The fine-tune is trained on a 2,000-example synthetic neuro-QA dataset
-covering 20 brain regions across all 8 Yeo networks. The supervisor handles
-unattended multi-hour runs — it resumes if killed, retries failed examples,
-hits an Ollama health check between regions, and stops at a configurable
-deadline.
-
-```bash
-# Sensible defaults for an unattended overnight run against gemma4:e4b
-python -m scripts.generate_neuro_dataset \
-    --backend ollama:gemma4:e4b \
-    --n-per-family 20 \
-    --supervised \
-    --max-runtime-min 180 \
-    --output data/cortex_train.jsonl
-
-# Quality-check the result
-python -m scripts.validate_dataset --input data/cortex_train.jsonl
-# Wakes you up to data/dataset_quality_report.md with per-region distribution,
-# answer-length stats, region-mention rate, and a verdict block.
-```
-
-### Fine-tune
-
-```bash
-# Dry run — print resolved config and exit (no GPU work)
-python -m scripts.train_cortex --dry-run
-
-# Real run on the 5090 (after dataset is generated)
-python -m scripts.train_cortex \
-    --dataset data/cortex_train.jsonl \
-    --epochs 3 --merge --gguf q4_k_m --modelfile
-```
-
-Hyperparameters are pinned to Daniel Han-Chen's verified Gemma 4 31B Unsloth
-notebook (`r=32, alpha=32, all-linear, max_grad_norm=0.3, weight_decay=0.001,
-adamw_8bit, gemma-4-thinking chat template`). See [docs/unsloth.md](docs/unsloth.md)
-for the rationale, source pinning, and bug-fix gotchas.
-
-### Fetch demo content
-
-```bash
-# Edit scripts/demo_clips.yaml first to point at the YouTube IDs you want
-python -m scripts.fetch_demo_clips --output-dir assets/demo
-# Trims each clip to ≤50s (TRIBE's hard cap) and writes a manifest.json
-```
-
----
-
-## Project layout
-
-```
-cortex/
-├── cortex/                  # main package: GPU scheduler, queue, pipeline,
-│                              errors, GCP fallback client
-├── hermes/                  # Hermes Agent fork — tools + agent config
-├── cli/                     # typer-based CLI
-├── webapp/                  # FastAPI + WebSocket + Three.js viewer
-├── gcp/                     # Cloud Run worker + Dockerfiles + Cloud Build
-├── scripts/
-│   ├── regions.py           # 20 brain regions across all 8 Yeo networks
-│   ├── templates.py         # 5 QA template families (per SPEC §8)
-│   ├── backends.py          # LLM backends: stub / ollama / anthropic
-│   ├── generate_neuro_dataset.py  # supervised dataset generator
-│   ├── validate_dataset.py  # quality checker → Markdown report
-│   ├── train_cortex.py      # Unsloth fine-tune (cortex-gemma-4-e4b)
-│   ├── fetch_demo_clips.py  # yt-dlp wrapper + curated YAML clip list
-│   └── demo_clips.yaml      # curated Google YouTube clip references
-├── docs/
-│   ├── unsloth.md           # verified hyperparameters + bug-fix notes
-│   ├── turboquant.md        # KV-cache quantization viability assessment
-│   ├── gcp.md               # GCP deployment runbook
-│   ├── kaggle_writeup.md    # Kaggle submission draft (~1,200 words)
-│   └── video_script.md      # 3-minute demo video shot list
-├── tests/                   # 263 unit + integration tests, all passing
-├── SPEC.md                  # full technical specification
-├── SPRINT_PLAN.md           # day-by-day hackathon sprint
-└── CLAUDE.md                # working notes for Claude Code
-```
-
----
-
-## Hackathon submission
-
-| Track | Goal |
-|-------|------|
-| **Health & Sciences Impact** | Make TRIBE v2 brain analysis accessible to non-specialists |
-| **Ollama track** | End-to-end local pipeline running entirely on a single 5090 |
-| **Unsloth track** *(stretch)* | `cortex-gemma-4-e4b` fine-tune — Gemma 4 specialized for neuroscience interpretation |
-
-Deliverables (as required by the hackathon rules):
-
-- [x] Public GitHub repository (this one) — Apache 2.0
-- [x] Kaggle write-up draft — see [docs/kaggle_writeup.md](docs/kaggle_writeup.md) (~1,200 words)
-- [x] Demo video shot list — see [docs/video_script.md](docs/video_script.md) (recording pending)
-- [ ] Live demo at `cortex.redteamkitchen.com` *(Cloud Run pending)*
-- [ ] Public HuggingFace model: `RedTeamKitchen/cortex-gemma-4-e4b` *(post-fine-tune)*
-- [ ] 3-minute YouTube demo video *(record after the fine-tune lands)*
-
----
-
-## Licensing & attribution
-
-The Cortex code in this repository is **Apache 2.0** licensed (see [LICENSE](LICENSE)). Bundled or referenced third-party works retain their own licenses — see [NOTICE](NOTICE) for the full attribution table.
-
-Two notes worth surfacing:
-
-- **TRIBE v2 weights are CC-BY-NC 4.0** — non-commercial only. Do not use Cortex with TRIBE v2 in a commercial product without obtaining a separate license from Meta.
-- **"Gemma" is a trademark of Google LLC.** Cortex is not endorsed by Google. Per [Google's Gemma naming guidelines](https://ai.google.dev/gemma/prohibited_use_policy), the fine-tuned model is published as `RedTeamKitchen/cortex-gemma-4-e4b` (Gemma referenced in the path, not the product name).
-
----
-
-## Status
-
-Active development for the Gemma 4 Good Hackathon (deadline: **May 18, 2026, 6:59 PM CDT**).
-
-Built by [Alexios Bluff Mara LLC](https://redteamkitchen.com) (dba Red Team Kitchen).
+TRIBE v2 model weights: CC-BY-NC 4.0 (Meta). Gemma 4: Gemma Terms of Use (Google). All code: MIT.

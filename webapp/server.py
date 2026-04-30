@@ -291,6 +291,71 @@ def create_app(
         return record
 
     # -----------------------------------------------------------------------
+    # Narrations lookup
+    # -----------------------------------------------------------------------
+
+    @app.get("/api/scan/{scan_id}/narrations")
+    async def get_narrations(scan_id: str) -> dict[str, Any]:
+        record = await app.state.registry.get(scan_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail=f"Scan not found: {scan_id}")
+        narrations = record.get("narrations") or {}
+        if not narrations and record.get("narration"):
+            narrations = {"college": record["narration"]}
+        return {"scan_id": scan_id, "narrations": narrations, "status": record.get("status")}
+
+    # -----------------------------------------------------------------------
+    # Model / server info
+    # -----------------------------------------------------------------------
+
+    @app.get("/api/info")
+    async def model_info() -> dict[str, Any]:
+        return {
+            "tribe_v2": {
+                "sample_rate_hz": 2.0,
+                "tr_seconds": 0.5,
+                "n_vertices": 20484,
+                "surface": "fsaverage5",
+                "hrf_lag_seconds": 5.0,
+                "training_subjects": 25,
+                "max_input_seconds_practical": 120,
+                "description": (
+                    "TRIBE v2 predicts fsaverage5 BOLD at 2 Hz. t=N in the timeseries "
+                    "corresponds to N × 0.5 seconds of predicted cortical response. "
+                    "A 5-second hemodynamic lag is pre-applied, so predictions are "
+                    "temporally aligned to the stimulus. "
+                    "E.g. peak_t=7 → peak activation at 3.5 s; peak_t=11 → 5.5 s."
+                ),
+            },
+            "gemma": {
+                "fast_model": "gemma4:e4b",
+                "fast_speed_toks": 194,
+                "tiers": {
+                    "0-1": "E4B fast model",
+                    "2-4": "26B MoE deep model",
+                    "5-6": "31B dense expert model",
+                },
+                "context_limits": {
+                    "tier_0_1": 4096,
+                    "tier_2_4": 8192,
+                    "tier_5": 16384,
+                    "tier_6": 32768,
+                },
+            },
+            "upload": {
+                "max_mb": 50,
+                "max_duration_seconds_practical": 120,
+                "accepted_types": ["video", "audio", "image", "pdf", "text"],
+            },
+            "prod_readiness_notes": [
+                "ScanRegistry is in-memory: restart loses all records. Add Redis/Firestore TTL for prod.",
+                "GPU scheduler supports one active model at a time; parallel requests queue.",
+                "TRIBE v2 is group-averaged (25 subjects): not a personal diagnostic tool.",
+                "Max practical video: ~2 min at 2Hz = 240 timepoints × 20484 verts × 4B = ~20 MB/scan.",
+            ],
+        }
+
+    # -----------------------------------------------------------------------
     # Re-narrate an existing scan at a different tier
     # -----------------------------------------------------------------------
 
@@ -596,24 +661,49 @@ async def _run_image_scan_background(
             "views this image."
         )
         label = Path(media_path).name
-        user_prompt   = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
-        system_prompt = _prompts.ALL_TIER_SYSTEMS[max(0, min(6, tier))]
+        user_prompt = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
 
-        narration = await queue.submit(
+        narr_3 = await queue.submit(
             request_type=RequestType.NARRATE,
             payload={
                 "prompt":      user_prompt,
-                "system":      system_prompt,
-                "tier":        tier,
-                "num_predict": _tiers._TIER_NUM_PREDICT[tier],
-                "temperature": _tiers._TIER_TEMPERATURE[tier],
+                "system":      _prompts.ALL_TIER_SYSTEMS[3],
+                "tier":        3,
+                "num_predict": _tiers._TIER_NUM_PREDICT[3],
+                "temperature": _tiers._TIER_TEMPERATURE[3],
             },
             priority=0 if source == "webui" else 5,
             source=source,
         )
+        narr_4 = await queue.submit(
+            request_type=RequestType.NARRATE,
+            payload={
+                "prompt":      user_prompt,
+                "system":      _prompts.ALL_TIER_SYSTEMS[4],
+                "tier":        4,
+                "num_predict": _tiers._TIER_NUM_PREDICT[4],
+                "temperature": _tiers._TIER_TEMPERATURE[4],
+            },
+            priority=0 if source == "webui" else 5,
+            source=source,
+        )
+        narr_5 = await queue.submit(
+            request_type=RequestType.NARRATE,
+            payload={
+                "prompt":      user_prompt,
+                "system":      _prompts.ALL_TIER_SYSTEMS[5],
+                "tier":        5,
+                "num_predict": _tiers._TIER_NUM_PREDICT[5],
+                "temperature": _tiers._TIER_TEMPERATURE[5],
+            },
+            priority=0 if source == "webui" else 5,
+            source=source,
+        )
+        narrations = {"general": narr_3, "college": narr_4, "clinical": narr_5}
 
-        await registry.update(scan_id, status="complete", narration=narration, top_rois=None, peak_t=None)
+        await registry.update(scan_id, status="complete", narration=narr_4, narrations=narrations, top_rois=None, peak_t=None)
         await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
+        await hub.broadcast({"type": "scan_narrations_ready", "scan_id": scan_id, "narrations": narrations})
         log.info("[webapp] image scan %s complete", scan_id)
 
     except Exception as exc:
@@ -651,22 +741,49 @@ async def _run_document_scan_background(
             "describe the brain regions and networks expected to activate when a person "
             "reads or engages with this content."
         )
-        user_prompt   = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
-        system_prompt = _prompts.ALL_TIER_SYSTEMS[max(0, min(6, tier))]
-        narration = await queue.submit(
+        user_prompt = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
+
+        narr_3 = await queue.submit(
             request_type=RequestType.NARRATE,
             payload={
                 "prompt":      user_prompt,
-                "system":      system_prompt,
-                "tier":        tier,
-                "num_predict": _tiers._TIER_NUM_PREDICT[tier],
-                "temperature": _tiers._TIER_TEMPERATURE[tier],
+                "system":      _prompts.ALL_TIER_SYSTEMS[3],
+                "tier":        3,
+                "num_predict": _tiers._TIER_NUM_PREDICT[3],
+                "temperature": _tiers._TIER_TEMPERATURE[3],
             },
             priority=0 if source == "webui" else 5,
             source=source,
         )
-        await registry.update(scan_id, status="complete", narration=narration, top_rois=None, peak_t=None)
+        narr_4 = await queue.submit(
+            request_type=RequestType.NARRATE,
+            payload={
+                "prompt":      user_prompt,
+                "system":      _prompts.ALL_TIER_SYSTEMS[4],
+                "tier":        4,
+                "num_predict": _tiers._TIER_NUM_PREDICT[4],
+                "temperature": _tiers._TIER_TEMPERATURE[4],
+            },
+            priority=0 if source == "webui" else 5,
+            source=source,
+        )
+        narr_5 = await queue.submit(
+            request_type=RequestType.NARRATE,
+            payload={
+                "prompt":      user_prompt,
+                "system":      _prompts.ALL_TIER_SYSTEMS[5],
+                "tier":        5,
+                "num_predict": _tiers._TIER_NUM_PREDICT[5],
+                "temperature": _tiers._TIER_TEMPERATURE[5],
+            },
+            priority=0 if source == "webui" else 5,
+            source=source,
+        )
+        narrations = {"general": narr_3, "college": narr_4, "clinical": narr_5}
+
+        await registry.update(scan_id, status="complete", narration=narr_4, narrations=narrations, top_rois=None, peak_t=None)
         await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
+        await hub.broadcast({"type": "scan_narrations_ready", "scan_id": scan_id, "narrations": narrations})
         log.info("[webapp] document scan %s complete", scan_id)
     except Exception as exc:
         err = CortexError(code=ErrorCode.INFERENCE_FAILED, message=str(exc), component="webapp.doc_scan")
@@ -728,31 +845,60 @@ async def _run_scan_background(
             lambda: analyse(result, harvard_oxford=False, juelich=False).gemma_context(),
         )
         label = Path(media_path).name
-        user_prompt  = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
-        system_prompt = _prompts.ALL_TIER_SYSTEMS[max(0, min(6, tier))]
+        user_prompt = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
 
-        narration = await queue.submit(
+        narr_3 = await queue.submit(
             request_type=RequestType.NARRATE,
             payload={
                 "prompt":      user_prompt,
-                "system":      system_prompt,
-                "tier":        tier,
-                "num_predict": _tiers._TIER_NUM_PREDICT[tier],
-                "temperature": _tiers._TIER_TEMPERATURE[tier],
+                "system":      _prompts.ALL_TIER_SYSTEMS[3],
+                "tier":        3,
+                "num_predict": _tiers._TIER_NUM_PREDICT[3],
+                "temperature": _tiers._TIER_TEMPERATURE[3],
             },
             priority=0 if source == "webui" else 5,
             source=source,
         )
+        narr_4 = await queue.submit(
+            request_type=RequestType.NARRATE,
+            payload={
+                "prompt":      user_prompt,
+                "system":      _prompts.ALL_TIER_SYSTEMS[4],
+                "tier":        4,
+                "num_predict": _tiers._TIER_NUM_PREDICT[4],
+                "temperature": _tiers._TIER_TEMPERATURE[4],
+            },
+            priority=0 if source == "webui" else 5,
+            source=source,
+        )
+        narr_5 = await queue.submit(
+            request_type=RequestType.NARRATE,
+            payload={
+                "prompt":      user_prompt,
+                "system":      _prompts.ALL_TIER_SYSTEMS[5],
+                "tier":        5,
+                "num_predict": _tiers._TIER_NUM_PREDICT[5],
+                "temperature": _tiers._TIER_TEMPERATURE[5],
+            },
+            priority=0 if source == "webui" else 5,
+            source=source,
+        )
+        narrations = {"general": narr_3, "college": narr_4, "clinical": narr_5}
 
+        preds = getattr(result, "preds", None)
         await registry.update(
             scan_id,
             status="complete",
             top_rois=getattr(result, "top_rois", None),
             peak_t=getattr(result, "peak_t", None),
             seconds_elapsed=getattr(result, "seconds_elapsed", None),
-            narration=narration,
+            narration=narr_4,
+            narrations=narrations,
+            tr_seconds=0.5,
+            n_t=int(preds.shape[0]) if preds is not None else None,
         )
         await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
+        await hub.broadcast({"type": "scan_narrations_ready", "scan_id": scan_id, "narrations": narrations})
         log.info("[webapp] scan %s complete", scan_id)
 
     except Exception as exc:
