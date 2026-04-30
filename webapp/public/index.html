@@ -485,84 +485,239 @@
         .total-row .cost-breakdown-val { color: var(--accent); font-size: 14px; }
 
         /* ════════════════════════════════════════════════
-           MOBILE CLOUD UI  (≤ 768 px)
-           Single-column: narration first, input below.
-           No Three.js canvas — 2D network donut instead.
+           MOBILE (≤ 768 px) — Samsung / Google Pixel / OnePlus / iPhone
+           Two-row layout: narration on top, input at bottom.
+           No Three.js — 2D donut brain instead.
+           Touch-first: 44px minimum targets, safe-area insets,
+           smooth momentum scrolling, dynamic viewport height.
            ════════════════════════════════════════════════ */
         @media (max-width: 768px) {
-            /* Hide pipeline tabs & GPU badge — always cloud on mobile */
-            .pipeline-tabs { display: none; }
-            #gpu-badge { display: none; }
-            .brand-name { font-size: 13px; }
-            .status { font-size: 11px; }
+            /* ── Reset for full-bleed mobile ── */
+            html, body { overflow: hidden; }
 
-            /* Stack panels vertically, narration on top */
+            /* ── Hide desktop-only chrome ── */
+            .pipeline-tabs { display: none; }
+            #gpu-badge     { display: none; }
+            #event-log-section { display: none; }  /* log hidden on mobile */
+
+            /* ── Topbar: more compact ── */
+            :root { --topbar: 46px; }
+            .topbar { height: var(--topbar); padding: 0 14px; gap: 10px; }
+            .brand-mark { font-size: 18px; }
+            .brand-name { font-size: 13px; letter-spacing: 0.02em; }
+            .status { font-size: 10px; gap: 5px; }
+            .dot { width: 6px; height: 6px; }
+
+            /* ── Two-row layout ── */
             .layout {
                 display: flex;
                 flex-direction: column;
                 height: calc(100dvh - var(--topbar));
                 overflow: hidden;
             }
-            .panel-left {
-                order: 2;
-                flex: 0 0 44vh;
-                border-right: none;
-                border-top: 1px solid var(--border);
-                min-height: 0;
-                overflow: hidden;
-            }
-            .panel-centre { display: none; }
+
+            /* Narration — fills 54% of screen */
             .panel-right {
                 order: 1;
-                flex: 1;
+                flex: 0 0 54%;
                 border-left: none;
+                border-bottom: 1px solid var(--border);
                 min-height: 0;
                 display: flex;
                 flex-direction: column;
             }
-            /* Cost layout mobile */
+
+            /* Input — fills remaining 46% */
+            .panel-left {
+                order: 2;
+                flex: 1;
+                border-right: none;
+                border-top: none;
+                min-height: 0;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+                /* iOS home indicator safe area */
+                padding-bottom: env(safe-area-inset-bottom, 0px);
+            }
+
+            /* 3D viewer hidden on mobile */
+            .panel-centre { display: none; }
+
+            /* Cost layout */
             .cost-layout { grid-template-columns: 1fr; overflow-y: auto; }
             .cost-panel { border-right: none; border-bottom: 1px solid var(--border); }
 
-            /* 2D mobile brain canvas */
+            /* ── Narration panel ── */
+            .narration-header { padding: 8px 14px; flex-shrink: 0; min-height: 38px; }
+            .narration-header .panel-title { font-size: 10px; }
+            .mobile-cloud-pill { display: inline-flex !important; }
+
+            .narration-tabs {
+                padding: 6px 12px 0;
+                gap: 3px;
+                flex-shrink: 0;
+                overflow-x: auto;
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+            }
+            .narration-tabs::-webkit-scrollbar { display: none; }
+            .narr-tab {
+                padding: 7px 13px;
+                font-size: 11.5px;
+                font-weight: 700;
+                letter-spacing: 0;
+                white-space: nowrap;
+                flex-shrink: 0;
+                min-height: 36px;
+                -webkit-tap-highlight-color: transparent;
+                touch-action: manipulation;
+            }
+
+            .narration-body {
+                flex: 1;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior: contain;
+                padding: 12px 16px 8px;
+                gap: 10px;
+            }
+            .narration-text {
+                font-size: 15px;
+                line-height: 1.82;
+            }
+            .narration-placeholder {
+                font-size: 13.5px;
+            }
+
+            .run-cost-badge {
+                flex-direction: column;
+                gap: 2px;
+                text-align: center;
+                margin: 0 12px 4px;
+                padding: 5px 10px;
+                font-size: 10px;
+            }
+
+            /* 2D brain — pinned to bottom of narration section */
             #mobile-brain-canvas {
                 display: block;
                 width: 100%;
-                height: 180px;
+                height: 120px;
                 flex-shrink: 0;
                 border-top: 1px solid var(--border);
                 background: var(--bg);
             }
 
-            /* Show mobile cloud pill */
-            .mobile-cloud-pill { display: inline-flex !important; }
+            /* Stat cards: tighter */
+            .stat { padding: 8px 10px; }
+            .stat-val { font-size: 16px; }
+            .stat-key { font-size: 9px; }
 
-            /* Bigger, comfy narration text */
-            .narration-text { font-size: 15px; line-height: 1.82; }
-            .narration-body { padding: 14px 16px 6px; gap: 10px; }
-            .narration-header { padding: 10px 14px; }
+            /* ROI section */
+            .roi-section { padding-top: 10px; }
 
-            /* Tier pills: horizontal scroll, no wrap */
-            .tier-selector {
-                flex-wrap: nowrap;
-                overflow-x: auto;
-                scrollbar-width: none;
-                -ms-overflow-style: none;
-                padding: 8px 12px;
+            /* ── Input panel ── */
+            .mode-tabs {
+                flex-shrink: 0;
+                border-bottom: 1px solid var(--border);
             }
-            .tier-selector::-webkit-scrollbar { display: none; }
-            .tier-pill { white-space: nowrap; flex-shrink: 0; }
+            .mode-tab {
+                font-size: 9.5px;
+                padding: 11px 0;
+                font-weight: 700;
+                letter-spacing: 0.05em;
+                min-height: 42px;
+                -webkit-tap-highlight-color: transparent;
+                touch-action: manipulation;
+            }
 
-            /* Compact left-panel controls */
-            .tier-section { padding: 7px 12px 5px; }
-            .event-log { font-size: 10px; }
-            .panel-section { padding: 10px 12px; }
-            .panel-title { margin-bottom: 8px; }
-            .submit-btn { padding: 12px 0; font-size: 14px; border-radius: 12px; }
-            .run-cost-badge { flex-direction: column; gap: 3px; text-align: center; margin: 0 12px 6px; }
+            /* Mode panels: flex-column, fill remaining height */
+            .mode-panel {
+                flex: 1;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior: contain;
+                padding: 12px 14px;
+                gap: 10px;
+                display: none; /* overridden by .active */
+            }
+            .mode-panel.active { display: flex; }
 
-            /* Mode tabs fill width */
-            .mode-tab { font-size: 9px; padding: 10px 0; }
+            /* Drop zone */
+            .drop-zone { padding: 18px 12px; }
+            .drop-icon { font-size: 22px; margin-bottom: 5px; }
+            .drop-label { font-size: 13px; }
+            .drop-types { font-size: 10.5px; }
+
+            /* Input preview */
+            .input-preview img, .input-preview video { max-height: 100px; }
+
+            /* Camera: limited height on small screens */
+            .camera-wrap { max-height: 150px; }
+
+            /* Voice visualizer */
+            #voice-vis { height: 44px; border-radius: 10px; }
+            .voice-timer-text { font-size: 22px; }
+            #voice-state-label { font-size: 10px; letter-spacing: 0.05em; }
+
+            /* Text area */
+            #text-input { min-height: 88px; font-size: 14px; line-height: 1.6; }
+
+            /* Submit buttons — comfortable touch targets */
+            .submit-btn {
+                padding: 13px 0;
+                font-size: 14px;
+                font-weight: 700;
+                border-radius: 12px;
+                min-height: 48px;
+                touch-action: manipulation;
+                -webkit-tap-highlight-color: transparent;
+            }
+            .submit-btn:active { opacity: 0.75; }
+
+            /* Mode action buttons */
+            .mode-actions button {
+                min-height: 44px;
+                font-size: 12px;
+                touch-action: manipulation;
+                -webkit-tap-highlight-color: transparent;
+            }
+            .mode-actions button:active { opacity: 0.75; }
+
+            /* Tier section — compact strip */
+            .tier-section {
+                padding: 7px 14px 5px;
+                flex-shrink: 0;
+                border-top: 1px solid var(--border);
+            }
+            .tier-section .panel-title { margin-bottom: 5px; }
+            .tier-row { gap: 6px; }
+            .tier-label { font-size: 10px; }
+            #tier-display { font-size: 12px; min-width: 14px; }
+            #scan-tier { accent-color: var(--accent); }
+
+            /* Panel section padding */
+            .panel-section { padding: 10px 14px; }
+            .panel-title { margin-bottom: 7px; }
+        }
+
+        /* ── Very small screens: iPhone SE (375 px), older Androids ── */
+        @media (max-width: 390px) {
+            .narr-tab { padding: 6px 10px; font-size: 11px; }
+            .narration-text { font-size: 14px; }
+            .mode-tab { font-size: 9px; letter-spacing: 0.03em; }
+            .camera-wrap { max-height: 120px; }
+            #mobile-brain-canvas { height: 100px; }
+            .submit-btn { min-height: 44px; font-size: 13px; }
+        }
+
+        /* ── Landscape phone: short viewport ── */
+        @media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
+            .panel-right { flex: 0 0 100%; border-bottom: none; }
+            .panel-left { display: none; }
+            #mobile-brain-canvas { height: 80px; }
+            .narration-body { padding: 8px 14px; }
         }
     </style>
     <!-- GA4 — replace G-MBRS3TCQTL with your Measurement ID -->
@@ -667,7 +822,7 @@
             </div>
 
             <!-- Event log -->
-            <div class="panel-section" style="flex:1;display:flex;flex-direction:column;overflow:hidden;border-bottom:none;">
+            <div id="event-log-section" class="panel-section" style="flex:1;display:flex;flex-direction:column;overflow:hidden;border-bottom:none;">
                 <p class="panel-title">Pipeline events</p>
                 <ol id="event-log" class="event-log"></ol>
             </div>
@@ -849,6 +1004,6 @@
         </div>
     </div>
 
-    <script type="module" src="/assets/main.js?v=20260430-personas1"></script>
+    <script type="module" src="/assets/main.js?v=20260430-mobile1"></script>
 </body>
 </html>

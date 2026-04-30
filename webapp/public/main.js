@@ -1219,9 +1219,12 @@ async function submitMediaFile(file, { btnEl, resetLabel } = {}) {
         dropZone.classList.remove("drag-over");
         const file = e.dataTransfer?.files?.[0];
         if (file) {
-            const dt = new DataTransfer();
-            dt.items.add(file);
-            fileInput.files = dt.files;
+            // iOS Safari doesn't support DataTransfer constructor — fallback gracefully
+            try {
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                fileInput.files = dt.files;
+            } catch (_) { /* DataTransfer not supported; skip fileInput sync */ }
             applyFile(file);
         }
     });
@@ -1263,10 +1266,16 @@ const camSubmitBtn  = document.getElementById("camera-submit-btn");
 async function openCamera() {
     if (_camStream) return;
     try {
-        _camStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 960 } },
-        });
+        // On mobile, "environment" = rear camera; fall back to any camera on desktop
+        const constraints = {
+            video: isMobile
+                ? { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 960 } }
+                : { width: { ideal: 1280 }, height: { ideal: 960 } },
+        };
+        _camStream = await navigator.mediaDevices.getUserMedia(constraints);
         camVideo.srcObject = _camStream;
+        // iOS Safari: must call play() explicitly after assigning srcObject
+        await camVideo.play().catch(() => {});
         camOpenBtn.hidden    = true;
         camCaptureBtn.hidden = false;
         appendEvent("camera open");
@@ -1365,9 +1374,14 @@ async function startVoice() {
     _voiceAnalyser.fftSize = 64;
     src.connect(_voiceAnalyser);
 
-    // Pick best supported MIME type
-    const mime = ["audio/webm;codecs=opus","audio/webm","audio/ogg;codecs=opus","audio/mp4"]
-        .find(t => MediaRecorder.isTypeSupported(t));
+    // Pick best supported MIME type — iOS Safari supports audio/mp4; Android supports webm/opus
+    const mime = [
+        "audio/webm;codecs=opus",  // Chrome/Android: best
+        "audio/webm",              // Chrome/Android: fallback
+        "audio/ogg;codecs=opus",   // Firefox
+        "audio/mp4;codecs=mp4a",   // iOS Safari 14.3+
+        "audio/mp4",               // iOS Safari
+    ].find(t => MediaRecorder.isTypeSupported(t));
     _voiceRecorder = new MediaRecorder(_voiceStream, mime ? { mimeType: mime } : undefined);
     _voiceRecorder.ondataavailable = e => { if (e.data.size > 0) _voiceChunks.push(e.data); };
     _voiceRecorder.onstop = () => {
