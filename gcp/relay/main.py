@@ -93,6 +93,44 @@ async def gallery():
 async def scan_page(scan_id: str):
     return (_STATIC / "scan.html").read_text()
 
+@app.get("/ads.txt", response_class=HTMLResponse)
+async def ads_txt():
+    """Google AdSense authorized sellers file. Required for AdSense site verification."""
+    return HTMLResponse(
+        content="google.com, pub-7794155680942670, DIRECT, f08c47fec0942fa0\n",
+        media_type="text/plain",
+        headers={"Cache-Control": "public, max-age=86400", "X-Robots-Tag": "noindex"},
+    )
+
+@app.get("/robots.txt", response_class=HTMLResponse)
+async def robots_txt():
+    """Allow all crawlers including AdSense and Googlebot."""
+    return HTMLResponse(
+        content=(
+            "User-agent: *\n"
+            "Allow: /\n"
+            "User-agent: Mediapartners-Google\n"
+            "Allow: /\n"
+            "Sitemap: https://cortex.redteamkitchen.com/sitemap.xml\n"
+        ),
+        media_type="text/plain",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+@app.get("/sitemap.xml", response_class=HTMLResponse)
+async def sitemap():
+    """Basic sitemap for Google Search Console and AdSense verification."""
+    return HTMLResponse(
+        content=(
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            '<url><loc>https://cortex.redteamkitchen.com/gallery</loc></url>'
+            '</urlset>'
+        ),
+        media_type="application/xml",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
 db     = firestore.AsyncClient(project=GCP_PROJECT)
 gcs    = storage.Client(project=GCP_PROJECT)
 bucket = gcs.bucket(GCS_BUCKET)
