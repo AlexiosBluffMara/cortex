@@ -8,8 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- ISU official web fonts: Open Sans (primary sans), PT Serif (serif), JetBrains Mono (data/code) -->
 <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<!-- Google Identity Services -->
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<!-- open access — no sign-in required -->
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -487,25 +486,6 @@
   <div class="header-actions">
     <span class="status-badge status-pending" id="statusBadge">queued</span>
 
-    <!-- Google sign-in -->
-    <div id="gsiHeader">
-      <div id="g_id_onload"
-        data-client_id="YOUR_GOOGLE_CLIENT_ID"
-        data-callback="handleGsiCredential"
-        data-auto_prompt="false">
-      </div>
-      <div class="g_id_signin"
-        data-type="standard" data-shape="pill" data-theme="outline"
-        data-text="signin_with" data-size="medium" data-logo_alignment="left" data-color="dark">
-      </div>
-    </div>
-
-    <!-- User chip (shown when authed) -->
-    <div class="user-chip" id="userChip" onclick="signOut()">
-      <img id="userAvatar" src="" alt="avatar">
-      <span id="userName"></span>
-    </div>
-
     <button class="btn btn-ghost" id="shareBtn">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
       Share
@@ -843,42 +823,7 @@
   const API        = RELAY ? `${RELAY}/api` : '/api';
   const VIEWER_URL = (window.LIVE_VIEWER_URL || '').replace(/\/$/, '') || 'http://localhost:8765';
 
-  /* ── Auth ── */
-  let authToken = localStorage.getItem('cortex_google_token') || null;
-
-  window.handleGsiCredential = function (response) {
-    authToken = response.credential;
-    localStorage.setItem('cortex_google_token', authToken);
-    applyAuthState();
-  };
-  window.signOut = function () {
-    authToken = null;
-    localStorage.removeItem('cortex_google_token');
-    applyAuthState();
-  };
-
-  function decodeJwt(t) {
-    try { return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
-    catch (_) { return null; }
-  }
-
-  function applyAuthState() {
-    const gsiHeader = document.getElementById('gsiHeader');
-    const userChip  = document.getElementById('userChip');
-    if (authToken) {
-      const p = decodeJwt(authToken);
-      gsiHeader.classList.add('hidden');
-      userChip.classList.add('visible');
-      if (p) {
-        document.getElementById('userAvatar').src = p.picture || '';
-        document.getElementById('userName').textContent = p.given_name || p.name || '';
-      }
-    } else {
-      gsiHeader.classList.remove('hidden');
-      userChip.classList.remove('visible');
-    }
-  }
-  applyAuthState();
+  /* open access — no auth required */
 
   /* ── Scan ID + persona from URL ── */
   const params = new URLSearchParams(location.search);
@@ -1135,9 +1080,7 @@
 
   /* ── Fetch ── */
   async function fetchScan() {
-    const res = await fetch(`${API}/scan/${scanId}`, {
-      headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
-    });
+    const res = await fetch(`${API}/scan/${scanId}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   }

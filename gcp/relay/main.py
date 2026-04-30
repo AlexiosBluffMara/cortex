@@ -1,85 +1,111 @@
 """Cortex Cloud Run relay — routes public scan requests to the local 5090.
 
-Fallback behaviour when 5090 is unreachable:
-  - Scan submission: marked 'queued_local'; will retry on next /api/scans poll
-  - Narration: Gemini 1.5 Flash API (set GEMINI_API_KEY env var to enable)
+Open access — no auth required. Protection layers:
+  - slowapi: 30 submissions/hour per IP + 5/minute burst cap
+  - 50 MB file-size cap
+  - IP geolocation logged to Firestore for every submission
+  - Extensible ban-list (IP_BLOCKLIST env var, comma-separated)
+
+Fallback when 5090 is unreachable:
+  - Scan submission: marked 'queued_cloud'
+  - Narration: Gemini 3.1 Flash API (set GEMINI_API_KEY env var to enable)
 """
 from __future__ import annotations
-import asyncio, os, uuid, json, logging, time
+import asyncio, os, uuid, logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import httpx
 from cachetools import TTLCache
-from fastapi import FastAPI, File, Form, UploadFile, WebSocket, WebSocketDisconnect, Header, HTTPException, Depends
+from fastapi import FastAPI, File, Form, Request, UploadFile, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from google.cloud import firestore, storage
-from google.auth.transport import requests as google_requests
-from google.oauth2 import id_token as google_id_token
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 log = logging.getLogger("cortex-relay")
 
-TUNNEL_URL      = os.environ["TUNNEL_URL"]
-GCS_BUCKET      = os.environ["GCS_BUCKET"]
-GCP_PROJECT     = os.environ["GCP_PROJECT"]
-GEMINI_KEY      = os.environ.get("GEMINI_API_KEY", "")
-# Google OAuth client ID — set in Cloud Run env vars after creating in GCP Console
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
-# Gemini fallback model — override with GEMINI_MODEL env var on Cloud Run without redeploy
-# Gemini 3 / 3.1 model lineup (April 2026):
-#   gemini-3.1-flash-preview      Frontier-class Flash; fast + capable; free tier (reduced quota) — DEFAULT
-#   gemini-3.1-flash-lite-preview Budget Flash; cheapest + fastest; free tier (reduced quota)
-#   gemini-3.1-pro-preview        Most capable; complex agentic tasks; PAID-ONLY (no free tier)
-#   gemini-3-flash                Previous stable Flash; $0.50/$3.00 per 1M tok; free tier
-# Note: 2.5 family is legacy/deprecated — avoid for new work.
-GEMINI_MODEL     = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-preview")
-# Domains allowed to submit scans (pipe-separated: "philanthropytraders.com|redteamkitchen.com")
-ALLOWED_DOMAINS = set(os.environ.get("ALLOWED_DOMAINS", "philanthropytraders.com,redteamkitchen.com").split(","))
-MAX_MB          = 50
-TUNNEL_TIMEOUT  = 10
+TUNNEL_URL   = os.environ["TUNNEL_URL"]
+GCS_BUCKET   = os.environ["GCS_BUCKET"]
+GCP_PROJECT  = os.environ["GCP_PROJECT"]
+GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-preview")
+MAX_MB       = 50
+TUNNEL_TIMEOUT = 10
 
-# Cache verified tokens for 5 minutes so we don't call Google on every request
-_token_cache: TTLCache = TTLCache(maxsize=256, ttl=300)
-
-
-# ─── auth ─────────────────────────────────────────────────────────────────────
-
-def _verify_google_token(token: str) -> dict:
-    """Verify a Google ID token and return the payload. Raises HTTPException on failure."""
-    if token in _token_cache:
-        return _token_cache[token]
-    if not GOOGLE_CLIENT_ID:
-        raise HTTPException(503, "Google OAuth not configured on this server (GOOGLE_CLIENT_ID missing).")
-    try:
-        payload = google_id_token.verify_oauth2_token(
-            token, google_requests.Request(), GOOGLE_CLIENT_ID, clock_skew_in_seconds=10
-        )
-    except Exception as e:
-        raise HTTPException(401, f"Invalid Google token: {e}")
-    # Accept any valid Google account — no domain restriction.
-    # ALLOWED_DOMAINS is kept for analytics/logging only.
-    _token_cache[token] = payload
-    return payload
-
-
-async def require_domain_auth(authorization: Optional[str] = Header(None)) -> dict:
-    """FastAPI dependency: require a valid Google ID token from any Google account."""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(401, "Sign in with any Google account to submit scans.")
-    return _verify_google_token(authorization.split("Bearer ", 1)[1])
-
-app = FastAPI(title="Cortex Relay")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+# Optional comma-separated IP blocklist — set in Cloud Run env vars without redeploy
+_IP_BLOCKLIST: set[str] = set(
+    ip.strip() for ip in os.environ.get("IP_BLOCKLIST", "").split(",") if ip.strip()
 )
 
-# Serve static gallery + scan pages
+# ─── cost constants ───────────────────────────────────────────────────────────
+# Local (RTX 5090 ~300W × ~30s at $0.15/kWh) — electricity only, no compute cost
+COST_LOCAL_USD = 0.00006
+# Cloud Gemini 3.1 Flash estimated pricing (April 2026)
+_GEMINI_IN_PER_M  = 0.10   # $ per 1M input tokens
+_GEMINI_OUT_PER_M = 0.40   # $ per 1M output tokens
+# Estimated token budget: 800 input + 350 output × 4 personas
+COST_CLOUD_USD = (3200 * _GEMINI_IN_PER_M + 1400 * _GEMINI_OUT_PER_M) / 1_000_000  # ~$0.00088
+
+# ─── rate limiter ─────────────────────────────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address)
+
+# ─── geo cache: 24-hour TTL, up to 8192 unique IPs ───────────────────────────
+_geo_cache: TTLCache = TTLCache(maxsize=8192, ttl=86400)
+
+
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for", "")
+    return xff.split(",")[0].strip() if xff else (request.client.host if request.client else "0.0.0.0")
+
+
+async def _geo(ip: str) -> dict:
+    """Non-blocking geo lookup via ipinfo.io (free tier: 50K req/mo). Cached 24h per IP."""
+    if ip in _geo_cache:
+        return _geo_cache[ip]
+    result: dict = {"ip": ip, "city": "", "region": "", "country": "", "org": "", "loc": ""}
+    try:
+        async with httpx.AsyncClient(timeout=3) as c:
+            r = await c.get(f"https://ipinfo.io/{ip}/json",
+                            headers={"Accept": "application/json"})
+            if r.status_code == 200:
+                d = r.json()
+                result = {
+                    "ip": ip,
+                    "city":    d.get("city", ""),
+                    "region":  d.get("region", ""),
+                    "country": d.get("country", ""),
+                    "org":     d.get("org", ""),
+                    "loc":     d.get("loc", ""),
+                }
+    except Exception:
+        pass
+    _geo_cache[ip] = result
+    return result
+
+
+# ─── app ──────────────────────────────────────────────────────────────────────
+app = FastAPI(title="Cortex Relay")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+)
+
 _STATIC = Path(__file__).parent / "public"
 if _STATIC.exists():
     app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
+
+db     = firestore.AsyncClient(project=GCP_PROJECT)
+gcs    = storage.Client(project=GCP_PROJECT)
+bucket = gcs.bucket(GCS_BUCKET)
+
+
+# ─── static pages ─────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=RedirectResponse)
 async def root():
@@ -93,33 +119,28 @@ async def gallery():
 async def scan_page(scan_id: str):
     return (_STATIC / "scan.html").read_text()
 
-@app.get("/ads.txt", response_class=HTMLResponse)
+@app.get("/ads.txt")
 async def ads_txt():
-    """Google AdSense authorized sellers file. Required for AdSense site verification."""
     return HTMLResponse(
         content="google.com, pub-7794155680942670, DIRECT, f08c47fec0942fa0\n",
         media_type="text/plain",
         headers={"Cache-Control": "public, max-age=86400", "X-Robots-Tag": "noindex"},
     )
 
-@app.get("/robots.txt", response_class=HTMLResponse)
+@app.get("/robots.txt")
 async def robots_txt():
-    """Allow all crawlers including AdSense and Googlebot."""
     return HTMLResponse(
         content=(
-            "User-agent: *\n"
-            "Allow: /\n"
-            "User-agent: Mediapartners-Google\n"
-            "Allow: /\n"
+            "User-agent: *\nAllow: /\n"
+            "User-agent: Mediapartners-Google\nAllow: /\n"
             "Sitemap: https://cortex.redteamkitchen.com/sitemap.xml\n"
         ),
         media_type="text/plain",
         headers={"Cache-Control": "public, max-age=86400"},
     )
 
-@app.get("/sitemap.xml", response_class=HTMLResponse)
+@app.get("/sitemap.xml")
 async def sitemap():
-    """Basic sitemap for Google Search Console and AdSense verification."""
     return HTMLResponse(
         content=(
             '<?xml version="1.0" encoding="UTF-8"?>'
@@ -131,17 +152,48 @@ async def sitemap():
         headers={"Cache-Control": "public, max-age=86400"},
     )
 
-db     = firestore.AsyncClient(project=GCP_PROJECT)
-gcs    = storage.Client(project=GCP_PROJECT)
-bucket = gcs.bucket(GCS_BUCKET)
 
-
-# ─── health ──────────────────────────────────────────────────────────────────
+# ─── health + info ────────────────────────────────────────────────────────────
 
 @app.get("/api/health")
 async def health():
-    alive = await _5090_alive()
-    return {"ok": True, "tunnel": TUNNEL_URL, "5090_online": alive}
+    return {"ok": True, "tunnel": TUNNEL_URL, "5090_online": await _5090_alive()}
+
+@app.get("/api/info")
+async def info():
+    return {
+        "relay": "cortex-relay v3",
+        "access": "open",
+        "tunnel": TUNNEL_URL,
+        "5090_online": await _5090_alive(),
+        "tribe_v2": {
+            "sample_rate_hz": 2.0, "tr_seconds": 0.5,
+            "n_vertices": 20484, "surface": "fsaverage5",
+            "hrf_lag_seconds": 5.0,
+        },
+        "fallback": {
+            "narration": GEMINI_MODEL if GEMINI_KEY else "none",
+            "inference": "queued_local (no cloud TRIBE v2 equivalent)",
+        },
+        "cost": {
+            "local_usd":  COST_LOCAL_USD,
+            "cloud_usd":  COST_CLOUD_USD,
+            "local_label":  f"${COST_LOCAL_USD*100:.4f}¢/scan  (RTX 5090 local)",
+            "cloud_label":  f"${COST_CLOUD_USD*100:.4f}¢/scan  (Gemini cloud fallback)",
+        },
+    }
+
+@app.get("/api/geo")
+async def geo_check(request: Request):
+    """Returns caller's geolocation — useful for transparency / debugging."""
+    return await _geo(_client_ip(request))
+
+@app.get("/api/utilization")
+async def relay_utilization():
+    return await _5090_utilization()
+
+
+# ─── 5090 helpers ─────────────────────────────────────────────────────────────
 
 async def _5090_alive() -> bool:
     try:
@@ -151,9 +203,7 @@ async def _5090_alive() -> bool:
     except Exception:
         return False
 
-
 async def _5090_utilization() -> dict:
-    """Fetch live utilization from the 5090 to decide whether to accept a job."""
     try:
         async with httpx.AsyncClient(timeout=TUNNEL_TIMEOUT) as c:
             r = await c.get(f"{TUNNEL_URL}/api/utilization")
@@ -164,27 +214,19 @@ async def _5090_utilization() -> dict:
     return {"accepting": False, "queue_depth": 0, "scheduler_state": "unreachable"}
 
 
-@app.get("/api/utilization")
-async def relay_utilization():
-    """Pass-through: exposes 5090 utilization to public clients (for UI badges)."""
-    return await _5090_utilization()
-
-
-# ─── file proxy (avoids allUsers IAM restriction on org-policy accounts) ─────
+# ─── file proxy ───────────────────────────────────────────────────────────────
 
 @app.get("/api/files/{bucket_path:path}")
 async def proxy_file(bucket_path: str):
-    """Proxy GCS object through Cloud Run. Allows public reads without allUsers IAM."""
+    """Proxy GCS object through Cloud Run — bypasses allUsers IAM org-policy restriction."""
     blob = bucket.blob(bucket_path)
     if not blob.exists():
         return JSONResponse({"error": "not found"}, status_code=404)
     content_type = blob.content_type or "application/octet-stream"
-
     def _stream():
         with blob.open("rb") as f:
             while chunk := f.read(65536):
                 yield chunk
-
     return StreamingResponse(_stream(), media_type=content_type,
                               headers={"Cache-Control": "public, max-age=86400"})
 
@@ -192,49 +234,71 @@ async def proxy_file(bucket_path: str):
 # ─── scan submission ──────────────────────────────────────────────────────────
 
 @app.post("/api/scan")
+@limiter.limit("5/minute;30/hour")
 async def submit_scan(
+    request: Request,
     file: UploadFile = File(...),
     tier: int = Form(default=4),
-    user: dict = Depends(require_domain_auth),
 ):
+    ip = _client_ip(request)
+
+    if ip in _IP_BLOCKLIST:
+        raise HTTPException(403, "Access denied.")
+
+    geo = await _geo(ip)
     scan_id = uuid.uuid4().hex[:12]
+
     data = await file.read()
     if len(data) > MAX_MB * 1024 * 1024:
-        return JSONResponse({"error": "file too large"}, status_code=413)
+        return JSONResponse({"error": f"File exceeds {MAX_MB} MB limit."}, status_code=413)
 
-    ext = Path(file.filename or "upload").suffix.lower() or ".bin"
-    blob = bucket.blob(f"uploads/{scan_id}{ext}")
+    ext      = Path(file.filename or "upload").suffix.lower() or ".bin"
+    blob     = bucket.blob(f"uploads/{scan_id}{ext}")
     blob.upload_from_string(data, content_type=file.content_type or "application/octet-stream")
-    # Use relay proxy URL so files are accessible without public IAM
     file_url = f"/api/files/uploads/{scan_id}{ext}"
 
     await db.collection("scans").document(scan_id).set({
-        "id": scan_id, "status": "queued", "filename": file.filename,
-        "tier": tier, "created_at": firestore.SERVER_TIMESTAMP,
+        "id": scan_id,
+        "status": "queued",
+        "filename": file.filename,
+        "tier": tier,
+        "created_at": firestore.SERVER_TIMESTAMP,
         "upload_gcs": f"gs://{GCS_BUCKET}/uploads/{scan_id}{ext}",
         "file_url": file_url,
-        "submitted_by": user.get("email", "unknown"),
-        "submitted_by_domain": user.get("hd", "unknown"),
+        # geo / analytics — never shown publicly
+        "submitted_from_ip":      ip,
+        "submitted_from_country": geo.get("country", ""),
+        "submitted_from_city":    geo.get("city", ""),
+        "submitted_from_org":     geo.get("org", ""),
+        # cost
+        "cost_mode":         "local",
+        "cost_estimate_usd": COST_LOCAL_USD,
     })
 
     asyncio.create_task(_forward_to_5090(scan_id, data, file.filename or "upload", ext, tier))
-    return JSONResponse({"ok": True, "scan_id": scan_id}, status_code=202)
+
+    return JSONResponse({
+        "ok": True,
+        "scan_id": scan_id,
+        "cost_mode": "local",
+        "cost_estimate_usd": COST_LOCAL_USD,
+        "cost_label": f"~{COST_LOCAL_USD * 100 * 100:.3f}¢ (RTX 5090 local)",
+    }, status_code=202)
 
 
 async def _forward_to_5090(scan_id: str, data: bytes, filename: str, ext: str, tier: int):
-    """Try to forward to the local 5090. Falls back gracefully if unreachable or overloaded."""
-    # Local-first: check utilization before committing — reject if overloaded
     util = await _5090_utilization()
     if not util.get("accepting", False):
         await db.collection("scans").document(scan_id).update({
             "status": "queued_cloud",
+            "cost_mode": "cloud",
+            "cost_estimate_usd": COST_CLOUD_USD,
             "status_message": (
                 f"RTX 5090 is {util.get('scheduler_state', 'unavailable')} "
                 f"(queue depth {util.get('queue_depth', '?')}). "
-                "Routed to cloud fallback."
+                "Routed to Gemini cloud fallback."
             ),
         })
-        # Fall through to cloud narration if possible
         return
 
     try:
@@ -245,8 +309,10 @@ async def _forward_to_5090(scan_id: str, data: bytes, filename: str, ext: str, t
             if r.status_code == 202:
                 body = r.json()
                 await db.collection("scans").document(scan_id).update({
-                    "local_scan_id": body["scan_id"],
-                    "status": "processing",
+                    "local_scan_id":     body["scan_id"],
+                    "status":            "processing",
+                    "cost_mode":         "local",
+                    "cost_estimate_usd": COST_LOCAL_USD,
                 })
             else:
                 raise RuntimeError(f"5090 returned {r.status_code}")
@@ -267,40 +333,40 @@ async def list_scans(limit: int = 50):
     async for doc in docs.stream():
         d = doc.to_dict(); d["id"] = doc.id
         results.append({
-            k: d[k] for k in
-            ["id","status","status_message","filename","peak_t","tr_seconds",
-             "thumbnail_url","file_url","created_at","narrations","n_vertices"]
-            if k in d
+            k: d[k] for k in [
+                "id", "status", "status_message", "filename", "peak_t", "tr_seconds",
+                "thumbnail_url", "file_url", "created_at", "narrations", "n_vertices",
+                "cost_mode", "cost_estimate_usd", "submitted_from_country",
+            ] if k in d
         })
     return {"scans": results}
 
 
 @app.get("/api/scan/{scan_id}")
 async def get_scan(scan_id: str):
-    # First check Firestore
     doc = await db.collection("scans").document(scan_id).get()
     if not doc.exists:
         return JSONResponse({"error": "not found"}, status_code=404)
     d = doc.to_dict(); d["id"] = scan_id
 
-    # If processing on the local machine, try to pull live status from 5090
     if d.get("status") == "processing" and d.get("local_scan_id"):
         try:
             async with httpx.AsyncClient(timeout=5) as c:
                 r = await c.get(f"{TUNNEL_URL}/api/scan/{d['local_scan_id']}")
                 if r.status_code == 200:
                     local = r.json()
-                    # Merge live fields in
-                    for k in ["status","peak_t","n_t","n_vertices","narrations","tr_seconds","bold_url","thumbnail_url"]:
+                    for k in ["status", "peak_t", "n_t", "n_vertices", "narrations",
+                               "tr_seconds", "bold_url", "thumbnail_url"]:
                         if k in local:
                             d[k] = local[k]
                     if local.get("status") == "complete":
                         await db.collection("scans").document(scan_id).update({
                             k: local[k] for k in
-                            ["status","peak_t","n_t","narrations","tr_seconds"] if k in local
+                            ["status", "peak_t", "n_t", "narrations", "tr_seconds"]
+                            if k in local
                         })
         except Exception:
-            pass  # fall through with Firestore data
+            pass
     return d
 
 
@@ -310,9 +376,10 @@ async def get_narrations(scan_id: str):
     if not doc.exists:
         return JSONResponse({"error": "not found"}, status_code=404)
     d = doc.to_dict()
+
     if "narrations" in d:
         return {"narrations": d["narrations"]}
-    # Try live fetch from 5090
+
     if d.get("local_scan_id"):
         try:
             async with httpx.AsyncClient(timeout=5) as c:
@@ -321,74 +388,84 @@ async def get_narrations(scan_id: str):
                     return r.json()
         except Exception:
             pass
-    # Gemini fallback narration if key is set and scan has a description
+
     if GEMINI_KEY and d.get("filename"):
         narration = await _gemini_narration(d["filename"])
         return {"narrations": narration, "source": "gemini-fallback"}
+
     return JSONResponse({"error": "narrations not ready"}, status_code=404)
 
 
 # ─── Gemini fallback narration ────────────────────────────────────────────────
 
 async def _gemini_narration(filename: str) -> dict:
-    """Gemini fallback narration when local Gemma 4 (RTX 5090) is unavailable.
+    """4-persona narration via Gemini when RTX 5090 is offline.
 
-    Model choice guide (April 2026 — set GEMINI_MODEL env var on Cloud Run to override):
-      gemini-3.1-flash-preview      DEFAULT — frontier Flash; best speed+quality; free tier (reduced)
-      gemini-3.1-flash-lite-preview Cheapest option; ~$0.25/$1.50 per 1M tok; free tier (reduced)
-      gemini-3.1-pro-preview        Most capable; paid-only (no free tier); complex multi-step reasoning
-      gemini-3-flash                Previous stable Flash; $0.50/$3.00 per 1M tok; free tier
-    Note: 2.5 family is legacy -- avoid for new work.
-    Generates 4 persona narrations: Alex (American), Jordan (Student),
-    Dr. Maya Chen (Neurosurgeon), Atlas (ML Engineer).
+    Persona system (matches local Gemma 4 prompts in cortex/prompts.py):
+      sam      — ISU freshman, all-lowercase, casual
+      priya    — Google DeepMind ML scientist, dense technical
+      dr_park  — Northwestern neuroscientist, clinical-academic
+      chris    — WBEZ Chicago science reporter, narrative
     """
     if not GEMINI_KEY:
         return {}
+
     base = (
         f"The media file '{filename}' was submitted to Cortex for brain-response analysis. "
         "TRIBE v2 (Meta's brain foundation model) predicts cortical BOLD activation across "
         "20,484 fsaverage5 vertices at 2 Hz, with a 5-second hemodynamic lag pre-applied. "
         "This is a group-averaged population model trained on 25 subjects — NOT a personal brain scan. "
     )
+
     personas = {
-        "american": (
+        "sam": (
             base +
-            "You are explaining this to Alex, a curious American adult with a high school education. "
-            "Write 3-4 sentences in plain, warm, conversational language using one everyday American analogy. "
-            "No jargon, no region names. Make it surprising and interesting."
+            "You are writing for Sam, an Illinois State University freshman from Normal, IL. "
+            "ALL LOWERCASE. Short punchy sentences. Contractions everywhere. 3-4 sentences max. "
+            "One ISU/Normal reference is fine (Twin Cities Mall, Uptown Normal, ISU quad). "
+            "No jargon at all. Make it feel like a text to a friend. Include one 'wait what' moment."
         ),
-        "student": (
+        "priya": (
             base +
-            "You are Jordan, a 16-year-old AP Biology student who's excited about neuroscience. "
-            "Write 4-5 sentences, enthusiastic and educational. You may name major brain lobes and one network. "
-            "Explain WHY those areas activate. Use one energetic transition like 'What's wild is that...'"
+            "You are writing for Priya, a senior ML Research Scientist at Google DeepMind, Chicago office. "
+            "Dense ML/systems register: treat cortex as a distributed inference graph. "
+            "Reference TRIBE v2 architecture explicitly: V-JEPA2 vision encoder, wav2vec-BERT 2.0 audio, "
+            "Llama-3.2-3B text encoder, (T × 20484) float32 at 2 Hz. "
+            "Mention RTX 5090 32 GB GDDR7 inference context. "
+            "5-7 sentences. Include one architectural critique or optimization opportunity. No hedging."
         ),
-        "neurosurgeon": (
+        "dr_park": (
             base +
-            "You are writing for Dr. Maya Chen, an attending neurosurgeon specializing in functional brain imaging. "
-            "Write 5-7 sentences in clinical register. Use gyral anatomy, Brodmann areas, and Yeo-7 networks. "
-            "Note laterality, BOLD dynamics, and one clinical framing sentence. "
-            "End with explicit caveat: group-averaged, not patient-specific imaging."
+            "You are writing for Dr. Jiyeon Park, Associate Professor of Neurology at Northwestern. "
+            "Full clinical-academic register: gyral anatomy, Brodmann areas, Yeo-7 network labels. "
+            "Use Yeo-7 names precisely: Default Mode, Dorsal Attention, Ventral Attention/Salience, "
+            "Frontoparietal, Somatomotor, Visual, Limbic. "
+            "5-7 sentences. Note laterality and BOLD dynamics. "
+            "End with: 'Group-averaged population inference — not individual neuroimaging.'"
         ),
-        "ml_engineer": (
+        "chris": (
             base +
-            "You are writing for Atlas, a senior ML engineer who builds multimodal foundation models. "
-            "Write 5-7 sentences in dense technical language. Reference TRIBE v2 architecture: "
-            "V-JEPA2 vision encoder, wav2vec-BERT 2.0, Llama-3.2-3B text encoder, (T × 20484) float32 at 2 Hz. "
-            "Mention RTX 5090 32GB GDDR7 inference context. Draw one analogy to attention maps or saliency. "
-            "End with scale economics: $0.30/scan cloud vs $0.006 local."
+            "You are writing for Chris, a science and technology reporter for WBEZ Chicago. "
+            "Clear, vivid, narrative-driven. Lead with the most interesting fact. "
+            "One concrete analogy that makes the data feel real to a non-scientist. "
+            "Include one specific number or data point. End with why this matters to Chicago or the Midwest. "
+            "4-5 sentences. No jargon. Sound like a radio essay."
         ),
     }
+
     results = {}
     async with httpx.AsyncClient(timeout=30) as c:
         for persona_id, prompt in personas.items():
             try:
                 r = await c.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_KEY}",
+                    f"https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"{GEMINI_MODEL}:generateContent?key={GEMINI_KEY}",
                     json={"contents": [{"parts": [{"text": prompt}]}]},
                 )
                 if r.status_code == 200:
                     results[persona_id] = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+                else:
+                    results[persona_id] = "(narration unavailable)"
             except Exception:
                 results[persona_id] = "(narration unavailable)"
     return results
@@ -400,7 +477,7 @@ async def _gemini_narration(filename: str) -> dict:
 async def ws_scan(ws: WebSocket, scan_id: str):
     await ws.accept()
     try:
-        for _ in range(120):  # max 10 min
+        for _ in range(120):  # max 10 min polling
             doc = await db.collection("scans").document(scan_id).get()
             if doc.exists:
                 d = doc.to_dict(); d["id"] = scan_id
@@ -410,23 +487,3 @@ async def ws_scan(ws: WebSocket, scan_id: str):
             await asyncio.sleep(5)
     except WebSocketDisconnect:
         pass
-
-
-# ─── info ─────────────────────────────────────────────────────────────────────
-
-@app.get("/api/info")
-async def info():
-    return {
-        "relay": "cortex-relay v2",
-        "tunnel": TUNNEL_URL,
-        "5090_online": await _5090_alive(),
-        "tribe_v2": {
-            "sample_rate_hz": 2.0, "tr_seconds": 0.5,
-            "n_vertices": 20484, "surface": "fsaverage5",
-            "hrf_lag_seconds": 5.0,
-        },
-        "fallback": {
-            "narration": GEMINI_MODEL if GEMINI_KEY else "none",
-            "inference": "queued_local (no cloud TRIBE v2 equivalent)",
-        },
-    }

@@ -8,8 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- ISU official web fonts: Open Sans (primary sans), PT Serif (serif), JetBrains Mono (data/code) -->
 <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<!-- Google Identity Services -->
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<!-- open access — no sign-in required -->
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -62,14 +61,15 @@
     --body:   'Open Sans', Helvetica, Arial, sans-serif;
     --serif:  'PT Serif', Georgia, serif;
 
-    /* Persona colors */
-    --p-american:        #f59e0b;
-    --p-american-rgb:    245,158,11;
-    --p-student:         #84cc16;
-    --p-student-rgb:     132,204,22;
-    --p-neurosurgeon:    #14b8a6;
-    --p-neurosurgeon-rgb:20,184,166;
-    --p-ml:              #06b6d4;
+    /* Persona brand colors */
+    --p-sam:          #CC0000;   /* ISU Red */
+    --p-sam-rgb:      204,0,0;
+    --p-priya:        #4285F4;   /* Google Blue */
+    --p-priya-rgb:    66,133,244;
+    --p-dr_park:      #4E2A84;   /* Northwestern Purple */
+    --p-dr_park-rgb:  78,42,132;
+    --p-chris:        #1A73E8;   /* WBEZ Chicago */
+    --p-chris-rgb:    26,115,232;
     --p-ml-rgb:          6,182,212;
   }
 
@@ -438,10 +438,10 @@
   }
   .persona-opt label:hover { border-color: var(--text-dim); }
 
-  .persona-opt[data-pid="american"]     label { --p-color: var(--p-american);    --p-rgb: var(--p-american-rgb); }
-  .persona-opt[data-pid="student"]      label { --p-color: var(--p-student);     --p-rgb: var(--p-student-rgb); }
-  .persona-opt[data-pid="neurosurgeon"] label { --p-color: var(--p-neurosurgeon);--p-rgb: var(--p-neurosurgeon-rgb); }
-  .persona-opt[data-pid="ml_engineer"]  label { --p-color: var(--p-ml);          --p-rgb: var(--p-ml-rgb); }
+  .persona-opt[data-pid="sam"]     label { --p-color: var(--p-sam);     --p-rgb: var(--p-sam-rgb); }
+  .persona-opt[data-pid="priya"]   label { --p-color: var(--p-priya);   --p-rgb: var(--p-priya-rgb); }
+  .persona-opt[data-pid="dr_park"] label { --p-color: var(--p-dr_park); --p-rgb: var(--p-dr_park-rgb); }
+  .persona-opt[data-pid="chris"]   label { --p-color: var(--p-chris);   --p-rgb: var(--p-chris-rgb); }
 
   .persona-opt input:checked + label {
     border-color: var(--p-color);
@@ -564,30 +564,6 @@
       <span id="gpuLabel">RTX 5090</span>
     </span>
 
-    <!-- Google sign-in button (hidden when authed) -->
-    <div id="gsiContainer">
-      <div id="g_id_onload"
-        data-client_id="YOUR_GOOGLE_CLIENT_ID"
-        data-callback="handleGsiCredential"
-        data-auto_prompt="false">
-      </div>
-      <div class="g_id_signin"
-        data-type="standard"
-        data-shape="pill"
-        data-theme="outline"
-        data-text="signin_with"
-        data-size="medium"
-        data-logo_alignment="left"
-        data-color="dark">
-      </div>
-    </div>
-
-    <!-- User chip (shown when authed) -->
-    <div class="user-chip" id="userChip" onclick="signOut()">
-      <img id="userAvatar" src="" alt="avatar">
-      <span id="userName"></span>
-    </div>
-
     <!-- Submit button -->
     <button class="btn btn-primary" id="openModalBtn">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -693,14 +669,7 @@
       <button class="modal-close" id="closeModalBtn" aria-label="Close">✕</button>
     </div>
 
-    <!-- Auth gate — shown when not signed in -->
-    <div class="modal-auth-gate" id="modalAuthGate">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-      <div>Sign in with Google to submit scans.</div>
-      <div id="gsiInModal"></div>
-    </div>
-
-    <!-- Upload form — shown when signed in -->
+    <!-- Upload form -->
     <div id="uploadForm">
       <div class="dropzone" id="dropzone">
         <input type="file" id="fileInput" accept="video/*,audio/*,image/*,.pdf,.txt,.md">
@@ -716,43 +685,43 @@
 
       <div class="field-label">Persona</div>
       <div class="persona-grid">
-        <div class="persona-opt" data-pid="american">
-          <input type="radio" name="persona" id="p-american" value="american" checked>
-          <label for="p-american">
+        <div class="persona-opt" data-pid="sam">
+          <input type="radio" name="persona" id="p-sam" value="sam" checked>
+          <label for="p-sam">
             <div class="persona-dot"></div>
             <div class="persona-label-text">
-              <div class="persona-label-name">Alex</div>
-              <div class="persona-label-role">High school-educated American</div>
+              <div class="persona-label-name">Sam</div>
+              <div class="persona-label-role">ISU freshman, Normal IL</div>
             </div>
           </label>
         </div>
-        <div class="persona-opt" data-pid="student">
-          <input type="radio" name="persona" id="p-student" value="student">
-          <label for="p-student">
+        <div class="persona-opt" data-pid="priya">
+          <input type="radio" name="persona" id="p-priya" value="priya">
+          <label for="p-priya">
             <div class="persona-dot"></div>
             <div class="persona-label-text">
-              <div class="persona-label-name">Jordan</div>
-              <div class="persona-label-role">16-year-old AP Bio student</div>
+              <div class="persona-label-name">Priya</div>
+              <div class="persona-label-role">ML Scientist, Google DeepMind</div>
             </div>
           </label>
         </div>
-        <div class="persona-opt" data-pid="neurosurgeon">
-          <input type="radio" name="persona" id="p-neurosurgeon" value="neurosurgeon">
-          <label for="p-neurosurgeon">
+        <div class="persona-opt" data-pid="dr_park">
+          <input type="radio" name="persona" id="p-dr_park" value="dr_park">
+          <label for="p-dr_park">
             <div class="persona-dot"></div>
             <div class="persona-label-text">
-              <div class="persona-label-name">Dr. Maya Chen</div>
-              <div class="persona-label-role">Attending neurosurgeon</div>
+              <div class="persona-label-name">Dr. Jiyeon Park</div>
+              <div class="persona-label-role">Neurologist, Northwestern</div>
             </div>
           </label>
         </div>
-        <div class="persona-opt" data-pid="ml_engineer">
-          <input type="radio" name="persona" id="p-ml_engineer" value="ml_engineer">
-          <label for="p-ml_engineer">
+        <div class="persona-opt" data-pid="chris">
+          <input type="radio" name="persona" id="p-chris" value="chris">
+          <label for="p-chris">
             <div class="persona-dot"></div>
             <div class="persona-label-text">
-              <div class="persona-label-name">Atlas</div>
-              <div class="persona-label-role">Senior ML/cloud engineer</div>
+              <div class="persona-label-name">Chris</div>
+              <div class="persona-label-role">Science reporter, WBEZ Chicago</div>
             </div>
           </label>
         </div>
@@ -782,71 +751,11 @@
 
   const API = RELAY ? `${RELAY}/api` : '/api';
 
-  /* ── Auth state ── */
-  let authToken = localStorage.getItem('cortex_google_token') || null;
-
-  function isAuthed() { return !!authToken; }
-
-  window.handleGsiCredential = function (response) {
-    authToken = response.credential;
-    localStorage.setItem('cortex_google_token', authToken);
-    applyAuthState();
-  };
-
-  window.signOut = function () {
-    authToken = null;
-    localStorage.removeItem('cortex_google_token');
-    applyAuthState();
-  };
-
-  function decodeJwt(token) {
-    try {
-      return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
-    } catch (_) { return null; }
-  }
-
-  function applyAuthState() {
-    const gsiContainer = document.getElementById('gsiContainer');
-    const userChip     = document.getElementById('userChip');
-    const userAvatar   = document.getElementById('userAvatar');
-    const userName     = document.getElementById('userName');
-    const modalAuthGate= document.getElementById('modalAuthGate');
-    const uploadForm   = document.getElementById('uploadForm');
-
-    if (isAuthed()) {
-      const payload = decodeJwt(authToken);
-      gsiContainer.classList.add('hidden');
-      userChip.classList.add('visible');
-      if (payload) {
-        userAvatar.src = payload.picture || '';
-        userName.textContent = payload.given_name || payload.name || 'User';
-      }
-      modalAuthGate.classList.remove('visible');
-      uploadForm.style.display = '';
-    } else {
-      gsiContainer.classList.remove('hidden');
-      userChip.classList.remove('visible');
-      modalAuthGate.classList.add('visible');
-      uploadForm.style.display = 'none';
-    }
-  }
-
-  /* Run once on load (in case token already in localStorage) */
-  applyAuthState();
-
-  /* If token in localStorage, check it's not expired */
-  if (authToken) {
-    const p = decodeJwt(authToken);
-    if (p && p.exp && p.exp * 1000 < Date.now()) {
-      authToken = null;
-      localStorage.removeItem('cortex_google_token');
-      applyAuthState();
-    }
-  }
-
   /* ── Restore saved persona selection ── */
   (function restorePersona() {
-    const saved = localStorage.getItem('cortex_persona') || 'american';
+    const legacyMap = { american: 'sam', student: 'sam', neurosurgeon: 'dr_park', ml_engineer: 'priya' };
+    const raw   = localStorage.getItem('cortex_persona') || 'sam';
+    const saved = legacyMap[raw] || raw;
     const radio = document.querySelector(`input[name=persona][value="${saved}"]`);
     if (radio) radio.checked = true;
   })();
@@ -1049,7 +958,6 @@
   });
 
   analyzeBtn.addEventListener('click', async () => {
-    if (!isAuthed()) { applyAuthState(); return; }
     const file = fileInput.files[0];
     if (!file) { fileInput.click(); return; }
     if (file.size > 50 * 1024 * 1024) {
@@ -1058,7 +966,7 @@
       return;
     }
 
-    const persona = document.querySelector('input[name=persona]:checked')?.value || 'american';
+    const persona = document.querySelector('input[name=persona]:checked')?.value || 'sam';
     analyzeBtn.disabled = true;
     analyzeBtn.textContent = 'Submitting…';
     progressRow.classList.add('visible');
@@ -1070,10 +978,7 @@
     body.append('persona', persona);
 
     try {
-      const res = await fetch(`${API}/scan`, {
-        method: 'POST', body,
-        headers: { 'Authorization': `Bearer ${authToken}` }
-      });
+      const res = await fetch(`${API}/scan`, { method: 'POST', body });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `HTTP ${res.status}`);
