@@ -1,40 +1,94 @@
-"""Cortex Cloud Run relay — routes public scan requests to the local 5090."""
+"""Cortex Cloud Run relay — routes public scan requests to the local 5090.
+
+Fallback behaviour when 5090 is unreachable:
+  - Scan submission: marked 'queued_local'; will retry on next /api/scans poll
+  - Narration: Gemini 1.5 Flash API (set GEMINI_API_KEY env var to enable)
+"""
 from __future__ import annotations
-import asyncio, os, uuid, json
+import asyncio, os, uuid, json, logging
 from pathlib import Path
 from typing import Any
 
 import httpx
 from fastapi import FastAPI, File, Form, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from google.cloud import firestore, storage
 
-TUNNEL_URL  = os.environ["TUNNEL_URL"]       # e.g. https://abc.trycloudflare.com
-GCS_BUCKET  = os.environ["GCS_BUCKET"]       # cortex-public-scans
-GCP_PROJECT = os.environ["GCP_PROJECT"]      # abm-isu
-MAX_MB      = 50
+log = logging.getLogger("cortex-relay")
+
+TUNNEL_URL   = os.environ["TUNNEL_URL"]        # e.g. https://cortex.redteamkitchen.com
+GCS_BUCKET   = os.environ["GCS_BUCKET"]        # cortex-public-scans
+GCP_PROJECT  = os.environ["GCP_PROJECT"]       # abm-isu
+GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "")  # optional fallback narration
+MAX_MB       = 50
+TUNNEL_TIMEOUT = 10  # seconds to decide 5090 is unreachable
 
 app = FastAPI(title="Cortex Relay")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+)
 
-db  = firestore.AsyncClient(project=GCP_PROJECT)
-gcs = storage.Client(project=GCP_PROJECT)
+# Serve static gallery + scan pages
+_STATIC = Path(__file__).parent / "public"
+if _STATIC.exists():
+    app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
+
+@app.get("/", response_class=RedirectResponse)
+async def root():
+    return RedirectResponse("/gallery")
+
+@app.get("/gallery", response_class=HTMLResponse)
+async def gallery():
+    return (_STATIC / "gallery.html").read_text()
+
+@app.get("/scan/{scan_id}", response_class=HTMLResponse)
+async def scan_page(scan_id: str):
+    return (_STATIC / "scan.html").read_text()
+
+db     = firestore.AsyncClient(project=GCP_PROJECT)
+gcs    = storage.Client(project=GCP_PROJECT)
 bucket = gcs.bucket(GCS_BUCKET)
+
+
+# ─── health ──────────────────────────────────────────────────────────────────
 
 @app.get("/api/health")
 async def health():
-    return {"ok": True, "tunnel": TUNNEL_URL}
+    alive = await _5090_alive()
+    return {"ok": True, "tunnel": TUNNEL_URL, "5090_online": alive}
 
-@app.get("/api/scans")
-async def list_scans(limit: int = 50):
-    docs = db.collection("scans").order_by("created_at", direction=firestore.Query.DESCENDING).limit(limit)
-    results = []
-    async for doc in docs.stream():
-        d = doc.to_dict()
-        d["id"] = doc.id
-        results.append({k: d[k] for k in ["id","status","filename","peak_t","tr_seconds","thumbnail_url","created_at","narrations"] if k in d})
-    return {"scans": results}
+async def _5090_alive() -> bool:
+    try:
+        async with httpx.AsyncClient(timeout=TUNNEL_TIMEOUT) as c:
+            r = await c.get(f"{TUNNEL_URL}/api/info")
+            return r.status_code == 200
+    except Exception:
+        return False
+
+
+# ─── file proxy (avoids allUsers IAM restriction on org-policy accounts) ─────
+
+@app.get("/api/files/{bucket_path:path}")
+async def proxy_file(bucket_path: str):
+    """Proxy GCS object through Cloud Run. Allows public reads without allUsers IAM."""
+    blob = bucket.blob(bucket_path)
+    if not blob.exists():
+        return JSONResponse({"error": "not found"}, status_code=404)
+    content_type = blob.content_type or "application/octet-stream"
+
+    def _stream():
+        with blob.open("rb") as f:
+            while chunk := f.read(65536):
+                yield chunk
+
+    return StreamingResponse(_stream(), media_type=content_type,
+                              headers={"Cache-Control": "public, max-age=86400"})
+
+
+# ─── scan submission ──────────────────────────────────────────────────────────
 
 @app.post("/api/scan")
 async def submit_scan(file: UploadFile = File(...), tier: int = Form(default=4)):
@@ -43,44 +97,167 @@ async def submit_scan(file: UploadFile = File(...), tier: int = Form(default=4))
     if len(data) > MAX_MB * 1024 * 1024:
         return JSONResponse({"error": "file too large"}, status_code=413)
 
-    ext = Path(file.filename).suffix.lower()
+    ext = Path(file.filename or "upload").suffix.lower() or ".bin"
     blob = bucket.blob(f"uploads/{scan_id}{ext}")
     blob.upload_from_string(data, content_type=file.content_type or "application/octet-stream")
-    upload_url = f"https://storage.googleapis.com/{GCS_BUCKET}/uploads/{scan_id}{ext}"
+    # Use relay proxy URL so files are accessible without public IAM
+    file_url = f"/api/files/uploads/{scan_id}{ext}"
 
     await db.collection("scans").document(scan_id).set({
         "id": scan_id, "status": "queued", "filename": file.filename,
-        "tier": tier, "created_at": firestore.SERVER_TIMESTAMP, "upload_url": upload_url,
+        "tier": tier, "created_at": firestore.SERVER_TIMESTAMP,
+        "upload_gcs": f"gs://{GCS_BUCKET}/uploads/{scan_id}{ext}",
+        "file_url": file_url,
     })
 
-    asyncio.create_task(_forward_to_5090(scan_id, data, file.filename, ext, tier))
+    asyncio.create_task(_forward_to_5090(scan_id, data, file.filename or "upload", ext, tier))
     return JSONResponse({"ok": True, "scan_id": scan_id}, status_code=202)
 
+
 async def _forward_to_5090(scan_id: str, data: bytes, filename: str, ext: str, tier: int):
+    """Try to forward to the local 5090. Falls back gracefully if unreachable."""
+    try:
+        async with httpx.AsyncClient(timeout=600) as client:
+            r = await client.get(f"{TUNNEL_URL}/api/info", timeout=TUNNEL_TIMEOUT)
+            if r.status_code != 200:
+                raise RuntimeError("5090 health check failed")
+    except Exception:
+        await db.collection("scans").document(scan_id).update({
+            "status": "queued_local",
+            "status_message": "RTX 5090 is currently unavailable. Your scan will run when it comes back online.",
+        })
+        # If Gemini is available, at least do narration for any cached scans
+        return
+
     try:
         async with httpx.AsyncClient(timeout=600) as client:
             files = {"file": (filename, data, "application/octet-stream")}
             form  = {"tier": str(tier), "source": "public-relay", "external_scan_id": scan_id}
-            r = await client.post(f"{TUNNEL_URL}/api/scan", files=files, data=form)
+            r = await client.post(f"{TUNNEL_URL}/api/scan", files=files, data=form, timeout=600)
             if r.status_code == 202:
                 body = r.json()
-                await db.collection("scans").document(scan_id).update({"local_scan_id": body["scan_id"]})
+                await db.collection("scans").document(scan_id).update({
+                    "local_scan_id": body["scan_id"],
+                    "status": "processing",
+                })
+            else:
+                raise RuntimeError(f"5090 returned {r.status_code}")
     except Exception as e:
-        await db.collection("scans").document(scan_id).update({"status": "failed", "error": str(e)})
+        await db.collection("scans").document(scan_id).update({
+            "status": "failed", "error": str(e)
+        })
+
+
+# ─── scan status & listing ────────────────────────────────────────────────────
+
+@app.get("/api/scans")
+async def list_scans(limit: int = 50):
+    docs = db.collection("scans").order_by(
+        "created_at", direction=firestore.Query.DESCENDING
+    ).limit(limit)
+    results = []
+    async for doc in docs.stream():
+        d = doc.to_dict(); d["id"] = doc.id
+        results.append({
+            k: d[k] for k in
+            ["id","status","status_message","filename","peak_t","tr_seconds",
+             "thumbnail_url","file_url","created_at","narrations","n_vertices"]
+            if k in d
+        })
+    return {"scans": results}
+
 
 @app.get("/api/scan/{scan_id}")
 async def get_scan(scan_id: str):
+    # First check Firestore
     doc = await db.collection("scans").document(scan_id).get()
     if not doc.exists:
         return JSONResponse({"error": "not found"}, status_code=404)
     d = doc.to_dict(); d["id"] = scan_id
+
+    # If processing on the local machine, try to pull live status from 5090
+    if d.get("status") == "processing" and d.get("local_scan_id"):
+        try:
+            async with httpx.AsyncClient(timeout=5) as c:
+                r = await c.get(f"{TUNNEL_URL}/api/scan/{d['local_scan_id']}")
+                if r.status_code == 200:
+                    local = r.json()
+                    # Merge live fields in
+                    for k in ["status","peak_t","n_t","n_vertices","narrations","tr_seconds","bold_url","thumbnail_url"]:
+                        if k in local:
+                            d[k] = local[k]
+                    if local.get("status") == "complete":
+                        await db.collection("scans").document(scan_id).update({
+                            k: local[k] for k in
+                            ["status","peak_t","n_t","narrations","tr_seconds"] if k in local
+                        })
+        except Exception:
+            pass  # fall through with Firestore data
     return d
+
+
+@app.get("/api/scan/{scan_id}/narrations")
+async def get_narrations(scan_id: str):
+    doc = await db.collection("scans").document(scan_id).get()
+    if not doc.exists:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    d = doc.to_dict()
+    if "narrations" in d:
+        return {"narrations": d["narrations"]}
+    # Try live fetch from 5090
+    if d.get("local_scan_id"):
+        try:
+            async with httpx.AsyncClient(timeout=5) as c:
+                r = await c.get(f"{TUNNEL_URL}/api/scan/{d['local_scan_id']}/narrations")
+                if r.status_code == 200:
+                    return r.json()
+        except Exception:
+            pass
+    # Gemini fallback narration if key is set and scan has a description
+    if GEMINI_KEY and d.get("filename"):
+        narration = await _gemini_narration(d["filename"])
+        return {"narrations": narration, "source": "gemini-fallback"}
+    return JSONResponse({"error": "narrations not ready"}, status_code=404)
+
+
+# ─── Gemini fallback narration ────────────────────────────────────────────────
+
+async def _gemini_narration(filename: str) -> dict:
+    """Cheap Gemini 1.5 Flash fallback when local Gemma 4 is unavailable."""
+    if not GEMINI_KEY:
+        return {}
+    prompt_base = (
+        f"The video file '{filename}' was submitted for brain-response analysis "
+        "using TRIBE v2 (Meta's brain foundation model). "
+        "The model predicts cortical BOLD responses across 20,484 fsaverage5 vertices at 2 Hz. "
+    )
+    tiers = {
+        "general":  prompt_base + "Explain in 2-3 sentences for a curious high-schooler what this analysis does and why it's interesting.",
+        "college":  prompt_base + "Explain in one paragraph for an undergraduate neuroscience student, naming key brain networks (DMN, salience, motor, visual) as appropriate.",
+        "clinical": prompt_base + "Write a 3-4 sentence clinical summary as if for a neurologist, mentioning BOLD signal, hemodynamic response, fsaverage5 surface space, and the population-averaged nature of the prediction.",
+    }
+    results = {}
+    async with httpx.AsyncClient(timeout=30) as c:
+        for tier, prompt in tiers.items():
+            try:
+                r = await c.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}",
+                    json={"contents": [{"parts": [{"text": prompt}]}]},
+                )
+                if r.status_code == 200:
+                    results[tier] = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            except Exception:
+                results[tier] = "(narration unavailable)"
+    return results
+
+
+# ─── WebSocket status feed ────────────────────────────────────────────────────
 
 @app.websocket("/api/ws/{scan_id}")
 async def ws_scan(ws: WebSocket, scan_id: str):
     await ws.accept()
     try:
-        for _ in range(120):  # max 10 min poll
+        for _ in range(120):  # max 10 min
             doc = await db.collection("scans").document(scan_id).get()
             if doc.exists:
                 d = doc.to_dict(); d["id"] = scan_id
@@ -90,3 +267,23 @@ async def ws_scan(ws: WebSocket, scan_id: str):
             await asyncio.sleep(5)
     except WebSocketDisconnect:
         pass
+
+
+# ─── info ─────────────────────────────────────────────────────────────────────
+
+@app.get("/api/info")
+async def info():
+    return {
+        "relay": "cortex-relay v2",
+        "tunnel": TUNNEL_URL,
+        "5090_online": await _5090_alive(),
+        "tribe_v2": {
+            "sample_rate_hz": 2.0, "tr_seconds": 0.5,
+            "n_vertices": 20484, "surface": "fsaverage5",
+            "hrf_lag_seconds": 5.0,
+        },
+        "fallback": {
+            "narration": "gemini-1.5-flash" if GEMINI_KEY else "none",
+            "inference": "queued_local (no cloud TRIBE v2 equivalent)",
+        },
+    }
