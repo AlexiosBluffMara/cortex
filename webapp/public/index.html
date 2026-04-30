@@ -290,7 +290,7 @@
             transition: color .12s, border-color .12s;
         }
         .narr-tab:hover:not(.active) { color: var(--text); }
-        .narr-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .narr-tab.active { color: var(--tab-color, var(--accent)); border-bottom-color: var(--tab-color, var(--accent)); }
 
         /* ROI breakdown */
         .roi-section { border-top: 1px solid var(--border); padding-top: 14px; }
@@ -565,13 +565,13 @@
             .mode-tab { font-size: 9px; padding: 10px 0; }
         }
     </style>
-    <!-- GA4 — replace G-PLACEHOLDER with your Measurement ID -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-PLACEHOLDER"></script>
+    <!-- GA4 — replace G-MBRS3TCQTL with your Measurement ID -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-MBRS3TCQTL"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      gtag('config', 'G-PLACEHOLDER', { send_page_view: true });
+      gtag('config', 'G-MBRS3TCQTL', { send_page_view: true });
     </script>
 </head>
 <body>
@@ -745,17 +745,19 @@
             </div>
 
             <div class="narration-tabs">
-                <button class="narr-tab" data-narr="general">General</button>
-                <button class="narr-tab active" data-narr="college">College</button>
-                <button class="narr-tab" data-narr="clinical">Clinical</button>
+                <button class="narr-tab active" data-narr="american" style="--tab-color:#f59e0b">Alex</button>
+                <button class="narr-tab" data-narr="student" style="--tab-color:#34d399">Jordan</button>
+                <button class="narr-tab" data-narr="neurosurgeon" style="--tab-color:#56758f">Dr. Chen</button>
+                <button class="narr-tab" data-narr="ml_engineer" style="--tab-color:#a78bfa">Atlas</button>
             </div>
 
             <div id="run-cost-badge" class="run-cost-badge hidden"></div>
 
             <div class="narration-body" id="narration-body">
-                <div id="narration-general" class="narration-tier hidden"><p class="narration-placeholder">Generating…</p></div>
-                <div id="narration-college" class="narration-tier active-tier"><p class="narration-placeholder">Run a scan to see Gemma's analysis.</p></div>
-                <div id="narration-clinical" class="narration-tier hidden"><p class="narration-placeholder">Generating…</p></div>
+                <div id="narration-american" class="narration-tier active-tier"><p class="narration-placeholder">Run a scan to see Alex's take.</p></div>
+                <div id="narration-student" class="narration-tier hidden"><p class="narration-placeholder">Generating…</p></div>
+                <div id="narration-neurosurgeon" class="narration-tier hidden"><p class="narration-placeholder">Generating…</p></div>
+                <div id="narration-ml_engineer" class="narration-tier hidden"><p class="narration-placeholder">Generating…</p></div>
             </div>
 
             <!-- Mobile-only 2D network canvas (hidden on desktop via CSS default, shown via media query) -->
@@ -847,6 +849,6 @@
         </div>
     </div>
 
-    <script type="module" src="/assets/main.js?v=20260430-isu3"></script>
+    <script type="module" src="/assets/main.js?v=20260430-hermes1"></script>
 </body>
 </html>

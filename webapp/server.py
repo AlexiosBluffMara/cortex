@@ -458,6 +458,31 @@ def create_app(
         import json as _json
         return _json.loads(atlas_file.read_text(encoding="utf-8"))
 
+    @app.get("/api/scan/{scan_id}/ascii-video")
+    async def ascii_video_endpoint(scan_id: str) -> Response:
+        """Serve the Hermes ascii-video BOLD visualization for a completed scan.
+
+        Generated automatically after scan completes. Returns the .mp4 file.
+        Status 202 if still generating, 404 if not available.
+        """
+        ascii_dir  = Path("D:/cortex/scans/ascii")
+        mp4_path   = ascii_dir / f"{scan_id}_ascii.mp4"
+        if mp4_path.exists():
+            return Response(
+                content=mp4_path.read_bytes(),
+                media_type="video/mp4",
+                headers={"Cache-Control": "public, max-age=86400", "X-Scan-Id": scan_id},
+            )
+        # Check if source .npy exists; if so, trigger generation
+        npy = Path("D:/cortex/scans") / f"{scan_id}.npy"
+        if npy.exists():
+            return Response(
+                content=b'{"status":"generating"}',
+                media_type="application/json",
+                status_code=202,
+            )
+        raise HTTPException(status_code=404, detail="ascii-video not available for this scan")
+
     @app.get("/api/scan/{scan_id}/bold-vertex")
     async def bold_vertex(scan_id: str, n_t: int = 100) -> Response:
         """Return the persisted per-vertex BOLD trace for `scan_id`.
@@ -785,6 +810,30 @@ async def _run_document_scan_background(
         log.error("[webapp] document scan %s failed: %s", scan_id, exc)
 
 
+async def _generate_ascii_video(
+    scan_id: str,
+    bold: Any,                  # numpy float32 (T, 20484)
+    peak_t: int | None,
+) -> None:
+    """Fire-and-forget: generate Hermes ascii-video BOLD visualization in background."""
+    try:
+        from cortex.ascii_video import generate_for_scan
+        npy_path = Path("D:/cortex/scans") / f"{scan_id}.npy"
+        out = await generate_for_scan(
+            scan_id=scan_id,
+            bold_path=npy_path,
+            output_dir="D:/cortex/scans/ascii",
+            peak_t=peak_t,
+            resolution="480p",
+        )
+        if out:
+            log.info("[webapp] ascii-video generated for %s → %s", scan_id, out)
+        else:
+            log.debug("[webapp] ascii-video skipped for %s (no output)", scan_id)
+    except Exception as _e:                                         # noqa: BLE001
+        log.debug("[webapp] ascii-video generation failed for %s: %s", scan_id, _e)
+
+
 async def _push_to_gcp(
     scan_id: str,
     result: Any,
@@ -927,8 +976,13 @@ async def _run_scan_background(
             _scans_dir.mkdir(parents=True, exist_ok=True)
             preds = getattr(result, "preds", None)
             if preds is not None:
-                _np.save(_scans_dir / f"{scan_id}.npy", _np.asarray(preds, dtype=_np.float32))
-                log.info("[webapp] persisted preds for %s shape=%s", scan_id, preds.shape)
+                bold_arr = _np.asarray(preds, dtype=_np.float32)
+                _np.save(_scans_dir / f"{scan_id}.npy", bold_arr)
+                log.info("[webapp] persisted preds for %s shape=%s", scan_id, bold_arr.shape)
+                # Fire-and-forget: generate ASCII art video (Hermes ascii-video technique)
+                asyncio.create_task(_generate_ascii_video(
+                    scan_id, bold_arr, getattr(result, "peak_t", None)
+                ))
         except Exception as _exc:                                  # noqa: BLE001
             log.warning("[webapp] preds persist failed for %s: %s", scan_id, _exc)
 
