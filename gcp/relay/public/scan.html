@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cortex — Scan</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- ISU official web fonts: Open Sans (primary sans), PT Serif (serif), JetBrains Mono (data/code) -->
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -20,11 +22,13 @@
     --border:       #2a2a3c;
     --border-hi:    #3a3a50;
 
-    /* Brand */
-    --accent:       #CE1126;
-    --accent-hi:    #e8142c;
-    --accent-glow:  rgba(206,17,38,.22);
-    --accent-dim:   rgba(206,17,38,.12);
+    /* ISU Brand — official digital palette (designsystem.illinoisstate.edu) */
+    --accent:       #CC0000;   /* ISU Brand Red */
+    --accent-hi:    #e00000;
+    --accent-glow:  rgba(204,0,0,.22);
+    --accent-dim:   rgba(204,0,0,.12);
+    --isu-yellow:   #F6A917;   /* ISU Secondary Yellow (Reggie) */
+    --isu-blue:     #56758f;   /* ISU Secondary Blue */
 
     /* Text */
     --text:         #eaeaf2;
@@ -41,15 +45,26 @@
     --heat-mid:     #5a5a7a;
     --heat-hi:      #e85c1a;
 
-    /* Typography */
-    --mono:  'JetBrains Mono', monospace;
-    --sans:  'Outfit', sans-serif;
-    --body:  'Inter', sans-serif;
+    /* Typography — ISU official web fonts */
+    --mono:   'JetBrains Mono', 'Courier New', monospace;
+    --sans:   'Open Sans', Helvetica, Arial, sans-serif;
+    --body:   'Open Sans', Helvetica, Arial, sans-serif;
+    --serif:  'PT Serif', Georgia, serif;
 
     /* Layout */
     --hdr-h:    62px;
     --bar-h:    52px;
     --banner-h: 40px;
+
+    /* Persona colors */
+    --p-american:        #f59e0b;
+    --p-american-rgb:    245,158,11;
+    --p-student:         #84cc16;
+    --p-student-rgb:     132,204,22;
+    --p-neurosurgeon:    #14b8a6;
+    --p-neurosurgeon-rgb:20,184,166;
+    --p-ml:              #06b6d4;
+    --p-ml-rgb:          6,182,212;
   }
 
   html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--body); overflow-x: hidden; }
@@ -234,17 +249,40 @@
     border-left: 1px solid var(--border);
     display: flex; flex-direction: column; background: var(--surface); overflow: hidden;
   }
-  .tab-bar { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+
+  /* ── 4-persona tab bar ── */
+  .tab-bar {
+    display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .tab-bar::-webkit-scrollbar { display: none; }
   .tab {
-    flex: 1; padding: .65rem .5rem; text-align: center;
-    font-size: .75rem; font-weight: 600; cursor: pointer;
+    flex: 1; min-width: 0;
+    padding: .6rem .3rem; text-align: center;
+    font-size: .72rem; font-weight: 600; cursor: pointer;
     color: var(--text-dim); border-bottom: 2px solid transparent;
     transition: all .15s; background: none;
-    border-top: none; border-left: none; border-right: none; font-family: var(--sans);
+    border-top: none; border-left: none; border-right: none;
+    font-family: var(--sans); white-space: nowrap;
+    display: flex; align-items: center; justify-content: center; gap: .3rem;
   }
   .tab:hover { color: var(--text); }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
+  /* Per-persona tab active colors */
+  .tab[data-persona="american"].active    { color: var(--p-american);    border-bottom-color: var(--p-american); }
+  .tab[data-persona="student"].active     { color: var(--p-student);     border-bottom-color: var(--p-student); }
+  .tab[data-persona="neurosurgeon"].active{ color: var(--p-neurosurgeon);border-bottom-color: var(--p-neurosurgeon); }
+  .tab[data-persona="ml_engineer"].active { color: var(--p-ml);          border-bottom-color: var(--p-ml); }
+
+  .tab-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  }
+  .tab[data-persona="american"]    .tab-dot { background: var(--p-american); }
+  .tab[data-persona="student"]     .tab-dot { background: var(--p-student); }
+  .tab[data-persona="neurosurgeon"].tab-dot  { background: var(--p-neurosurgeon); }
+  .tab[data-persona="ml_engineer"] .tab-dot { background: var(--p-ml); }
+
+  /* ── Narration body ── */
   .narr-body {
     flex: 1; overflow-y: auto; padding: 1.25rem 1.1rem;
     scrollbar-width: thin; scrollbar-color: var(--border) transparent;
@@ -252,6 +290,55 @@
   .narr-body::-webkit-scrollbar { width: 4px; }
   .narr-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
+  /* Persona header inside narr-body */
+  .persona-header {
+    display: flex; align-items: center; gap: .5rem;
+    margin-bottom: 1rem; padding-bottom: .75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .persona-header-dot {
+    width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+  }
+  .persona-header-name {
+    font-family: var(--sans); font-size: .82rem; font-weight: 600; color: var(--text);
+  }
+  .persona-header-role {
+    font-size: .7rem; color: var(--text-dim); margin-top: 1px;
+  }
+
+  /* ── Narration body per-persona styles ── */
+  .narr-body.persona-american .narr-text {
+    font-family: var(--body); font-size: .9rem; line-height: 1.85;
+    color: var(--text); white-space: pre-wrap;
+  }
+  .narr-body.persona-american .narr-text strong,
+  .narr-body.persona-american .narr-placeholder em { color: var(--p-american); }
+
+  .narr-body.persona-student .narr-text {
+    font-family: var(--sans); font-size: .95rem; line-height: 1.8; font-weight: 500;
+    letter-spacing: .008em; color: var(--text); white-space: pre-wrap;
+  }
+  .narr-body.persona-student .narr-text strong,
+  .narr-body.persona-student .narr-placeholder em { color: var(--p-student); }
+
+  .narr-body.persona-neurosurgeon .narr-text {
+    font-family: var(--body); font-size: .875rem; line-height: 1.65;
+    color: var(--text); white-space: pre-wrap;
+  }
+  .narr-body.persona-neurosurgeon .narr-text strong,
+  .narr-body.persona-neurosurgeon .narr-placeholder em { color: var(--p-neurosurgeon); }
+  .narr-body.persona-neurosurgeon .narr-data {
+    font-family: 'JetBrains Mono', monospace; font-size: .78rem; color: var(--p-neurosurgeon);
+  }
+
+  .narr-body.persona-ml_engineer .narr-text {
+    font-family: 'JetBrains Mono', monospace; font-size: .8rem; line-height: 1.7;
+    color: var(--text); white-space: pre-wrap;
+  }
+  .narr-body.persona-ml_engineer .narr-text strong,
+  .narr-body.persona-ml_engineer .narr-placeholder em { color: var(--p-ml); }
+
+  /* Fallback (no persona class) */
   .narr-text { font-size: .875rem; line-height: 1.75; color: var(--text); font-family: var(--body); white-space: pre-wrap; }
   .narr-placeholder { font-size: .875rem; line-height: 1.75; color: var(--text-mid); font-family: var(--body); font-style: italic; padding: .5rem 0; }
   .narr-empty {
@@ -406,9 +493,18 @@
   <!-- ── Right: narration tabs ── -->
   <div class="panel-narr">
     <div class="tab-bar">
-      <button class="tab active" data-tab="general">General</button>
-      <button class="tab"        data-tab="college">College</button>
-      <button class="tab"        data-tab="clinical">Clinical</button>
+      <button class="tab" data-persona="american">
+        <span class="tab-dot"></span>Alex
+      </button>
+      <button class="tab" data-persona="student">
+        <span class="tab-dot"></span>Jordan
+      </button>
+      <button class="tab" data-persona="neurosurgeon">
+        <span class="tab-dot"></span>Dr. Chen
+      </button>
+      <button class="tab" data-persona="ml_engineer">
+        <span class="tab-dot"></span>Atlas
+      </button>
     </div>
 
     <div class="narr-body" id="narrBody">
@@ -478,9 +574,10 @@
   }
   applyAuthState();
 
-  /* ── Scan ID from URL ── */
+  /* ── Scan ID + persona from URL ── */
   const params = new URLSearchParams(location.search);
   const scanId = params.get('id');
+  const urlPersona = params.get('persona');
 
   if (!scanId) {
     document.body.innerHTML = `<div style="padding:4rem;text-align:center;color:var(--text-dim);font-family:var(--sans)">
@@ -488,6 +585,25 @@
     </div>`;
     return;
   }
+
+  /* ── Persona state ── */
+  const PERSONAS = {
+    american:     { name: 'Alex',         role: 'High school-educated American adult', color: 'var(--p-american)' },
+    student:      { name: 'Jordan',       role: '16-year-old AP Bio student',          color: 'var(--p-student)' },
+    neurosurgeon: { name: 'Dr. Maya Chen',role: 'Attending neurosurgeon, brain imaging',color: 'var(--p-neurosurgeon)' },
+    ml_engineer:  { name: 'Atlas',        role: 'Senior ML/cloud engineer',            color: 'var(--p-ml)' },
+  };
+
+  const VALID_PERSONAS = Object.keys(PERSONAS);
+
+  function resolvePersona(id) {
+    return VALID_PERSONAS.includes(id) ? id : 'american';
+  }
+
+  /* URL param takes priority over localStorage */
+  let activePersona = resolvePersona(
+    urlPersona || localStorage.getItem('cortex_persona') || 'american'
+  );
 
   /* ── DOM refs ── */
   const hdrFilename    = document.getElementById('hdrFilename');
@@ -511,20 +627,36 @@
   const shareBtnNarr   = document.getElementById('shareBtnNarr');
   const downloadBtn    = document.getElementById('downloadBtn');
 
-  let activeTab = 'general';
   let currentNarrations = null;
   let currentScan = null;
 
   document.title = `Cortex — ${scanId}`;
   hdrFilename.textContent = scanId;
 
+  /* ── Activate a tab ── */
+  function activatePersonaTab(pid) {
+    activePersona = pid;
+    localStorage.setItem('cortex_persona', pid);
+    tabs.forEach(t => {
+      if (t.dataset.persona === pid) {
+        t.classList.add('active');
+      } else {
+        t.classList.remove('active');
+      }
+    });
+    /* Update narr-body persona class */
+    VALID_PERSONAS.forEach(p => narrBody.classList.remove(`persona-${p}`));
+    narrBody.classList.add(`persona-${pid}`);
+    renderNarration(currentNarrations, currentScan);
+  }
+
   /* ── Tab switching ── */
   tabs.forEach(t => t.addEventListener('click', () => {
-    tabs.forEach(x => x.classList.remove('active'));
-    t.classList.add('active');
-    activeTab = t.dataset.tab;
-    renderNarration(currentNarrations, currentScan);
+    activatePersonaTab(t.dataset.persona);
   }));
+
+  /* Initialize active tab from state */
+  activatePersonaTab(activePersona);
 
   /* ── Share ── */
   function copyLink(btn) {
@@ -616,22 +748,47 @@
     mediaFilename.textContent = filename || '';
   }
 
-  /* Brain Cinema placeholder text per narration tier */
+  /* Placeholder text per persona */
   const PLACEHOLDER = {
-    general:
-      'Your brain lit up like a packed stadium right before the big play. ' +
-      'The visual cortex was buzzing with all the action on screen, while motor areas were primed to react ' +
-      'even though you were just sitting still. Peak activity hit around the moment things got most intense.',
-    college:
-      'BOLD signal in early visual cortex (V1/V2) peaked at t=N, consistent with primary visual processing. ' +
-      'Concurrent activation in MT+ suggests motion processing. Prefrontal engagement at t=N+3 likely reflects ' +
-      'working memory maintenance and top-down attentional modulation of sensory input.',
-    clinical:
-      'Hemodynamic response in occipital cortex (Brodmann areas 17–18) reached maximum amplitude at TR N (t=N×0.5 s). ' +
-      'Bilateral MT/V5 activation is consistent with optic flow and motion processing. ' +
-      'Dorsolateral prefrontal and anterior cingulate co-activation reflects attentional control networks. ' +
-      'No anomalous suppression patterns detected above the 2-SD threshold across the population average.',
+    american:
+      'Alex is waiting for the brain data to come back... Once it does, you\'ll get a plain-English take on what\'s happening up there.',
+    student:
+      'Jordan\'s getting ready to break it down — once the scan finishes, you\'ll get the full scoop on which brain regions are lighting up and why.',
+    neurosurgeon:
+      'Dr. Chen is reviewing the activation maps... Clinical analysis will populate once TRIBE v2 inference completes.',
+    ml_engineer:
+      'Atlas is standing by to analyze the model output... TRIBE v2 inference pending. Tensor shape: (T × 20484) float32 @ 2 Hz.',
   };
+
+  /* Backward-compat key mapping: old 3-tier keys → new persona keys */
+  const LEGACY_MAP = {
+    american:     'general',
+    student:      'general',
+    neurosurgeon: 'clinical',
+    ml_engineer:  'college',
+  };
+
+  function getPersonaText(narrs, pid) {
+    if (!narrs) return null;
+    /* Direct match (new API) */
+    if (narrs[pid]) return narrs[pid];
+    /* Legacy fallback */
+    const legacyKey = LEGACY_MAP[pid];
+    if (legacyKey && narrs[legacyKey]) return narrs[legacyKey];
+    /* Last resort: any non-empty value */
+    return narrs.general || narrs.college || narrs.clinical || null;
+  }
+
+  function buildPersonaHeader(pid) {
+    const p = PERSONAS[pid];
+    return `<div class="persona-header">
+      <div class="persona-header-dot" style="background:${p.color}"></div>
+      <div>
+        <div class="persona-header-name">${escHtml(p.name)}</div>
+        <div class="persona-header-role">${escHtml(p.role)}</div>
+      </div>
+    </div>`;
+  }
 
   function renderNarration(narrs, scan) {
     const rois = (scan && scan.top_rois) || [];
@@ -642,17 +799,19 @@
          </div>`
       : '';
 
+    const header = buildPersonaHeader(activePersona);
+
     if (!narrs) {
-      const ph = PLACEHOLDER[activeTab] || PLACEHOLDER.general;
-      narrBody.innerHTML = `<div class="narr-placeholder">${escHtml(ph)}</div>${roiHtml}`;
+      const ph = PLACEHOLDER[activePersona] || PLACEHOLDER.american;
+      narrBody.innerHTML = `${header}<div class="narr-placeholder">${escHtml(ph)}</div>${roiHtml}`;
       return;
     }
-    const text = narrs[activeTab] || narrs.general || narrs.college || narrs.clinical || '';
+    const text = getPersonaText(narrs, activePersona);
     if (!text) {
-      narrBody.innerHTML = `<div class="narr-empty"><span>No ${activeTab} narration available.</span></div>${roiHtml}`;
+      narrBody.innerHTML = `${header}<div class="narr-empty"><span>No narration available for this persona.</span></div>${roiHtml}`;
       return;
     }
-    narrBody.innerHTML = `<div class="narr-text">${escHtml(text)}</div>${roiHtml}`;
+    narrBody.innerHTML = `${header}<div class="narr-text">${escHtml(text)}</div>${roiHtml}`;
   }
 
   function injectViewer(d) {

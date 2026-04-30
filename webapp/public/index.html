@@ -8,7 +8,8 @@
     <title>Cortex · Brain-response analysis</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- ISU official web fonts: Open Sans (primary sans), PT Serif (serif), JetBrains Mono (data/code) -->
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         /* ── Reset & base ── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -27,7 +28,9 @@
             --border-strong: #383a47;
 
             /* ISU Cardinal — single brand accent */
-            --accent: #CE1126;
+            --accent: #CC0000;  /* ISU Brand Red — designsystem.illinoisstate.edu */
+            --isu-yellow: #F6A917;
+            --isu-blue: #56758f;
             --accent2: #ee2d3f;
             --accent-deep: #9c0d1d;
 
@@ -44,7 +47,7 @@
             --radius: 12px;
             --topbar: 52px;
         }
-        html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: "Inter", ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+        html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: "Open Sans", ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
         body, button, input, select { font-feature-settings: "ss01", "cv11"; }
 
         /* ── Topbar ── */
@@ -98,7 +101,7 @@
             min-height: 0; min-width: 0;
         }
         .panel-section { padding: 16px; border-bottom: 1px solid var(--border); }
-        .panel-title { font-size: 11px; font-family: "Outfit", sans-serif; font-weight: 600; letter-spacing: -0.01em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+        .panel-title { font-size: 11px; font-family: "Open Sans", sans-serif; font-weight: 600; letter-spacing: -0.01em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
 
         .scan-form { display: flex; flex-direction: column; gap: 10px; }
         .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
@@ -182,7 +185,7 @@
             position: absolute; pointer-events: none; display: none;
             background: rgba(13,14,20,.92); border: 1px solid var(--border);
             border-radius: 8px; padding: 8px 12px; font-size: 12px;
-            font-family: "Inter", sans-serif;
+            font-family: "Open Sans", sans-serif;
             max-width: 220px; z-index: 50;
         }
         #region-tooltip .tt-name { font-weight: 600; color: var(--text); }
@@ -264,11 +267,11 @@
         }
 
         .narration-text {
-            font-family: "Inter", sans-serif; font-size: 13px; line-height: 1.75;
+            font-family: "Open Sans", sans-serif; font-size: 13px; line-height: 1.75;
             color: var(--text); font-weight: 400;
         }
         .narration-placeholder {
-            font-family: "Inter", sans-serif; font-size: 13px;
+            font-family: "Open Sans", sans-serif; font-size: 13px;
             color: var(--muted); text-align: center; margin: auto;
         }
         .narration-tier { display: none; }

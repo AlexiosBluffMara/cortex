@@ -27,8 +27,11 @@ GCP_PROJECT     = os.environ["GCP_PROJECT"]
 GEMINI_KEY      = os.environ.get("GEMINI_API_KEY", "")
 # Google OAuth client ID — set in Cloud Run env vars after creating in GCP Console
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+# Gemini fallback model — override with GEMINI_MODEL env var on Cloud Run
+# Options: gemini-2.5-flash (default), gemini-3.1-flash-preview, gemini-3.1-flash-lite-preview
+GEMINI_MODEL     = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 # Domains allowed to submit scans (pipe-separated: "philanthropytraders.com|redteamkitchen.com")
-ALLOWED_DOMAINS = set(os.environ.get("ALLOWED_DOMAINS", "philanthropytraders.com|redteamkitchen.com").split("|"))
+ALLOWED_DOMAINS = set(os.environ.get("ALLOWED_DOMAINS", "philanthropytraders.com,redteamkitchen.com").split(","))
 MAX_MB          = 50
 TUNNEL_TIMEOUT  = 10
 
@@ -55,7 +58,7 @@ def _verify_google_token(token: str) -> dict:
         raise HTTPException(
             403,
             f"Your Google account domain '{hd}' is not authorized to submit scans. "
-            f"Sign in with a @{'/@'.join(ALLOWED_DOMAINS)} account."
+            f"Sign in with a @{' or @'.join(sorted(ALLOWED_DOMAINS))} account."
         )
     _token_cache[token] = payload
     return payload
@@ -271,31 +274,71 @@ async def get_narrations(scan_id: str):
 # ─── Gemini fallback narration ────────────────────────────────────────────────
 
 async def _gemini_narration(filename: str) -> dict:
-    """Cheap Gemini 1.5 Flash fallback when local Gemma 4 is unavailable."""
+    """Gemini fallback narration when local Gemma 4 (RTX 5090) is unavailable.
+
+    Model choice guide (April 2026 — update GEMINI_MODEL env var to override):
+      gemini-2.5-flash          Best price-performance; stable production; ~$0.50/$3.00 per 1M tok
+      gemini-3.1-flash-preview  Latest frontier Flash; faster, slightly more capable; preview pricing
+      gemini-3.1-flash-lite-preview  Budget option; fastest; ~$0.25/$1.50 per 1M tok
+      gemini-2.5-pro            Advanced reasoning; $2.00-$4.00 / $12.00-$18.00 per 1M tok; NO free tier
+      gemini-3.1-pro-preview    Most capable; complex agentic tasks; paid-only
+
+    Default: gemini-2.5-flash — stable, cost-effective, free tier available (reduced quota).
+    Set GEMINI_MODEL env var on Cloud Run to override without a redeploy.
+    """
+
+    Generates 4 persona narrations — Alex (American), Jordan (Student),
+    Dr. Maya Chen (Neurosurgeon), Atlas (ML Engineer).
+    """
     if not GEMINI_KEY:
         return {}
-    prompt_base = (
-        f"The video file '{filename}' was submitted for brain-response analysis "
-        "using TRIBE v2 (Meta's brain foundation model). "
-        "The model predicts cortical BOLD responses across 20,484 fsaverage5 vertices at 2 Hz. "
+    base = (
+        f"The media file '{filename}' was submitted to Cortex for brain-response analysis. "
+        "TRIBE v2 (Meta's brain foundation model) predicts cortical BOLD activation across "
+        "20,484 fsaverage5 vertices at 2 Hz, with a 5-second hemodynamic lag pre-applied. "
+        "This is a group-averaged population model trained on 25 subjects — NOT a personal brain scan. "
     )
-    tiers = {
-        "general":  prompt_base + "Explain in 2-3 sentences for a curious high-schooler what this analysis does and why it's interesting.",
-        "college":  prompt_base + "Explain in one paragraph for an undergraduate neuroscience student, naming key brain networks (DMN, salience, motor, visual) as appropriate.",
-        "clinical": prompt_base + "Write a 3-4 sentence clinical summary as if for a neurologist, mentioning BOLD signal, hemodynamic response, fsaverage5 surface space, and the population-averaged nature of the prediction.",
+    personas = {
+        "american": (
+            base +
+            "You are explaining this to Alex, a curious American adult with a high school education. "
+            "Write 3-4 sentences in plain, warm, conversational language using one everyday American analogy. "
+            "No jargon, no region names. Make it surprising and interesting."
+        ),
+        "student": (
+            base +
+            "You are Jordan, a 16-year-old AP Biology student who's excited about neuroscience. "
+            "Write 4-5 sentences, enthusiastic and educational. You may name major brain lobes and one network. "
+            "Explain WHY those areas activate. Use one energetic transition like 'What's wild is that...'"
+        ),
+        "neurosurgeon": (
+            base +
+            "You are writing for Dr. Maya Chen, an attending neurosurgeon specializing in functional brain imaging. "
+            "Write 5-7 sentences in clinical register. Use gyral anatomy, Brodmann areas, and Yeo-7 networks. "
+            "Note laterality, BOLD dynamics, and one clinical framing sentence. "
+            "End with explicit caveat: group-averaged, not patient-specific imaging."
+        ),
+        "ml_engineer": (
+            base +
+            "You are writing for Atlas, a senior ML engineer who builds multimodal foundation models. "
+            "Write 5-7 sentences in dense technical language. Reference TRIBE v2 architecture: "
+            "V-JEPA2 vision encoder, wav2vec-BERT 2.0, Llama-3.2-3B text encoder, (T × 20484) float32 at 2 Hz. "
+            "Mention RTX 5090 32GB GDDR7 inference context. Draw one analogy to attention maps or saliency. "
+            "End with scale economics: $0.30/scan cloud vs $0.006 local."
+        ),
     }
     results = {}
     async with httpx.AsyncClient(timeout=30) as c:
-        for tier, prompt in tiers.items():
+        for persona_id, prompt in personas.items():
             try:
                 r = await c.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}",
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_KEY}",
                     json={"contents": [{"parts": [{"text": prompt}]}]},
                 )
                 if r.status_code == 200:
-                    results[tier] = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+                    results[persona_id] = r.json()["candidates"][0]["content"]["parts"][0]["text"]
             except Exception:
-                results[tier] = "(narration unavailable)"
+                results[persona_id] = "(narration unavailable)"
     return results
 
 
@@ -331,7 +374,7 @@ async def info():
             "hrf_lag_seconds": 5.0,
         },
         "fallback": {
-            "narration": "gemini-1.5-flash" if GEMINI_KEY else "none",
+            "narration": GEMINI_MODEL if GEMINI_KEY else "none",
             "inference": "queued_local (no cloud TRIBE v2 equivalent)",
         },
     }

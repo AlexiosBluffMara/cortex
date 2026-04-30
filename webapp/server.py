@@ -669,45 +669,22 @@ async def _run_image_scan_background(
         label = Path(media_path).name
         user_prompt = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
 
-        narr_3 = await queue.submit(
-            request_type=RequestType.NARRATE,
-            payload={
-                "prompt":      user_prompt,
-                "system":      _prompts.ALL_TIER_SYSTEMS[3],
-                "tier":        3,
-                "num_predict": _tiers._TIER_NUM_PREDICT[3],
-                "temperature": _tiers._TIER_TEMPERATURE[3],
-            },
-            priority=0 if source == "webui" else 5,
-            source=source,
-        )
-        narr_4 = await queue.submit(
-            request_type=RequestType.NARRATE,
-            payload={
-                "prompt":      user_prompt,
-                "system":      _prompts.ALL_TIER_SYSTEMS[4],
-                "tier":        4,
-                "num_predict": _tiers._TIER_NUM_PREDICT[4],
-                "temperature": _tiers._TIER_TEMPERATURE[4],
-            },
-            priority=0 if source == "webui" else 5,
-            source=source,
-        )
-        narr_5 = await queue.submit(
-            request_type=RequestType.NARRATE,
-            payload={
-                "prompt":      user_prompt,
-                "system":      _prompts.ALL_TIER_SYSTEMS[5],
-                "tier":        5,
-                "num_predict": _tiers._TIER_NUM_PREDICT[5],
-                "temperature": _tiers._TIER_TEMPERATURE[5],
-            },
-            priority=0 if source == "webui" else 5,
-            source=source,
-        )
-        narrations = {"general": narr_3, "college": narr_4, "clinical": narr_5}
+        narrations: dict[str, str] = {}
+        for persona_id, (tier_n, sys_prompt) in _prompts.PERSONA_CONFIGS.items():
+            narrations[persona_id] = await queue.submit(
+                request_type=RequestType.NARRATE,
+                payload={
+                    "prompt":      user_prompt,
+                    "system":      sys_prompt,
+                    "tier":        tier_n,
+                    "num_predict": _tiers._TIER_NUM_PREDICT[tier_n],
+                    "temperature": _tiers._TIER_TEMPERATURE[tier_n],
+                },
+                priority=0 if source == "webui" else 5,
+                source=source,
+            )
 
-        await registry.update(scan_id, status="complete", narration=narr_4, narrations=narrations, top_rois=None, peak_t=None)
+        await registry.update(scan_id, status="complete", narration=narrations.get("american", ""), narrations=narrations, top_rois=None, peak_t=None)
         await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
         await hub.broadcast({"type": "scan_narrations_ready", "scan_id": scan_id, "narrations": narrations})
         log.info("[webapp] image scan %s complete", scan_id)
@@ -749,45 +726,22 @@ async def _run_document_scan_background(
         )
         user_prompt = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
 
-        narr_3 = await queue.submit(
-            request_type=RequestType.NARRATE,
-            payload={
-                "prompt":      user_prompt,
-                "system":      _prompts.ALL_TIER_SYSTEMS[3],
-                "tier":        3,
-                "num_predict": _tiers._TIER_NUM_PREDICT[3],
-                "temperature": _tiers._TIER_TEMPERATURE[3],
-            },
-            priority=0 if source == "webui" else 5,
-            source=source,
-        )
-        narr_4 = await queue.submit(
-            request_type=RequestType.NARRATE,
-            payload={
-                "prompt":      user_prompt,
-                "system":      _prompts.ALL_TIER_SYSTEMS[4],
-                "tier":        4,
-                "num_predict": _tiers._TIER_NUM_PREDICT[4],
-                "temperature": _tiers._TIER_TEMPERATURE[4],
-            },
-            priority=0 if source == "webui" else 5,
-            source=source,
-        )
-        narr_5 = await queue.submit(
-            request_type=RequestType.NARRATE,
-            payload={
-                "prompt":      user_prompt,
-                "system":      _prompts.ALL_TIER_SYSTEMS[5],
-                "tier":        5,
-                "num_predict": _tiers._TIER_NUM_PREDICT[5],
-                "temperature": _tiers._TIER_TEMPERATURE[5],
-            },
-            priority=0 if source == "webui" else 5,
-            source=source,
-        )
-        narrations = {"general": narr_3, "college": narr_4, "clinical": narr_5}
+        narrations: dict[str, str] = {}
+        for persona_id, (tier_n, sys_prompt) in _prompts.PERSONA_CONFIGS.items():
+            narrations[persona_id] = await queue.submit(
+                request_type=RequestType.NARRATE,
+                payload={
+                    "prompt":      user_prompt,
+                    "system":      sys_prompt,
+                    "tier":        tier_n,
+                    "num_predict": _tiers._TIER_NUM_PREDICT[tier_n],
+                    "temperature": _tiers._TIER_TEMPERATURE[tier_n],
+                },
+                priority=0 if source == "webui" else 5,
+                source=source,
+            )
 
-        await registry.update(scan_id, status="complete", narration=narr_4, narrations=narrations, top_rois=None, peak_t=None)
+        await registry.update(scan_id, status="complete", narration=narrations.get("american", ""), narrations=narrations, top_rois=None, peak_t=None)
         await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
         await hub.broadcast({"type": "scan_narrations_ready", "scan_id": scan_id, "narrations": narrations})
         log.info("[webapp] document scan %s complete", scan_id)
@@ -949,43 +903,20 @@ async def _run_scan_background(
         label = Path(media_path).name
         user_prompt = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
 
-        narr_3 = await queue.submit(
-            request_type=RequestType.NARRATE,
-            payload={
-                "prompt":      user_prompt,
-                "system":      _prompts.ALL_TIER_SYSTEMS[3],
-                "tier":        3,
-                "num_predict": _tiers._TIER_NUM_PREDICT[3],
-                "temperature": _tiers._TIER_TEMPERATURE[3],
-            },
-            priority=0 if source == "webui" else 5,
-            source=source,
-        )
-        narr_4 = await queue.submit(
-            request_type=RequestType.NARRATE,
-            payload={
-                "prompt":      user_prompt,
-                "system":      _prompts.ALL_TIER_SYSTEMS[4],
-                "tier":        4,
-                "num_predict": _tiers._TIER_NUM_PREDICT[4],
-                "temperature": _tiers._TIER_TEMPERATURE[4],
-            },
-            priority=0 if source == "webui" else 5,
-            source=source,
-        )
-        narr_5 = await queue.submit(
-            request_type=RequestType.NARRATE,
-            payload={
-                "prompt":      user_prompt,
-                "system":      _prompts.ALL_TIER_SYSTEMS[5],
-                "tier":        5,
-                "num_predict": _tiers._TIER_NUM_PREDICT[5],
-                "temperature": _tiers._TIER_TEMPERATURE[5],
-            },
-            priority=0 if source == "webui" else 5,
-            source=source,
-        )
-        narrations = {"general": narr_3, "college": narr_4, "clinical": narr_5}
+        narrations: dict[str, str] = {}
+        for persona_id, (tier_n, sys_prompt) in _prompts.PERSONA_CONFIGS.items():
+            narrations[persona_id] = await queue.submit(
+                request_type=RequestType.NARRATE,
+                payload={
+                    "prompt":      user_prompt,
+                    "system":      sys_prompt,
+                    "tier":        tier_n,
+                    "num_predict": _tiers._TIER_NUM_PREDICT[tier_n],
+                    "temperature": _tiers._TIER_TEMPERATURE[tier_n],
+                },
+                priority=0 if source == "webui" else 5,
+                source=source,
+            )
 
         preds = getattr(result, "preds", None)
         await registry.update(
@@ -994,7 +925,7 @@ async def _run_scan_background(
             top_rois=getattr(result, "top_rois", None),
             peak_t=getattr(result, "peak_t", None),
             seconds_elapsed=getattr(result, "seconds_elapsed", None),
-            narration=narr_4,
+            narration=narrations.get("american", ""),
             narrations=narrations,
             tr_seconds=0.5,
             n_t=int(preds.shape[0]) if preds is not None else None,

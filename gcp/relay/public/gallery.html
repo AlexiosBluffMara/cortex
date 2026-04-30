@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cortex — Brain-Response Analysis</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- ISU official web fonts: Open Sans (primary sans), PT Serif (serif), JetBrains Mono (data/code) -->
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -20,11 +22,13 @@
     --border:       #2a2a3c;
     --border-hi:    #3a3a50;
 
-    /* Brand */
-    --accent:       #CE1126;
-    --accent-hi:    #e8142c;
-    --accent-glow:  rgba(206,17,38,.22);
-    --accent-dim:   rgba(206,17,38,.12);
+    /* ISU Brand — official digital palette (designsystem.illinoisstate.edu) */
+    --accent:       #CC0000;   /* ISU Brand Red */
+    --accent-hi:    #e00000;
+    --accent-glow:  rgba(204,0,0,.22);
+    --accent-dim:   rgba(204,0,0,.12);
+    --isu-yellow:   #F6A917;   /* ISU Secondary Yellow (Reggie) */
+    --isu-blue:     #56758f;   /* ISU Secondary Blue (preferred digital) */
 
     /* Text */
     --text:         #eaeaf2;
@@ -37,25 +41,36 @@
     --cobalt:       #4a90d9;
 
     /* Activation heatmap stops (legend) */
-    --heat-low:     #3a6aba;   /* cobalt — suppressed */
-    --heat-mid:     #6a6a88;   /* gray — baseline */
-    --heat-hi:      #e85c1a;   /* orange-red — strongly activated */
+    --heat-low:     #3a6aba;
+    --heat-mid:     #6a6a88;
+    --heat-hi:      #e85c1a;
 
     /* Region pill colours */
     --pill-1:       rgba(78,140,230,.18);
     --pill-1-text:  #7ab3f5;
     --pill-1-border:rgba(78,140,230,.35);
-    --pill-2:       rgba(206,17,38,.14);
-    --pill-2-text:  #e8888a;
-    --pill-2-border:rgba(206,17,38,.28);
+    --pill-2:       rgba(204,0,0,.14);
+    --pill-2-text:  #e88888;
+    --pill-2-border:rgba(204,0,0,.28);
     --pill-3:       rgba(46,204,113,.12);
     --pill-3-text:  #6dd9a0;
     --pill-3-border:rgba(46,204,113,.25);
 
-    /* Typography */
-    --mono:  'JetBrains Mono', monospace;
-    --sans:  'Outfit', sans-serif;
-    --body:  'Inter', sans-serif;
+    /* Typography — ISU official web fonts */
+    --mono:   'JetBrains Mono', 'Courier New', monospace;
+    --sans:   'Open Sans', Helvetica, Arial, sans-serif;
+    --body:   'Open Sans', Helvetica, Arial, sans-serif;
+    --serif:  'PT Serif', Georgia, serif;
+
+    /* Persona colors */
+    --p-american:        #f59e0b;
+    --p-american-rgb:    245,158,11;
+    --p-student:         #84cc16;
+    --p-student-rgb:     132,204,22;
+    --p-neurosurgeon:    #14b8a6;
+    --p-neurosurgeon-rgb:20,184,166;
+    --p-ml:              #06b6d4;
+    --p-ml-rgb:          6,182,212;
   }
 
   html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--body); }
@@ -399,25 +414,54 @@
   .dropzone-hint.info { color: var(--text-dim); }
   .file-chosen { margin-top: .55rem; font-size: .78rem; font-family: var(--mono); color: var(--green); }
 
-  /* Tier selector */
+  /* ── Persona selector ── */
   .field-label {
     font-size: .75rem; font-weight: 600; color: var(--text-dim);
     margin: 1.25rem 0 .55rem; letter-spacing: .06em; text-transform: uppercase;
     font-family: var(--sans);
   }
-  .tier-options { display: flex; gap: .5rem; }
-  .tier-opt { flex: 1; }
-  .tier-opt input[type=radio] { display: none; }
-  .tier-opt label {
-    display: block; text-align: center; padding: .55rem .25rem;
-    border-radius: 8px; border: 1px solid var(--border-hi);
-    cursor: pointer; font-size: .82rem; font-weight: 500; font-family: var(--sans);
-    color: var(--text-mid); transition: all .12s;
+
+  .persona-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: .5rem;
   }
-  .tier-opt input:checked + label {
-    border-color: var(--accent); background: var(--accent-dim); color: #fff;
+
+  .persona-opt { position: relative; }
+  .persona-opt input[type=radio] { position: absolute; opacity: 0; width: 0; height: 0; }
+
+  .persona-opt label {
+    display: flex; align-items: center; gap: .65rem;
+    padding: .6rem .75rem; border-radius: 10px;
+    border: 1.5px solid var(--border-hi); cursor: pointer;
+    transition: border-color .15s, background .15s;
+    --p-color: var(--text-dim); --p-rgb: 160,160,188;
   }
-  .tier-opt label:hover { border-color: var(--text-dim); color: var(--text); }
+  .persona-opt label:hover { border-color: var(--text-dim); }
+
+  .persona-opt[data-pid="american"]     label { --p-color: var(--p-american);    --p-rgb: var(--p-american-rgb); }
+  .persona-opt[data-pid="student"]      label { --p-color: var(--p-student);     --p-rgb: var(--p-student-rgb); }
+  .persona-opt[data-pid="neurosurgeon"] label { --p-color: var(--p-neurosurgeon);--p-rgb: var(--p-neurosurgeon-rgb); }
+  .persona-opt[data-pid="ml_engineer"]  label { --p-color: var(--p-ml);          --p-rgb: var(--p-ml-rgb); }
+
+  .persona-opt input:checked + label {
+    border-color: var(--p-color);
+    background: rgba(var(--p-rgb), 0.08);
+  }
+
+  .persona-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    background: var(--p-color);
+  }
+
+  .persona-label-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .persona-label-name {
+    font-family: var(--sans); font-size: .82rem; font-weight: 600;
+    color: var(--text); white-space: nowrap;
+  }
+  .persona-label-role {
+    font-size: .68rem; color: var(--text-dim);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
 
   .modal-footer { margin-top: 1.5rem; display: flex; flex-direction: column; gap: .7rem; }
   .progress-row {
@@ -468,6 +512,7 @@
   @media (max-width: 480px) {
     .stat-item { border-right: none; border-bottom: 1px solid var(--border); }
     .stat-item:last-child { border-bottom: none; }
+    .persona-grid { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -634,11 +679,48 @@
         <div class="file-chosen" id="fileChosen" style="display:none"></div>
       </div>
 
-      <div class="field-label">Narration depth</div>
-      <div class="tier-options">
-        <div class="tier-opt"><input type="radio" name="tier" id="t3" value="3"><label for="t3">General</label></div>
-        <div class="tier-opt"><input type="radio" name="tier" id="t4" value="4" checked><label for="t4">College</label></div>
-        <div class="tier-opt"><input type="radio" name="tier" id="t5" value="5"><label for="t5">Clinical</label></div>
+      <div class="field-label">Persona</div>
+      <div class="persona-grid">
+        <div class="persona-opt" data-pid="american">
+          <input type="radio" name="persona" id="p-american" value="american" checked>
+          <label for="p-american">
+            <div class="persona-dot"></div>
+            <div class="persona-label-text">
+              <div class="persona-label-name">Alex</div>
+              <div class="persona-label-role">High school-educated American</div>
+            </div>
+          </label>
+        </div>
+        <div class="persona-opt" data-pid="student">
+          <input type="radio" name="persona" id="p-student" value="student">
+          <label for="p-student">
+            <div class="persona-dot"></div>
+            <div class="persona-label-text">
+              <div class="persona-label-name">Jordan</div>
+              <div class="persona-label-role">16-year-old AP Bio student</div>
+            </div>
+          </label>
+        </div>
+        <div class="persona-opt" data-pid="neurosurgeon">
+          <input type="radio" name="persona" id="p-neurosurgeon" value="neurosurgeon">
+          <label for="p-neurosurgeon">
+            <div class="persona-dot"></div>
+            <div class="persona-label-text">
+              <div class="persona-label-name">Dr. Maya Chen</div>
+              <div class="persona-label-role">Attending neurosurgeon</div>
+            </div>
+          </label>
+        </div>
+        <div class="persona-opt" data-pid="ml_engineer">
+          <input type="radio" name="persona" id="p-ml_engineer" value="ml_engineer">
+          <label for="p-ml_engineer">
+            <div class="persona-dot"></div>
+            <div class="persona-label-text">
+              <div class="persona-label-name">Atlas</div>
+              <div class="persona-label-role">Senior ML/cloud engineer</div>
+            </div>
+          </label>
+        </div>
       </div>
 
       <div class="modal-footer">
@@ -726,6 +808,20 @@
       applyAuthState();
     }
   }
+
+  /* ── Restore saved persona selection ── */
+  (function restorePersona() {
+    const saved = localStorage.getItem('cortex_persona') || 'american';
+    const radio = document.querySelector(`input[name=persona][value="${saved}"]`);
+    if (radio) radio.checked = true;
+  })();
+
+  /* Save persona to localStorage when changed */
+  document.querySelectorAll('input[name=persona]').forEach(r => {
+    r.addEventListener('change', () => {
+      if (r.checked) localStorage.setItem('cortex_persona', r.value);
+    });
+  });
 
   /* ── GPU badge ── */
   const gpuBadge = document.getElementById('gpuBadge');
@@ -927,7 +1023,7 @@
       return;
     }
 
-    const tier = document.querySelector('input[name=tier]:checked')?.value || '4';
+    const persona = document.querySelector('input[name=persona]:checked')?.value || 'american';
     analyzeBtn.disabled = true;
     analyzeBtn.textContent = 'Submitting…';
     progressRow.classList.add('visible');
@@ -935,7 +1031,8 @@
 
     const body = new FormData();
     body.append('file', file);
-    body.append('tier', tier);
+    body.append('tier', '4');
+    body.append('persona', persona);
 
     try {
       const res = await fetch(`${API}/scan`, {
@@ -961,7 +1058,7 @@
           submitStatus.textContent = `${d.status || 'queued'} — ${scan_id}`;
           if (d.status === 'complete') {
             ws.close(); closeModal(); loadScans();
-            window.location.href = `/scan.html?id=${scan_id}`;
+            window.location.href = `/scan.html?id=${scan_id}&persona=${encodeURIComponent(persona)}`;
           }
           if (d.status === 'failed') {
             ws.close();
@@ -969,20 +1066,20 @@
             analyzeBtn.disabled = false; analyzeBtn.textContent = 'Retry';
           }
         };
-        ws.onerror = () => { if (!wsFailed) { wsFailed = true; pollStatus(scan_id); } };
+        ws.onerror = () => { if (!wsFailed) { wsFailed = true; pollStatus(scan_id, persona); } };
         ws.onclose = () => {
           if (!wsFailed && submitStatus.textContent.startsWith('Queued')) {
-            wsFailed = true; pollStatus(scan_id);
+            wsFailed = true; pollStatus(scan_id, persona);
           }
         };
-      } catch (_) { pollStatus(scan_id); }
+      } catch (_) { pollStatus(scan_id, persona); }
     } catch (err) {
       submitStatus.textContent = `Error: ${err.message}`;
       analyzeBtn.disabled = false; analyzeBtn.textContent = 'Retry';
     }
   });
 
-  function pollStatus(scanId) {
+  function pollStatus(scanId, persona) {
     const iv = setInterval(async () => {
       try {
         const r = await fetch(`${API}/scan/${scanId}`);
@@ -991,7 +1088,7 @@
         submitStatus.textContent = `${d.status} — ${scanId}`;
         if (d.status === 'complete') {
           clearInterval(iv); closeModal(); loadScans();
-          window.location.href = `/scan.html?id=${scanId}`;
+          window.location.href = `/scan.html?id=${scanId}&persona=${encodeURIComponent(persona)}`;
         }
         if (d.status === 'failed') {
           clearInterval(iv);
