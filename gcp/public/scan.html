@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cortex — Scan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0b0b0e;
+    --surface:   #13131a;
+    --surface2:  #1c1c28;
+    --border:    #2a2a3a;
+    --accent:    #CE1126;
+    --accent-hi: #ff1f3d;
+    --text:      #e8e8f0;
+    --text-dim:  #7a7a9a;
+    --green:     #2ecc71;
+    --yellow:    #f39c12;
+    --mono:      'JetBrains Mono', monospace;
+    --sans:      'Outfit', sans-serif;
+    --hdr-h:     60px;
+  }
+
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow-x: hidden; }
+
+  /* ── Header ── */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 1.5rem; height: var(--hdr-h);
+    background: rgba(11,11,14,.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    gap: 1rem;
+  }
+  .back-link {
+    display: flex; align-items: center; gap: .5rem;
+    color: var(--text-dim); text-decoration: none; font-size: .875rem;
+    transition: color .15s;
+  }
+  .back-link:hover { color: var(--text); }
+  .back-arrow { font-size: 1.1rem; }
+
+  .header-title {
+    flex: 1; min-width: 0;
+    font-size: .9rem; font-weight: 600; font-family: var(--mono);
+    color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .header-title span { color: var(--text); }
+
+  .header-actions { display: flex; align-items: center; gap: .6rem; flex-shrink: 0; }
+  .btn {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .45rem .9rem; border-radius: 7px; font-size: .8rem;
+    font-weight: 600; cursor: pointer; transition: all .15s; border: none; font-family: var(--sans);
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hi); }
+  .btn-ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text-dim); }
+
+  .status-badge {
+    padding: 3px 10px; border-radius: 20px; font-size: .7rem;
+    font-family: var(--mono); font-weight: 500; letter-spacing: .04em;
+  }
+  .status-complete { background: rgba(46,204,113,.15); color: var(--green); border: 1px solid rgba(46,204,113,.3); }
+  .status-pending   { background: rgba(243,156,18,.12); color: var(--yellow); border: 1px solid rgba(243,156,18,.3); }
+  .status-failed    { background: rgba(206,17,38,.15);  color: var(--accent); border: 1px solid rgba(206,17,38,.3); }
+
+  /* ── Stats bar ── */
+  .stats-bar {
+    display: flex; gap: 1.5rem; padding: .75rem 1.5rem;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .stats-bar::-webkit-scrollbar { display: none; }
+  .stat-item { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
+  .stat-label { font-size: .65rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; }
+  .stat-value { font-size: .85rem; font-family: var(--mono); color: var(--text); font-weight: 500; }
+  .stat-value.accent { color: var(--accent); }
+
+  /* ── Three-panel layout ── */
+  .panels {
+    display: grid;
+    grid-template-columns: 320px 1fr 340px;
+    grid-template-rows: 1fr;
+    height: calc(100vh - var(--hdr-h) - 52px); /* minus stats bar */
+    min-height: 520px;
+    overflow: hidden;
+  }
+
+  /* Left: media preview */
+  .panel-media {
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .panel-title {
+    padding: .75rem 1rem; font-size: .72rem; font-weight: 600;
+    color: var(--text-dim); text-transform: uppercase; letter-spacing: .08em;
+    border-bottom: 1px solid var(--border); background: var(--surface);
+    flex-shrink: 0;
+  }
+  .media-container {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    background: var(--surface2); overflow: hidden; padding: 1rem;
+  }
+  .media-container video,
+  .media-container audio,
+  .media-container img {
+    max-width: 100%; max-height: 100%; border-radius: 8px;
+    background: #000;
+  }
+  .media-container audio { width: 100%; }
+  .media-placeholder {
+    display: flex; flex-direction: column; align-items: center; gap: .75rem;
+    color: var(--text-dim); font-size: .875rem;
+  }
+  .media-placeholder svg { width: 48px; height: 48px; opacity: .3; }
+
+  /* Centre: brain viewer */
+  .panel-viewer {
+    display: flex; flex-direction: column;
+    background: var(--bg);
+    position: relative;
+  }
+  .viewer-iframe {
+    flex: 1; border: none; width: 100%; height: 100%;
+    background: #000;
+  }
+  .viewer-placeholder {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 1rem; padding: 2rem;
+    color: var(--text-dim); text-align: center;
+  }
+  .viewer-placeholder .brain-anim {
+    width: 80px; height: 80px; position: relative;
+  }
+  .viewer-placeholder .brain-anim::before {
+    content: '🧠'; font-size: 3rem;
+    display: block;
+    animation: breathe 2.5s ease infinite;
+  }
+  @keyframes breathe {
+    0%,100%{transform:scale(1);opacity:.6;} 50%{transform:scale(1.08);opacity:1;}
+  }
+  .spinner {
+    width: 36px; height: 36px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Right: narrations */
+  .panel-narr {
+    border-left: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden; background: var(--surface);
+  }
+  .tab-bar {
+    display: flex; border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .tab {
+    flex: 1; padding: .65rem .5rem; text-align: center;
+    font-size: .75rem; font-weight: 600; cursor: pointer;
+    color: var(--text-dim); border-bottom: 2px solid transparent;
+    transition: all .15s; background: none; border-top: none;
+    border-left: none; border-right: none; font-family: var(--sans);
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .narr-body {
+    flex: 1; overflow-y: auto; padding: 1.25rem 1.1rem;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+  }
+  .narr-body::-webkit-scrollbar { width: 5px; }
+  .narr-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .narr-text {
+    font-size: .875rem; line-height: 1.7; color: var(--text);
+    white-space: pre-wrap;
+  }
+  .narr-empty {
+    display: flex; flex-direction: column; align-items: center; gap: .75rem;
+    padding: 3rem 1rem; color: var(--text-dim); text-align: center; font-size: .875rem;
+  }
+
+  /* ROI chips */
+  .roi-section { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: .75rem; }
+  .roi-title { font-size: .7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; margin-bottom: .5rem; }
+  .roi-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .roi-chip {
+    padding: 2px 9px; border-radius: 20px; font-size: .7rem;
+    font-family: var(--mono); background: rgba(206,17,38,.1);
+    border: 1px solid rgba(206,17,38,.25); color: #e88;
+  }
+
+  /* ── Polling overlay ── */
+  .poll-overlay {
+    position: absolute; inset: 0; background: rgba(11,11,14,.85);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1rem; color: var(--text-dim); text-align: center;
+    backdrop-filter: blur(2px);
+  }
+  .poll-overlay.hidden { display: none; }
+  .poll-status { font-size: .875rem; font-family: var(--mono); }
+
+  /* ── Responsive breakpoints ── */
+  @media (max-width: 1100px) {
+    .panels { grid-template-columns: 260px 1fr 300px; }
+  }
+  @media (max-width: 800px) {
+    .panels {
+      grid-template-columns: 1fr;
+      grid-template-rows: 220px auto 1fr;
+      height: auto;
+    }
+    .panel-media { border-right: none; border-bottom: 1px solid var(--border); height: 220px; }
+    .panel-viewer { min-height: 360px; }
+    .panel-narr { border-left: none; border-top: 1px solid var(--border); min-height: 320px; }
+  }
+  @media (max-width: 540px) {
+    header { padding: 0 1rem; }
+    .stats-bar { padding: .6rem 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <a class="back-link" href="/gallery.html">
+    <span class="back-arrow">←</span> Gallery
+  </a>
+  <div class="header-title"><span id="hdrFilename">Loading…</span></div>
+  <div class="header-actions">
+    <span class="status-badge status-pending" id="statusBadge">queued</span>
+    <button class="btn btn-ghost" id="shareBtn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      Share
+    </button>
+  </div>
+</header>
+
+<div class="stats-bar" id="statsBar">
+  <div class="stat-item"><div class="stat-label">Scan ID</div><div class="stat-value" id="statId">—</div></div>
+  <div class="stat-item"><div class="stat-label">Peak activation</div><div class="stat-value accent" id="statPeak">—</div></div>
+  <div class="stat-item"><div class="stat-label">Peak time</div><div class="stat-value" id="statPeakS">—</div></div>
+  <div class="stat-item"><div class="stat-label">TR</div><div class="stat-value" id="statTR">0.5 s</div></div>
+  <div class="stat-item"><div class="stat-label">Vertices</div><div class="stat-value">20,484</div></div>
+  <div class="stat-item"><div class="stat-label">Top ROIs</div><div class="stat-value" id="statRois">—</div></div>
+</div>
+
+<div class="panels">
+
+  <!-- Left: original media -->
+  <div class="panel-media">
+    <div class="panel-title">Input Media</div>
+    <div class="media-container" id="mediaContainer">
+      <div class="media-placeholder">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg>
+        <span>Loading media…</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Centre: live brain viewer -->
+  <div class="panel-viewer" id="viewerPanel">
+    <div class="panel-title">Cortical Activity</div>
+    <div class="poll-overlay" id="pollOverlay">
+      <div class="spinner"></div>
+      <div class="poll-status" id="pollStatus">Waiting for scan…</div>
+    </div>
+    <!-- iframe injected by JS when scan is complete -->
+  </div>
+
+  <!-- Right: narrations -->
+  <div class="panel-narr">
+    <div class="tab-bar">
+      <button class="tab active" data-tab="general">General</button>
+      <button class="tab" data-tab="college">College</button>
+      <button class="tab" data-tab="clinical">Clinical</button>
+    </div>
+    <div class="narr-body" id="narrBody">
+      <div class="narr-empty">
+        <div class="spinner"></div>
+        <span>Awaiting narrations…</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  const RELAY      = (window.RELAY_URL      || '').replace(/\/$/, '');
+  const VIEWER_URL = (window.LIVE_VIEWER_URL || '').replace(/\/$/, '') || 'http://localhost:8765';
+
+  const params  = new URLSearchParams(location.search);
+  const scanId  = params.get('id');
+
+  if (!scanId) {
+    document.body.innerHTML = '<div style="padding:4rem;text-align:center;color:#7a7a9a">No scan ID in URL. <a href="/gallery.html" style="color:#CE1126">Back to gallery</a></div>';
+    return;
+  }
+
+  /* ── DOM refs ── */
+  const hdrFilename  = document.getElementById('hdrFilename');
+  const statusBadge  = document.getElementById('statusBadge');
+  const statId       = document.getElementById('statId');
+  const statPeak     = document.getElementById('statPeak');
+  const statPeakS    = document.getElementById('statPeakS');
+  const statTR       = document.getElementById('statTR');
+  const statRois     = document.getElementById('statRois');
+  const mediaContainer = document.getElementById('mediaContainer');
+  const viewerPanel  = document.getElementById('viewerPanel');
+  const pollOverlay  = document.getElementById('pollOverlay');
+  const pollStatus   = document.getElementById('pollStatus');
+  const narrBody     = document.getElementById('narrBody');
+  const tabs         = document.querySelectorAll('.tab');
+  const shareBtn     = document.getElementById('shareBtn');
+
+  let activeTab = 'general';
+  let currentNarrations = null;
+
+  document.title = `Cortex — ${scanId}`;
+  statId.textContent = scanId;
+  hdrFilename.textContent = scanId;
+
+  /* ── Tab switching ── */
+  tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    activeTab = t.dataset.tab;
+    renderNarration(currentNarrations);
+  }));
+
+  /* ── Share ── */
+  shareBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(location.href).then(() => {
+      shareBtn.textContent = 'Copied!';
+      setTimeout(() => { shareBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Share`; }, 1800);
+    });
+  });
+
+  /* ── Apply scan data to UI ── */
+  function applyData(d) {
+    hdrFilename.textContent = d.filename || scanId;
+    document.title = `Cortex — ${d.filename || scanId}`;
+
+    const status = d.status || 'queued';
+    statusBadge.textContent = status;
+    statusBadge.className = 'status-badge ' + (
+      status === 'complete' ? 'status-complete' :
+      status === 'failed'   ? 'status-failed'   : 'status-pending'
+    );
+
+    if (d.peak_t != null) {
+      statPeak.textContent  = `t = ${d.peak_t}`;
+      const tr = d.tr_seconds || 0.5;
+      statPeakS.textContent = `${(d.peak_t * tr).toFixed(2)} s`;
+      statTR.textContent    = `${tr} s`;
+    }
+
+    if (d.top_rois && d.top_rois.length) {
+      statRois.textContent = d.top_rois.slice(0, 3).join(', ');
+    }
+
+    // Media preview
+    if (d.upload_url) renderMedia(d.upload_url, d.filename || '');
+
+    // Narrations
+    if (d.narrations) {
+      currentNarrations = d.narrations;
+      renderNarration(d.narrations);
+    }
+
+    // Brain viewer
+    if (status === 'complete') {
+      injectViewer(d);
+      pollOverlay.classList.add('hidden');
+    } else if (status === 'failed') {
+      pollOverlay.classList.add('hidden');
+      pollStatus.textContent = `Scan failed: ${d.error || 'unknown error'}`;
+    } else {
+      pollStatus.textContent = `Status: ${status}…`;
+    }
+  }
+
+  function renderMedia(url, filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const videoExts = ['mp4','mkv','webm','mov','avi','gif','ts','m4v','3gp','ogv','flv','wmv'];
+    const audioExts = ['mp3','wav','flac','ogg','m4a','aac','wma','opus','ac3','aiff','aif'];
+
+    if (videoExts.includes(ext)) {
+      mediaContainer.innerHTML = `<video src="${url}" controls loop muted playsinline></video>`;
+    } else if (audioExts.includes(ext)) {
+      mediaContainer.innerHTML = `<audio src="${url}" controls></audio>`;
+    } else {
+      mediaContainer.innerHTML = `<img src="${url}" alt="${filename}">`;
+    }
+  }
+
+  function renderNarration(narrs) {
+    if (!narrs) {
+      narrBody.innerHTML = `<div class="narr-empty"><div class="spinner"></div><span>Awaiting narrations…</span></div>`;
+      return;
+    }
+    const text = narrs[activeTab] || narrs.general || narrs.college || narrs.clinical || '';
+    if (!text) {
+      narrBody.innerHTML = `<div class="narr-empty"><span>No ${activeTab} narration available.</span></div>`;
+      return;
+    }
+
+    const rois = (window._scanData && window._scanData.top_rois) || [];
+    const roiHtml = rois.length
+      ? `<div class="roi-section"><div class="roi-title">Top activated regions</div><div class="roi-chips">${rois.map(r => `<span class="roi-chip">${r}</span>`).join('')}</div></div>`
+      : '';
+
+    narrBody.innerHTML = `<div class="narr-text">${escHtml(text)}</div>${roiHtml}`;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function injectViewer(d) {
+    // Remove existing iframe if any
+    const old = viewerPanel.querySelector('.viewer-iframe');
+    if (old) return;
+
+    const iframe = document.createElement('iframe');
+    iframe.className = 'viewer-iframe';
+    iframe.src = `${VIEWER_URL}/?scan=${scanId}`;
+    iframe.allow = 'accelerometer; autoplay';
+    viewerPanel.appendChild(iframe);
+  }
+
+  /* ── Fetch + poll ── */
+  async function fetchScan() {
+    const url = RELAY ? `${RELAY}/api/scan/${scanId}` : `/api/scan/${scanId}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  async function init() {
+    try {
+      const d = await fetchScan();
+      window._scanData = d;
+      applyData(d);
+      if (d.status !== 'complete' && d.status !== 'failed') startWs(d);
+    } catch (e) {
+      pollStatus.textContent = `Could not load scan: ${e.message}`;
+    }
+  }
+
+  function startWs(initial) {
+    const wsBase = RELAY ? RELAY.replace(/^http/, 'ws') : `ws://${location.host}`;
+    const ws = new WebSocket(`${wsBase}/api/ws/${scanId}`);
+    let polling = false;
+
+    ws.onmessage = e => {
+      const d = JSON.parse(e.data);
+      window._scanData = d;
+      applyData(d);
+      if (d.status === 'complete' || d.status === 'failed') ws.close();
+    };
+
+    ws.onerror = () => {
+      if (!polling) { polling = true; startPoll(); }
+    };
+
+    ws.onclose = () => {
+      if (!polling && window._scanData && window._scanData.status !== 'complete' && window._scanData.status !== 'failed') {
+        polling = true; startPoll();
+      }
+    };
+  }
+
+  function startPoll() {
+    const iv = setInterval(async () => {
+      try {
+        const d = await fetchScan();
+        window._scanData = d;
+        applyData(d);
+        if (d.status === 'complete' || d.status === 'failed') clearInterval(iv);
+      } catch (_) {}
+    }, 5000);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

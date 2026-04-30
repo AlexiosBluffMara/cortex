@@ -27,6 +27,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+try:
+    from google.cloud import firestore as _firestore, storage as _gcs
+    _GCP_AVAILABLE = True
+except ImportError:
+    _GCP_AVAILABLE = False
+
 from fastapi import (
     FastAPI,
     File,
@@ -792,6 +798,102 @@ async def _run_document_scan_background(
         log.error("[webapp] document scan %s failed: %s", scan_id, exc)
 
 
+async def _push_to_gcp(
+    scan_id: str,
+    result: Any,
+    narrations: dict[str, str],
+) -> None:
+    if not _GCP_AVAILABLE:
+        return
+    import os, io
+    import numpy as _np
+
+    bucket_name = os.environ.get("GCS_BUCKET", "cortex-public-scans")
+    project     = os.environ.get("GCP_PROJECT", "abm-isu")
+
+    loop = asyncio.get_event_loop()
+
+    def _sync_push():
+        gcs_client  = _gcs.Client(project=project)
+        fs_client   = _firestore.Client(project=project)
+        bucket      = gcs_client.bucket(bucket_name)
+
+        update: dict[str, Any] = {
+            "status":      "complete",
+            "narrations":  narrations,
+            "tr_seconds":  0.5,
+        }
+
+        preds = getattr(result, "preds", None)
+        if preds is not None:
+            arr = _np.asarray(preds, dtype=_np.float32)
+
+            # Upload .npy
+            npy_buf = io.BytesIO()
+            _np.save(npy_buf, arr)
+            npy_buf.seek(0)
+            npy_blob = bucket.blob(f"bolddata/{scan_id}.npy")
+            npy_blob.upload_from_file(npy_buf, content_type="application/octet-stream")
+            update["npy_url"] = f"https://storage.googleapis.com/{bucket_name}/bolddata/{scan_id}.npy"
+
+            # Thumbnail: map 20484 vertices → 200x200 via a flat 143×143 grid,
+            # then letterbox to 200×200.  Uses peak_t frame z-scores + zToRGB logic.
+            peak_t = getattr(result, "peak_t", None)
+            if peak_t is not None:
+                try:
+                    from PIL import Image as _Image
+                    frame = arr[int(peak_t)]                        # (20484,)
+                    z = frame.copy()
+                    z_min, z_max = z.min(), z.max()
+                    if z_max > z_min:
+                        z = (z - z_min) / (z_max - z_min)          # 0..1
+                    else:
+                        z = _np.zeros_like(z)
+
+                    # zToRGB: blue→cyan→green→yellow→red
+                    def _z2rgb(v):
+                        if v < 0.25:
+                            t = v / 0.25
+                            return (0, int(t*255), 255)
+                        elif v < 0.5:
+                            t = (v - 0.25) / 0.25
+                            return (0, 255, int((1-t)*255))
+                        elif v < 0.75:
+                            t = (v - 0.5) / 0.25
+                            return (int(t*255), 255, 0)
+                        else:
+                            t = (v - 0.75) / 0.25
+                            return (255, int((1-t)*255), 0)
+
+                    side = 143                                       # 143*143=20449; close to 20484
+                    n_v  = min(len(z), side * side)
+                    rgb  = _np.zeros((side, side, 3), dtype=_np.uint8)
+                    for i in range(n_v):
+                        r, c = divmod(i, side)
+                        rgb[r, c] = _z2rgb(float(z[i]))
+
+                    img = _Image.fromarray(rgb, 'RGB').resize((200, 200), _Image.NEAREST)
+                    thumb_buf = io.BytesIO()
+                    img.save(thumb_buf, format='JPEG', quality=82)
+                    thumb_buf.seek(0)
+                    thumb_blob = bucket.blob(f"thumbnails/{scan_id}.jpg")
+                    thumb_blob.upload_from_file(thumb_buf, content_type="image/jpeg")
+                    update["thumbnail_url"] = f"https://storage.googleapis.com/{bucket_name}/thumbnails/{scan_id}.jpg"
+                except Exception:
+                    pass
+
+        top_rois = getattr(result, "top_rois", None)
+        peak_t   = getattr(result, "peak_t", None)
+        if top_rois is not None:
+            update["top_rois"] = top_rois
+        if peak_t is not None:
+            update["peak_t"] = int(peak_t)
+
+        fs_client.collection("scans").document(scan_id).set(update, merge=True)
+
+    await loop.run_in_executor(None, _sync_push)
+
+
 async def _run_scan_background(
     app: FastAPI,
     scan_id: str,
@@ -900,6 +1002,12 @@ async def _run_scan_background(
         await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
         await hub.broadcast({"type": "scan_narrations_ready", "scan_id": scan_id, "narrations": narrations})
         log.info("[webapp] scan %s complete", scan_id)
+
+        try:
+            await _push_to_gcp(scan_id, result, narrations)
+            log.info("[webapp] GCP push complete for %s", scan_id)
+        except Exception as _gcp_exc:
+            log.warning("[webapp] GCP push failed for %s: %s", scan_id, _gcp_exc)
 
     except Exception as exc:
         err = CortexError(

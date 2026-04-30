@@ -1,0 +1,10 @@
+{
+  "hosting": {
+    "public": "gcp/public",
+    "ignore": ["firebase.json", "**/.*"],
+    "rewrites": [
+      {"source": "/api/**", "run": {"serviceId": "cortex-relay", "region": "us-central1"}},
+      {"source": "**", "destination": "/gallery.html"}
+    ]
+  }
+}

@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cortex — Brain-Response Analysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0b0b0e;
+    --surface:   #13131a;
+    --surface2:  #1c1c28;
+    --border:    #2a2a3a;
+    --accent:    #CE1126;
+    --accent-hi: #ff1f3d;
+    --text:      #e8e8f0;
+    --text-dim:  #7a7a9a;
+    --green:     #2ecc71;
+    --yellow:    #f39c12;
+    --mono:      'JetBrains Mono', monospace;
+    --sans:      'Outfit', sans-serif;
+  }
+
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); }
+
+  /* ── Header ── */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 2rem; height: 64px;
+    background: rgba(11,11,14,.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .logo { display: flex; align-items: center; gap: .75rem; text-decoration: none; }
+  .logo-mark {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: var(--accent); display: grid; place-items: center;
+  }
+  .logo-mark svg { width: 22px; height: 22px; fill: #fff; }
+  .logo-text { font-size: 1.2rem; font-weight: 700; color: var(--text); letter-spacing: -.02em; }
+  .logo-sub { font-size: .7rem; color: var(--text-dim); font-family: var(--mono); margin-top: -2px; }
+  nav { display: flex; align-items: center; gap: 1rem; }
+  .btn {
+    display: inline-flex; align-items: center; gap: .45rem;
+    padding: .5rem 1.1rem; border-radius: 8px; font-size: .875rem;
+    font-weight: 600; cursor: pointer; transition: all .15s; border: none; font-family: var(--sans);
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hi); transform: translateY(-1px); }
+  .btn-ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text-dim); }
+
+  /* ── Hero ── */
+  .hero {
+    padding: 4rem 2rem 2.5rem;
+    text-align: center;
+    background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(206,17,38,.18) 0%, transparent 70%);
+  }
+  .hero h1 { font-size: clamp(2rem, 4vw, 3rem); font-weight: 700; letter-spacing: -.03em; line-height: 1.15; }
+  .hero h1 span { color: var(--accent); }
+  .hero p { margin: .8rem auto 0; max-width: 520px; color: var(--text-dim); font-size: 1.05rem; line-height: 1.6; }
+
+  /* ── Stats row ── */
+  .stats { display: flex; justify-content: center; gap: 2.5rem; padding: 1.5rem 2rem; flex-wrap: wrap; }
+  .stat { text-align: center; }
+  .stat-n { font-size: 1.75rem; font-weight: 700; font-family: var(--mono); color: var(--accent); }
+  .stat-l { font-size: .75rem; color: var(--text-dim); margin-top: 2px; }
+
+  /* ── Gallery grid ── */
+  .gallery-wrap { padding: 0 2rem 4rem; max-width: 1440px; margin: 0 auto; }
+  .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+  .section-title { font-size: 1rem; font-weight: 600; color: var(--text-dim); letter-spacing: .08em; text-transform: uppercase; }
+  .live-dot {
+    display: inline-flex; align-items: center; gap: .4rem;
+    font-size: .75rem; color: var(--green); font-family: var(--mono);
+  }
+  .live-dot::before {
+    content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+    animation: pulse 1.8s ease infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.25rem;
+  }
+
+  /* ── Scan card ── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    overflow: hidden; text-decoration: none; color: var(--text);
+    transition: transform .2s, border-color .2s, box-shadow .2s;
+    display: flex; flex-direction: column;
+  }
+  .card:hover {
+    transform: translateY(-3px); border-color: var(--accent);
+    box-shadow: 0 8px 32px rgba(206,17,38,.18);
+  }
+  .card-thumb {
+    aspect-ratio: 16/9; background: var(--surface2);
+    position: relative; overflow: hidden;
+  }
+  .card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card-thumb-placeholder {
+    width: 100%; height: 100%;
+    display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--surface2) 0%, #1a1a2e 100%);
+  }
+  .brain-icon { width: 48px; height: 48px; opacity: .25; }
+  .status-pill {
+    position: absolute; top: 8px; right: 8px;
+    padding: 2px 8px; border-radius: 20px; font-size: .65rem;
+    font-family: var(--mono); font-weight: 500; letter-spacing: .04em;
+  }
+  .status-complete { background: rgba(46,204,113,.15); color: var(--green); border: 1px solid rgba(46,204,113,.3); }
+  .status-queued, .status-running, .status-narrating {
+    background: rgba(243,156,18,.12); color: var(--yellow);
+    border: 1px solid rgba(243,156,18,.3);
+  }
+  .status-failed { background: rgba(206,17,38,.15); color: var(--accent); border: 1px solid rgba(206,17,38,.3); }
+
+  .card-body { padding: 1rem 1.1rem 1.1rem; flex: 1; display: flex; flex-direction: column; gap: .5rem; }
+  .card-filename { font-size: .8rem; font-family: var(--mono); color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-narration { font-size: .875rem; color: var(--text); line-height: 1.5; flex: 1; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .card-meta { display: flex; gap: 1rem; margin-top: auto; padding-top: .6rem; border-top: 1px solid var(--border); }
+  .card-meta-item { font-size: .72rem; font-family: var(--mono); color: var(--text-dim); }
+  .card-meta-item span { color: var(--text); font-weight: 500; }
+
+  /* ── Empty / loading states ── */
+  .state-center {
+    grid-column: 1 / -1; padding: 5rem 2rem;
+    display: flex; flex-direction: column; align-items: center; gap: 1rem;
+    color: var(--text-dim); text-align: center;
+  }
+  .spinner {
+    width: 36px; height: 36px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Modal overlay ── */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,.7); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 1rem;
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .modal-backdrop.open { opacity: 1; pointer-events: all; }
+
+  .modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+    width: 100%; max-width: 520px; padding: 2rem;
+    transform: translateY(16px); transition: transform .2s;
+  }
+  .modal-backdrop.open .modal { transform: translateY(0); }
+
+  .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+  .modal-title { font-size: 1.25rem; font-weight: 700; }
+  .modal-close {
+    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-dim); cursor: pointer; font-size: 1.1rem;
+    display: grid; place-items: center;
+  }
+  .modal-close:hover { color: var(--text); border-color: var(--text-dim); }
+
+  /* Drop zone */
+  .dropzone {
+    border: 2px dashed var(--border); border-radius: 12px;
+    padding: 2.5rem 1rem; text-align: center; cursor: pointer;
+    transition: border-color .15s, background .15s;
+    position: relative;
+  }
+  .dropzone.drag-over { border-color: var(--accent); background: rgba(206,17,38,.06); }
+  .dropzone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .dropzone-icon { font-size: 2.5rem; margin-bottom: .5rem; }
+  .dropzone-text { color: var(--text-dim); font-size: .9rem; }
+  .dropzone-text strong { color: var(--accent); }
+  .dropzone-hint { font-size: .75rem; color: var(--text-dim); margin-top: .35rem; font-family: var(--mono); }
+  .file-chosen { margin-top: .6rem; font-size: .8rem; font-family: var(--mono); color: var(--green); }
+
+  /* Tier selector */
+  .tier-label { font-size: .8rem; font-weight: 600; color: var(--text-dim); margin: 1.25rem 0 .6rem; letter-spacing: .05em; text-transform: uppercase; }
+  .tier-options { display: flex; gap: .6rem; }
+  .tier-opt { flex: 1; }
+  .tier-opt input[type=radio] { display: none; }
+  .tier-opt label {
+    display: block; text-align: center; padding: .55rem .5rem; border-radius: 8px;
+    border: 1px solid var(--border); cursor: pointer; font-size: .82rem; font-weight: 500;
+    transition: all .12s;
+  }
+  .tier-opt input:checked + label { border-color: var(--accent); background: rgba(206,17,38,.12); color: #fff; }
+  .tier-opt label:hover { border-color: var(--text-dim); }
+
+  .modal-footer { margin-top: 1.5rem; display: flex; flex-direction: column; gap: .75rem; }
+  .progress-row {
+    display: none; align-items: center; gap: .75rem;
+    font-size: .82rem; font-family: var(--mono); color: var(--text-dim);
+  }
+  .progress-row.visible { display: flex; }
+  .submit-status { font-size: .82rem; color: var(--text-dim); font-family: var(--mono); text-align: center; }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    header { padding: 0 1rem; }
+    .hero { padding: 2.5rem 1rem 1.5rem; }
+    .gallery-wrap { padding: 0 1rem 3rem; }
+    .stats { gap: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <a class="logo" href="/">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26C17.81 13.47 19 11.38 19 9c0-3.87-3.13-7-7-7zm-1 14v-1.28c-.6-.17-1.16-.46-1.65-.83L8 15.42V16h3zm2 0h3v-.58l-1.35-.8c-.49.37-1.05.66-1.65.83V16zm.5-4.18c.78-.43 1.5-1.04 1.5-2.32 0-1.65-1.35-3-3-3s-3 1.35-3 3c0 1.28.72 1.89 1.5 2.32v.36l1.5.89 1.5-.89v-.36z"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-text">Cortex</div>
+      <div class="logo-sub">Brain-Response Analysis</div>
+    </div>
+  </a>
+  <nav>
+    <button class="btn btn-primary" id="openModalBtn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Submit a scan
+    </button>
+  </nav>
+</header>
+
+<div class="hero">
+  <h1>Every video leaves a<br><span>neural fingerprint</span></h1>
+  <p>TRIBE v2 + Gemma 4 maps cortical responses across 20,484 vertices at 2 Hz. Submit any clip and explore your brain's reaction.</p>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-n" id="statTotal">—</div><div class="stat-l">scans completed</div></div>
+  <div class="stat"><div class="stat-n">20,484</div><div class="stat-l">cortical vertices</div></div>
+  <div class="stat"><div class="stat-n">2 Hz</div><div class="stat-l">temporal resolution</div></div>
+  <div class="stat"><div class="stat-n">0.5 s</div><div class="stat-l">TR (TRIBE v2)</div></div>
+</div>
+
+<div class="gallery-wrap">
+  <div class="section-head">
+    <span class="section-title">Recent Scans</span>
+    <span class="live-dot" id="liveIndicator">live</span>
+  </div>
+  <div class="grid" id="scanGrid">
+    <div class="state-center"><div class="spinner"></div><p>Loading scans…</p></div>
+  </div>
+</div>
+
+<!-- Submit modal -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Submit a brain scan</span>
+      <button class="modal-close" id="closeModalBtn" aria-label="Close">✕</button>
+    </div>
+
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept="video/*,audio/*,image/*,.pdf,.txt,.md">
+      <div class="dropzone-icon">🧠</div>
+      <div class="dropzone-text">Drop a file or <strong>click to browse</strong></div>
+      <div class="dropzone-hint">video · audio · image · pdf · txt — max 50 MB</div>
+      <div class="file-chosen" id="fileChosen" style="display:none"></div>
+    </div>
+
+    <div class="tier-label">Narration depth</div>
+    <div class="tier-options">
+      <div class="tier-opt"><input type="radio" name="tier" id="t3" value="3"><label for="t3">General</label></div>
+      <div class="tier-opt"><input type="radio" name="tier" id="t4" value="4" checked><label for="t4">College</label></div>
+      <div class="tier-opt"><input type="radio" name="tier" id="t5" value="5"><label for="t5">Clinical</label></div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="analyzeBtn" style="width:100%;justify-content:center;padding:.7rem;">
+        Analyze
+      </button>
+      <div class="progress-row" id="progressRow">
+        <div class="spinner" style="width:20px;height:20px;border-width:2px;"></div>
+        <span id="submitStatus">Uploading…</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  /* Config — set window.RELAY_URL before this script to override */
+  const RELAY = (window.RELAY_URL || '').replace(/\/$/, '') || '';
+
+  /* ── Helpers ── */
+  function statusClass(s) {
+    if (s === 'complete') return 'status-complete';
+    if (s === 'failed')   return 'status-failed';
+    return 'status-queued';
+  }
+
+  function relTime(ts) {
+    if (!ts) return '';
+    const d = ts.toDate ? ts.toDate() : new Date(ts._seconds ? ts._seconds * 1000 : ts);
+    const diff = Math.floor((Date.now() - d) / 1000);
+    if (diff < 60)  return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+    return `${Math.floor(diff/3600)}h ago`;
+  }
+
+  function peakLabel(peak_t, tr) {
+    if (peak_t == null) return '—';
+    const t_s = (peak_t * (tr || 0.5)).toFixed(1);
+    return `t=${peak_t} (${t_s}s)`;
+  }
+
+  function narratSnippet(scan) {
+    const narrs = scan.narrations;
+    if (!narrs) return '';
+    const text = narrs.college || narrs.general || narrs.clinical || '';
+    return text.slice(0, 120) + (text.length > 120 ? '…' : '');
+  }
+
+  function renderCard(scan) {
+    const href = `/scan.html?id=${scan.id}`;
+    const thumb = scan.thumbnail_url
+      ? `<img src="${scan.thumbnail_url}" alt="brain thumbnail" loading="lazy">`
+      : `<div class="card-thumb-placeholder"><svg class="brain-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26C17.81 13.47 19 11.38 19 9c0-3.87-3.13-7-7-7z"/></svg></div>`;
+
+    const snippet = narratSnippet(scan);
+    const peak = peakLabel(scan.peak_t, scan.tr_seconds);
+    const rel  = relTime(scan.created_at);
+
+    return `
+      <a class="card" href="${href}">
+        <div class="card-thumb">
+          ${thumb}
+          <span class="status-pill ${statusClass(scan.status)}">${scan.status || 'queued'}</span>
+        </div>
+        <div class="card-body">
+          <div class="card-filename">${scan.filename || scan.id}</div>
+          ${snippet ? `<div class="card-narration">${snippet}</div>` : ''}
+          <div class="card-meta">
+            <div class="card-meta-item">peak <span>${peak}</span></div>
+            ${rel ? `<div class="card-meta-item"><span>${rel}</span></div>` : ''}
+          </div>
+        </div>
+      </a>`;
+  }
+
+  /* ── Gallery fetch ── */
+  const grid = document.getElementById('scanGrid');
+  const statTotal = document.getElementById('statTotal');
+  let lastIds = [];
+
+  async function loadScans() {
+    try {
+      const res = await fetch(`${RELAY}/api/scans`);
+      if (!res.ok) throw new Error(res.status);
+      const { scans } = await res.json();
+
+      const completed = scans.filter(s => s.status === 'complete').length;
+      statTotal.textContent = completed;
+
+      const newIds = scans.map(s => s.id).join(',');
+      if (newIds === lastIds.join(',') && grid.children.length > 1) return;
+      lastIds = scans.map(s => s.id);
+
+      if (!scans.length) {
+        grid.innerHTML = `<div class="state-center"><p style="color:var(--text-dim)">No scans yet — be the first to submit.</p></div>`;
+        return;
+      }
+      grid.innerHTML = scans.map(renderCard).join('');
+    } catch (e) {
+      if (!grid.children.length || grid.querySelector('.spinner')) {
+        grid.innerHTML = `<div class="state-center"><p>Could not reach relay. Is it deployed?</p><p style="font-size:.75rem;font-family:var(--mono);color:var(--text-dim)">${RELAY || '(no RELAY_URL set)'}</p></div>`;
+      }
+    }
+  }
+
+  loadScans();
+  setInterval(loadScans, 10000);
+
+  /* ── Modal ── */
+  const backdrop  = document.getElementById('modalBackdrop');
+  const openBtn   = document.getElementById('openModalBtn');
+  const closeBtn  = document.getElementById('closeModalBtn');
+  const dropzone  = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const fileChosen= document.getElementById('fileChosen');
+  const analyzeBtn= document.getElementById('analyzeBtn');
+  const progressRow = document.getElementById('progressRow');
+  const submitStatus= document.getElementById('submitStatus');
+
+  openBtn.addEventListener('click', () => backdrop.classList.add('open'));
+  closeBtn.addEventListener('click', closeModal);
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) closeModal(); });
+
+  function closeModal() {
+    backdrop.classList.remove('open');
+    resetForm();
+  }
+
+  function resetForm() {
+    fileInput.value = '';
+    fileChosen.style.display = 'none';
+    analyzeBtn.disabled = false;
+    analyzeBtn.textContent = 'Analyze';
+    progressRow.classList.remove('visible');
+    submitStatus.textContent = 'Uploading…';
+  }
+
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files[0];
+    if (f) { fileChosen.textContent = f.name; fileChosen.style.display = 'block'; }
+  });
+
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault(); dropzone.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) {
+      const dt = new DataTransfer();
+      dt.items.add(e.dataTransfer.files[0]);
+      fileInput.files = dt.files;
+      fileChosen.textContent = e.dataTransfer.files[0].name;
+      fileChosen.style.display = 'block';
+    }
+  });
+
+  analyzeBtn.addEventListener('click', async () => {
+    const file = fileInput.files[0];
+    if (!file) { fileInput.click(); return; }
+
+    const tier = document.querySelector('input[name=tier]:checked')?.value || '4';
+
+    analyzeBtn.disabled = true;
+    analyzeBtn.textContent = 'Submitting…';
+    progressRow.classList.add('visible');
+    submitStatus.textContent = 'Uploading file…';
+
+    const body = new FormData();
+    body.append('file', file);
+    body.append('tier', tier);
+
+    try {
+      const res = await fetch(`${RELAY}/api/scan`, { method: 'POST', body });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const { scan_id } = await res.json();
+      submitStatus.textContent = `Queued — scan ID: ${scan_id}`;
+
+      // Poll until complete then redirect
+      const ws = new WebSocket(`${RELAY.replace(/^http/, 'ws')}/api/ws/${scan_id}`);
+      ws.onmessage = e => {
+        const d = JSON.parse(e.data);
+        submitStatus.textContent = `${d.status || 'queued'} — ${scan_id}`;
+        if (d.status === 'complete') {
+          ws.close();
+          closeModal();
+          loadScans();
+          window.location.href = `/scan.html?id=${scan_id}`;
+        }
+        if (d.status === 'failed') {
+          ws.close();
+          submitStatus.textContent = `Failed: ${d.error || 'unknown'}`;
+          analyzeBtn.disabled = false;
+          analyzeBtn.textContent = 'Retry';
+        }
+      };
+      ws.onerror = () => {
+        submitStatus.textContent = 'WebSocket error — check scan manually.';
+      };
+    } catch (err) {
+      submitStatus.textContent = `Error: ${err.message}`;
+      analyzeBtn.disabled = false;
+      analyzeBtn.textContent = 'Retry';
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+[{
+  "origin": ["*"],
+  "method": ["GET", "PUT", "POST"],
+  "responseHeader": ["Content-Type", "Authorization"],
+  "maxAgeSeconds": 3600
+}]
