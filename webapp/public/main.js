@@ -1179,3 +1179,19 @@ function animate() {
 })();
 
 window.loadBoldForScan = loadBoldForScan;
+window.loadScanResult = loadScanResult;
+
+// URL param: ?scan=<id> auto-loads that scan on page load.
+// Used by the public showcase + share links so a specific completed scan can be linked.
+(function autoLoadFromUrl() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const scanId = params.get("scan");
+        if (!scanId) return;
+        // wait one frame so the WS + initial fetches settle, then load the scan
+        setTimeout(() => {
+            try { loadScanResult(scanId); } catch (e) { console.warn("loadScanResult failed:", e); }
+            try { loadBoldForScan(scanId); } catch (e) { console.warn("loadBoldForScan failed:", e); }
+        }, 250);
+    } catch (e) { /* no-op */ }
+})();
