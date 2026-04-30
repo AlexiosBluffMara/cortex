@@ -458,6 +458,34 @@ def create_app(
         import json as _json
         return _json.loads(atlas_file.read_text(encoding="utf-8"))
 
+    @app.get("/api/scan/{scan_id}/manim-video")
+    async def manim_video_endpoint(scan_id: str, scene: str = "BoldTimeseries") -> Response:
+        """Serve the Manim brain activation explainer video for a completed scan.
+
+        Scenes: BoldTimeseries | BrainNetworkDiagram
+        Status 202 if still generating, 404 if not available.
+        """
+        manim_dir = Path("D:/cortex/scans/manim")
+        for subdir in [
+            manim_dir / "videos" / "manim_bold_scene" / "l480p15",
+            manim_dir / "videos" / "manim_bold_scene" / "m720p30",
+        ]:
+            mp4 = subdir / f"{scene}.mp4"
+            if mp4.exists():
+                return Response(
+                    content=mp4.read_bytes(),
+                    media_type="video/mp4",
+                    headers={"Cache-Control": "public, max-age=86400", "X-Scan-Id": scan_id},
+                )
+        npy = Path("D:/cortex/scans") / f"{scan_id}.npy"
+        if npy.exists():
+            return Response(
+                content=b'{"status":"generating"}',
+                media_type="application/json",
+                status_code=202,
+            )
+        raise HTTPException(status_code=404, detail="manim-video not available for this scan")
+
     @app.get("/api/scan/{scan_id}/ascii-video")
     async def ascii_video_endpoint(scan_id: str) -> Response:
         """Serve the Hermes ascii-video BOLD visualization for a completed scan.
@@ -810,6 +838,34 @@ async def _run_document_scan_background(
         log.error("[webapp] document scan %s failed: %s", scan_id, exc)
 
 
+async def _generate_manim_video(
+    scan_id: str,
+    peak_t: int | None,
+) -> None:
+    """Fire-and-forget: generate Manim brain explainer videos in background."""
+    try:
+        from cortex.manim_brain import render_bold_explainer
+        loop = asyncio.get_event_loop()
+        npy_path = Path("D:/cortex/scans") / f"{scan_id}.npy"
+        if not npy_path.exists():
+            return
+        for scene in ("BoldTimeseries", "BrainNetworkDiagram"):
+            out = await loop.run_in_executor(
+                None,
+                lambda s=scene: render_bold_explainer(
+                    bold_npy=npy_path,
+                    output_dir="D:/cortex/scans/manim",
+                    peak_t=peak_t,
+                    scene=s,
+                    quality="l",
+                )
+            )
+            if out:
+                log.info("[webapp] manim %s generated for %s → %s", scene, scan_id, out)
+    except Exception as _e:                                         # noqa: BLE001
+        log.debug("[webapp] manim generation failed for %s: %s", scan_id, _e)
+
+
 async def _generate_ascii_video(
     scan_id: str,
     bold: Any,                  # numpy float32 (T, 20484)
@@ -982,6 +1038,10 @@ async def _run_scan_background(
                 # Fire-and-forget: generate ASCII art video (Hermes ascii-video technique)
                 asyncio.create_task(_generate_ascii_video(
                     scan_id, bold_arr, getattr(result, "peak_t", None)
+                ))
+                # Fire-and-forget: Manim brain explainer (Hermes Manim skill)
+                asyncio.create_task(_generate_manim_video(
+                    scan_id, getattr(result, "peak_t", None)
                 ))
         except Exception as _exc:                                  # noqa: BLE001
             log.warning("[webapp] preds persist failed for %s: %s", scan_id, _exc)
