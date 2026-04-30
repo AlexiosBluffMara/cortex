@@ -235,43 +235,67 @@ async function loadBrainMesh() {
 }
 
 // ---------------------------------------------------------------------------
-// BOLD painting — high-contrast diverging colormap with adaptive scale.
+// BOLD painting — ISU-branded diverging colormap with adaptive scale.
 //
-// `_zScale` is set per-frame from the actual data range so even small-magnitude
-// scans (typical TRIBE z-scores are 0.3 – 1.5) saturate the full hot/cool
-// range. Cool side  (z<0):  base → cobalt #1f5cff. Warm side  (z>0):  base →
-// hot orange #ff3a25. Saturation is gamma-curved (pow 0.6) so mid-range values
-// don't look like a thin pastel wash — they read on a wide-shot.
+// Color spectrum (designsystem.illinoisstate.edu official colors):
+//   z << 0  →  ISU Blue  #56758f  (suppressed: blood flow BELOW baseline)
+//   z ≈ 0   →  dark neutral #2a2a3a  (baseline resting state)
+//   z > 0   →  ISU Yellow #F6A917  →  ISU Red #CC0000  (activated: BOLD rising)
+//
+// Blood flow interpretation:
+//   BOLD (Blood Oxygen Level Dependent) signal rises when neurons fire — more
+//   oxygenated blood floods activated regions.  TRIBE v2 predicts this z-score
+//   relative to a resting baseline across 25 subjects.
+//   Typical TRIBE z-score range: −1.5 to +1.5 per timepoint.
+//
+// `_zScale` is set per-frame so even quiet scans saturate the full range.
+// Gamma curve (pow 0.65) lifts mid-range values — mid-reds read clearly.
 // ---------------------------------------------------------------------------
 let _zScale = 1.0;     // updated by setZScaleForFrame(row); fallback = 1.0
 
 function setZScaleForFrame(rowAbsMax) {
-    // Map the frame's max(|z|) onto t=1.0. Floor at 0.3 so a flat-ish
-    // frame doesn't hyper-amplify noise; cap at 4.0 so a single outlier
-    // can't dim the rest. Soft EMA so timesteps don't flicker brightness.
     const target = Math.max(0.3, Math.min(4.0, rowAbsMax));
     _zScale = _zScale * 0.5 + target * 0.5;
 }
 
+// ISU-branded diverging colormap
+// Negative (suppressed): neutral → ISU Blue #56758f (#86,117,143)
+// Positive (activated):  neutral → ISU Gold #F6A917 → ISU Red #CC0000
 function zToRGB(z) {
     const raw = z / Math.max(0.0001, _zScale);
     const t = Math.max(-1, Math.min(1, raw));
-    const sign = t >= 0 ? 1 : -1;
-    // Gamma curve (pow 0.6) lifts mid-range values toward saturation.
-    const m = Math.pow(Math.abs(t), 0.6);
-    if (sign >= 0) {
-        // base mauve → hot orange/red (#ff3a25)
+    const m = Math.pow(Math.abs(t), 0.65);   // gamma lift
+
+    // Baseline neutral in dark-theme context: (0.17, 0.17, 0.23)
+    const BR = 0.17, BG = 0.17, BB = 0.23;
+
+    if (t >= 0) {
+        // Positive: neutral → ISU Gold (#F6A917 = 0.965,0.663,0.090) → ISU Red (#CC0000 = 0.80,0,0)
+        if (m < 0.55) {
+            // Phase 1: neutral → gold
+            const p = m / 0.55;
+            return [
+                BR + p * (0.965 - BR),
+                BG + p * (0.663 - BG),
+                BB + p * (0.090 - BB),
+            ];
+        } else {
+            // Phase 2: gold → ISU Red
+            const p = (m - 0.55) / 0.45;
+            return [
+                0.965 - p * (0.965 - 0.80),
+                0.663 - p * 0.663,
+                0.090 - p * 0.090,
+            ];
+        }
+    } else {
+        // Negative: neutral → ISU Blue (#56758f = 0.337,0.459,0.561)
         return [
-            1.00,
-            0.84 - m * 0.62,
-            0.85 - m * 0.71,
+            BR - m * (BR - 0.337),
+            BG - m * (BG - 0.459),
+            BB + m * (0.561 - BB),
         ];
     }
-    return [
-        0.90 - m * 0.78,
-        0.84 - m * 0.48,
-        0.85 + m * 0.15,         // → cobalt #1f5cff
-    ];
 }
 
 function _absMaxOf(arr, off, len) {

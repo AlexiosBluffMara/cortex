@@ -215,6 +215,39 @@ def create_app(
             "websocket_clients": app.state.hub.connection_count,
         }
 
+    @app.get("/api/utilization")
+    async def utilization() -> dict[str, Any]:
+        """Public endpoint used by the Cloud Run relay to decide whether to route
+        a job to the local 5090 or fall back to cloud.
+
+        Returns:
+            accepting      – True if the local GPU will accept new jobs now
+            queue_depth    – number of requests currently queued
+            max_queue      – maximum queue depth before rejection
+            scheduler_state– "idle" | "running" | "overloaded"
+            vram           – VRAM stats dict from the scheduler
+        """
+        q_status = _queue.status()
+        vram = _scheduler.vram_report()
+        depth = q_status.get("queued", 0)
+        max_q = q_status.get("max_queue", 8)
+        running = q_status.get("running", 0)
+        total_load = depth + running
+        if total_load == 0:
+            state = "idle"
+        elif total_load < max_q:
+            state = "running"
+        else:
+            state = "overloaded"
+        return {
+            "accepting": state != "overloaded",
+            "queue_depth": depth,
+            "running": running,
+            "max_queue": max_q,
+            "scheduler_state": state,
+            "vram": vram,
+        }
+
     # -----------------------------------------------------------------------
     # Scan submission
     # -----------------------------------------------------------------------
@@ -797,34 +830,39 @@ async def _push_to_gcp(
                 try:
                     from PIL import Image as _Image
                     frame = arr[int(peak_t)]                        # (20484,)
-                    z = frame.copy()
-                    z_min, z_max = z.min(), z.max()
-                    if z_max > z_min:
-                        z = (z - z_min) / (z_max - z_min)          # 0..1
-                    else:
-                        z = _np.zeros_like(z)
 
-                    # zToRGB: blue→cyan→green→yellow→red
-                    def _z2rgb(v):
-                        if v < 0.25:
-                            t = v / 0.25
-                            return (0, int(t*255), 255)
-                        elif v < 0.5:
-                            t = (v - 0.25) / 0.25
-                            return (0, 255, int((1-t)*255))
-                        elif v < 0.75:
-                            t = (v - 0.5) / 0.25
-                            return (int(t*255), 255, 0)
+                    # ISU-branded diverging colormap (matches main.js zToRGB)
+                    # Negative (suppressed blood flow): neutral dark -> ISU Blue #56758f
+                    # Positive (activated):             neutral dark -> ISU Gold #F6A917 -> ISU Red #CC0000
+                    z_scale = max(float(_np.abs(frame).max()), 0.0001)
+
+                    def _z2rgb(z_raw_val: float) -> tuple:
+                        t = max(-1.0, min(1.0, z_raw_val / z_scale))
+                        m = abs(t) ** 0.65
+                        BR, BG, BB = 0.17, 0.17, 0.23
+                        if t >= 0:
+                            if m < 0.55:
+                                p = m / 0.55
+                                r = BR + p * (0.965 - BR)
+                                g = BG + p * (0.663 - BG)
+                                b = BB + p * (0.090 - BB)
+                            else:
+                                p = (m - 0.55) / 0.45
+                                r = 0.965 - p * (0.965 - 0.80)
+                                g = 0.663 - p * 0.663
+                                b = 0.090 - p * 0.090
                         else:
-                            t = (v - 0.75) / 0.25
-                            return (255, int((1-t)*255), 0)
+                            r = BR - m * (BR - 0.337)
+                            g = BG - m * (BG - 0.459)
+                            b = BB + m * (0.561 - BB)
+                        return (int(r * 255), int(g * 255), int(b * 255))
 
                     side = 143                                       # 143*143=20449; close to 20484
-                    n_v  = min(len(z), side * side)
+                    n_v  = min(len(frame), side * side)
                     rgb  = _np.zeros((side, side, 3), dtype=_np.uint8)
                     for i in range(n_v):
                         r, c = divmod(i, side)
-                        rgb[r, c] = _z2rgb(float(z[i]))
+                        rgb[r, c] = _z2rgb(float(frame[i]))
 
                     img = _Image.fromarray(rgb, 'RGB').resize((200, 200), _Image.NEAREST)
                     thumb_buf = io.BytesIO()

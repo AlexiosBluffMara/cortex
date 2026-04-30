@@ -382,7 +382,87 @@
     .stat-item { padding: 0 .85rem; }
     .disclaimer-banner { font-size: .68rem; padding: 0 1rem; }
   }
+
+  /* ─── Color Key / Signal Legend ─────────────────────────────────────── */
+  .color-key-section {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .color-key-toggle {
+    display: flex; align-items: center; gap: .6rem;
+    width: 100%; padding: .85rem 1.25rem;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-mid); font: 600 .8rem/1 var(--sans);
+    letter-spacing: .04em; text-transform: uppercase;
+    transition: color .15s;
+  }
+  .color-key-toggle:hover { color: var(--text); }
+  .toggle-arrow { margin-left: auto; font-size: .9rem; transition: transform .2s; }
+  .color-key-toggle[aria-expanded="true"] .toggle-arrow { transform: rotate(180deg); }
+  .color-key-body {
+    display: none; padding: 0 1.25rem 1.4rem;
+    animation: ckFade .18s ease;
+  }
+  .color-key-toggle[aria-expanded="true"] + .color-key-body { display: block; }
+  @keyframes ckFade { from { opacity:0; transform:translateY(-4px);} to { opacity:1; transform:none;} }
+
+  .ck-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;
+    max-width: 960px; margin: 0 auto;
+  }
+  @media (max-width: 680px) { .ck-grid { grid-template-columns: 1fr; } }
+
+  .ck-gradient-wrap { display: flex; flex-direction: column; gap: .5rem; }
+  .ck-gradient-bar {
+    height: 18px; border-radius: 9px;
+    background: linear-gradient(to right,
+      #56758f 0%, #2a2a3a 50%, #F6A917 78%, #CC0000 100%);
+    box-shadow: 0 0 12px rgba(204,0,0,.18);
+  }
+  .ck-gradient-labels {
+    display: flex; justify-content: space-between;
+    font: .68rem/1 var(--mono); color: var(--text-dim);
+  }
+  .ck-gradient-labels span:nth-child(2) { text-align: center; }
+
+  .ck-items { display: flex; flex-direction: column; gap: .7rem; }
+  .ck-item { display: flex; align-items: flex-start; gap: .7rem; }
+  .ck-swatch {
+    flex-shrink: 0; width: 14px; height: 14px; border-radius: 3px; margin-top: 2px;
+  }
+  .ck-label { font: 600 .78rem/1.3 var(--sans); color: var(--text); }
+  .ck-desc  { font: .75rem/1.5 var(--body); color: var(--text-mid); margin-top: .2rem; }
+
+  .ck-explainer { display: flex; flex-direction: column; gap: .9rem; }
+  .ck-block-title { font: 600 .78rem/1 var(--sans); color: var(--text); letter-spacing: .04em; text-transform: uppercase; margin-bottom: .25rem; }
+  .ck-block-body  { font: .78rem/1.6 var(--body); color: var(--text-mid); }
+  .ck-block-body strong { color: var(--text); }
+  .ck-mono { font-family: var(--mono); font-size: .75rem; color: var(--isu-yellow); }
+
+  /* ─── AdSense banner ─────────────────────────────────────────────────── */
+  .ad-banner {
+    padding: .75rem 1.25rem;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    text-align: center;
+  }
+  .ad-label {
+    font: .6rem/1 var(--sans); color: var(--text-dim);
+    letter-spacing: .08em; text-transform: uppercase;
+    margin-bottom: .4rem;
+  }
 </style>
+<!-- GA4 — replace G-PLACEHOLDER with your Measurement ID -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-PLACEHOLDER"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-PLACEHOLDER', { send_page_view: true });
+</script>
+<!-- Google AdSense — replace ca-pub-PLACEHOLDER with your publisher ID -->
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-PLACEHOLDER" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -526,6 +606,118 @@
     </div>
   </div>
 
+</div>
+
+<!-- ══════════════════════════════════════════
+     COLOR KEY — BOLD SIGNAL LEGEND
+══════════════════════════════════════════ -->
+<section class="color-key-section">
+  <button class="color-key-toggle" id="colorKeyToggle" aria-expanded="false">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    What do the brain colors mean?
+    <span class="toggle-arrow">▾</span>
+  </button>
+  <div class="color-key-body" id="colorKeyBody">
+    <div class="ck-grid">
+
+      <!-- Left: gradient + swatch legend -->
+      <div>
+        <div class="ck-gradient-wrap" style="margin-bottom:1.1rem">
+          <div class="ck-gradient-bar"></div>
+          <div class="ck-gradient-labels">
+            <span>Suppressed<br>blood flow</span>
+            <span>Baseline</span>
+            <span>Peak<br>activation</span>
+          </div>
+        </div>
+        <div class="ck-items">
+          <div class="ck-item">
+            <div class="ck-swatch" style="background:#56758f"></div>
+            <div>
+              <div class="ck-label" style="color:#7aa0bc">ISU Blue — Deactivated</div>
+              <div class="ck-desc">Blood flow is <em>below</em> resting baseline. Neurons in this region are suppressed — the cortex is actively reducing activity here, often to redirect resources to other areas.</div>
+            </div>
+          </div>
+          <div class="ck-item">
+            <div class="ck-swatch" style="background:#2a2a3a;border:1px solid #444"></div>
+            <div>
+              <div class="ck-label">Dark neutral — Baseline</div>
+              <div class="ck-desc">z-score near zero. Blood flow matches the resting-state average. No strong activation or suppression in this vertex at this moment.</div>
+            </div>
+          </div>
+          <div class="ck-item">
+            <div class="ck-swatch" style="background:#F6A917"></div>
+            <div>
+              <div class="ck-label" style="color:#F6A917">ISU Gold — Activated</div>
+              <div class="ck-desc">Blood flow is rising above baseline. Oxygenated hemoglobin (oxy-Hb) is flooding into the region — neurons here are firing in response to the stimulus.</div>
+            </div>
+          </div>
+          <div class="ck-item">
+            <div class="ck-swatch" style="background:#CC0000"></div>
+            <div>
+              <div class="ck-label" style="color:#e05555">ISU Red — Peak activation</div>
+              <div class="ck-desc">Strong above-baseline response. High z-score = the most active cortical patch at this moment. Typically corresponds to primary sensory or motor processing zones.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: what is BOLD, z-score, t=N -->
+      <div class="ck-explainer">
+        <div>
+          <div class="ck-block-title">What is the BOLD signal?</div>
+          <div class="ck-block-body">
+            <strong>BOLD</strong> stands for Blood Oxygen Level Dependent — it's the quantity measured by fMRI.
+            When neurons fire, they consume oxygen. The brain then pumps in <strong>fresh oxygenated blood</strong>,
+            creating a measurable magnetic contrast difference about 5–6 seconds later (the hemodynamic response).
+            TRIBE v2 predicts this signal across all <strong>20,484 cortical vertices</strong> on the fsaverage5 surface at 2 Hz.
+          </div>
+        </div>
+        <div>
+          <div class="ck-block-title">What is a z-score?</div>
+          <div class="ck-block-body">
+            Each vertex's predicted BOLD value is expressed as a <strong>z-score</strong> — how many standard
+            deviations above or below that vertex's own resting mean.
+            <span class="ck-mono">z = 0</span> is baseline. <span class="ck-mono">z &gt; 2</span> is a strong activation.
+            <span class="ck-mono">z &lt; −1</span> is notable suppression. This normalization lets you compare
+            regions with very different baseline activity levels on the same scale.
+          </div>
+        </div>
+        <div>
+          <div class="ck-block-title">What does t=N mean?</div>
+          <div class="ck-block-body">
+            The brain viewer shows one time-frame <span class="ck-mono">t=N</span> at a time, where
+            <span class="ck-mono">N × 0.5 s</span> = the moment in your media file. A 5-second
+            hemodynamic lag is pre-applied, so <span class="ck-mono">t=10</span> reflects the cortical
+            response to whatever happened at <strong>0 s</strong> in the video. The scrubber
+            auto-loads the <em>peak</em> frame — the moment of maximum whole-brain activation.
+          </div>
+        </div>
+        <div>
+          <div class="ck-block-title">Powered by TRIBE v2</div>
+          <div class="ck-block-body">
+            Meta's TRIBE v2 foundation model was trained on 25 subjects watching natural videos
+            while inside an MRI scanner. It generalizes to new stimuli by predicting the most
+            likely cortical response given the visual + audio content — it is a <em>model</em>,
+            not a real brain scan. Results are for research &amp; educational purposes only.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Tasteful AdSense responsive banner — no popups, no autoplay -->
+<div class="ad-banner">
+  <div class="ad-label">Advertisement</div>
+  <ins class="adsbygoogle"
+       style="display:block"
+       data-ad-client="ca-pub-PLACEHOLDER"
+       data-ad-slot="SLOT-PLACEHOLDER"
+       data-ad-format="auto"
+       data-full-width-responsive="true"></ins>
+  <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
 </div>
 
 <script>
@@ -880,6 +1072,17 @@
   }
 
   init();
+
+  // Color key toggle
+  const ckToggle = document.getElementById('colorKeyToggle');
+  if (ckToggle) {
+    ckToggle.addEventListener('click', () => {
+      const expanded = ckToggle.getAttribute('aria-expanded') === 'true';
+      ckToggle.setAttribute('aria-expanded', String(!expanded));
+      if (typeof gtag !== 'undefined') gtag('event', 'color_key_toggle', { expanded: !expanded });
+    });
+  }
+
 })();
 </script>
 </body>

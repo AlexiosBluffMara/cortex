@@ -58,21 +58,16 @@ def _verify_google_token(token: str) -> dict:
         )
     except Exception as e:
         raise HTTPException(401, f"Invalid Google token: {e}")
-    hd = payload.get("hd", "")
-    if hd not in ALLOWED_DOMAINS:
-        raise HTTPException(
-            403,
-            f"Your Google account domain '{hd}' is not authorized to submit scans. "
-            f"Sign in with a @{' or @'.join(sorted(ALLOWED_DOMAINS))} account."
-        )
+    # Accept any valid Google account — no domain restriction.
+    # ALLOWED_DOMAINS is kept for analytics/logging only.
     _token_cache[token] = payload
     return payload
 
 
 async def require_domain_auth(authorization: Optional[str] = Header(None)) -> dict:
-    """FastAPI dependency: require a valid Google ID token from an allowed domain."""
+    """FastAPI dependency: require a valid Google ID token from any Google account."""
     if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(401, "Sign in with your Google (@philanthropytraders.com or @redteamkitchen.com) account to submit scans.")
+        raise HTTPException(401, "Sign in with any Google account to submit scans.")
     return _verify_google_token(authorization.split("Bearer ", 1)[1])
 
 app = FastAPI(title="Cortex Relay")
@@ -117,6 +112,24 @@ async def _5090_alive() -> bool:
             return r.status_code == 200
     except Exception:
         return False
+
+
+async def _5090_utilization() -> dict:
+    """Fetch live utilization from the 5090 to decide whether to accept a job."""
+    try:
+        async with httpx.AsyncClient(timeout=TUNNEL_TIMEOUT) as c:
+            r = await c.get(f"{TUNNEL_URL}/api/utilization")
+            if r.status_code == 200:
+                return r.json()
+    except Exception:
+        pass
+    return {"accepting": False, "queue_depth": 0, "scheduler_state": "unreachable"}
+
+
+@app.get("/api/utilization")
+async def relay_utilization():
+    """Pass-through: exposes 5090 utilization to public clients (for UI badges)."""
+    return await _5090_utilization()
 
 
 # ─── file proxy (avoids allUsers IAM restriction on org-policy accounts) ─────
@@ -171,18 +184,19 @@ async def submit_scan(
 
 
 async def _forward_to_5090(scan_id: str, data: bytes, filename: str, ext: str, tier: int):
-    """Try to forward to the local 5090. Falls back gracefully if unreachable."""
-    try:
-        async with httpx.AsyncClient(timeout=600) as client:
-            r = await client.get(f"{TUNNEL_URL}/api/info", timeout=TUNNEL_TIMEOUT)
-            if r.status_code != 200:
-                raise RuntimeError("5090 health check failed")
-    except Exception:
+    """Try to forward to the local 5090. Falls back gracefully if unreachable or overloaded."""
+    # Local-first: check utilization before committing — reject if overloaded
+    util = await _5090_utilization()
+    if not util.get("accepting", False):
         await db.collection("scans").document(scan_id).update({
-            "status": "queued_local",
-            "status_message": "RTX 5090 is currently unavailable. Your scan will run when it comes back online.",
+            "status": "queued_cloud",
+            "status_message": (
+                f"RTX 5090 is {util.get('scheduler_state', 'unavailable')} "
+                f"(queue depth {util.get('queue_depth', '?')}). "
+                "Routed to cloud fallback."
+            ),
         })
-        # If Gemini is available, at least do narration for any cached scans
+        # Fall through to cloud narration if possible
         return
 
     try:

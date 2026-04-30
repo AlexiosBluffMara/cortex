@@ -565,6 +565,14 @@
             .mode-tab { font-size: 9px; padding: 10px 0; }
         }
     </style>
+    <!-- GA4 — replace G-PLACEHOLDER with your Measurement ID -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-PLACEHOLDER"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-PLACEHOLDER', { send_page_view: true });
+    </script>
 </head>
 <body>
     <header class="topbar">
