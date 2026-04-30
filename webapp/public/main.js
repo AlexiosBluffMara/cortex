@@ -637,10 +637,10 @@ const TIER_MODELS = [
     "Gemma 4 26B","Gemma 4 31B","Gemma 4 31B",
 ];
 const PERSONA_MODELS = {
-    american:    "Gemma 4 E4B",
-    student:     "Gemma 4 E4B",
-    neurosurgeon:"Gemma 4 27B",
-    ml_engineer: "Gemma 4 27B · Nous Hermes-3",
+    sam:     "Gemma 4 E4B",
+    priya:   "Gemma 4 27B · Nous Hermes-3",
+    dr_park: "Gemma 4 27B",
+    chris:   "Gemma 4 E4B",
 };
 
 function _setNarrationText(divId, text, isPlaceholder) {
@@ -689,16 +689,17 @@ function renderNarration(result) {
     }
 
     // Populate 4-persona narration divs
-    const PERSONA_KEYS = ["american", "student", "neurosurgeon", "ml_engineer"];
+    const PERSONA_KEYS = ["sam", "priya", "dr_park", "chris"];
     if (result.narrations && typeof result.narrations === "object") {
-        // New persona dict format: {american, student, neurosurgeon, ml_engineer}
-        // Also handle legacy tier-keyed format {3, 4, 5} as fallback
-        const legacyMap = { 3: "american", 4: "student", 5: "neurosurgeon" };
+        // New persona dict format: {sam, priya, dr_park, chris}
+        // Legacy compat: map old keys → new persona keys
+        const legacyMap = { american: "sam", student: "sam", neurosurgeon: "dr_park", ml_engineer: "priya" };
+        const legacyNarrs = {};
+        for (const [oldKey, newKey] of Object.entries(legacyMap)) {
+            if (result.narrations[oldKey] && !legacyNarrs[newKey]) legacyNarrs[newKey] = result.narrations[oldKey];
+        }
         for (const key of PERSONA_KEYS) {
-            const text = result.narrations[key]
-                ?? Object.entries(legacyMap).find(([,v]) => v === key)?.[0]
-                    ? result.narrations[Object.entries(legacyMap).find(([,v]) => v === key)[0]]
-                    : null;
+            const text = result.narrations[key] ?? legacyNarrs[key] ?? null;
             if (text) {
                 _setNarrationText(`narration-${key}`, text, false);
             } else {
@@ -706,16 +707,16 @@ function renderNarration(result) {
             }
         }
     } else {
-        // Backwards compat: single narration field → american tab
+        // Backwards compat: single narration field → sam tab
         const fallbackText = result.narration ?? (
             result.status === "complete"  ? "No narration generated." :
             result.status === "narrating" ? "Narrating personas…"     : "TRIBE v2 running…"
         );
         const isPlaceholder = !result.narration;
-        _setNarrationText("narration-american",     fallbackText, isPlaceholder);
-        _setNarrationText("narration-student",      "Generating…", true);
-        _setNarrationText("narration-neurosurgeon", "Generating…", true);
-        _setNarrationText("narration-ml_engineer",  "Generating…", true);
+        _setNarrationText("narration-sam",     fallbackText, isPlaceholder);
+        _setNarrationText("narration-priya",   "Generating…", true);
+        _setNarrationText("narration-dr_park", "Generating…", true);
+        _setNarrationText("narration-chris",   "Generating…", true);
     }
 
     if (result.top_rois?.length) {
@@ -743,7 +744,7 @@ function renderNarration(result) {
 // ---------------------------------------------------------------------------
 // Narration tabs — 4 persona voices
 // ---------------------------------------------------------------------------
-const PERSONA_TAB_KEYS = ["american", "student", "neurosurgeon", "ml_engineer"];
+const PERSONA_TAB_KEYS = ["sam", "priya", "dr_park", "chris"];
 document.querySelectorAll(".narr-tab").forEach(btn => {
     btn.addEventListener("click", () => {
         document.querySelectorAll(".narr-tab").forEach(b => b.classList.remove("active"));
@@ -773,7 +774,7 @@ document.querySelectorAll(".tier-pill").forEach(btn => {
         const tier = +btn.dataset.tier;
         setTierPill(tier);
         if (st.scanId && st.scanResult?.status === "complete") {
-            _setNarrationText("narration-college", `Requesting tier-${tier} narration…`, true);
+            _setNarrationText("narration-sam", `Requesting tier-${tier} narration…`, true);
             try {
                 const r = await fetch(`/api/scan/${st.scanId}/narrate?tier=${tier}`, { method: "POST" });
                 if (!r.ok) throw new Error();
@@ -951,13 +952,13 @@ function onWs(msg) {
         case "scan_narrations_ready":
             if (msg.narrations) {
                 renderNarration({ narrations: msg.narrations });
-                appendEvent(`narrations ready (Alex · Jordan · Dr.Chen · Atlas)`, "complete");
+                appendEvent(`narrations ready (Sam · Priya · Dr. Park · Chris)`, "complete");
             }
             break;
         case "scan_failed":
             appendEvent(`scan failed: ${msg.error?.message ?? "?"}`, "failed");
             overlay.classList.add("hidden");
-            _setNarrationText("narration-american", "Scan failed.", true);
+            _setNarrationText("narration-sam", "Scan failed.", true);
             break;
     }
 }
@@ -1136,10 +1137,11 @@ async function submitMediaFile(file, { btnEl, resetLabel } = {}) {
         }
     }
 
-    // Reset narration tier divs to "pending" state
-    _setNarrationText("narration-general",  "Generating…", true);
-    _setNarrationText("narration-college",  "Scan accepted — awaiting results…", true);
-    _setNarrationText("narration-clinical", "Generating…", true);
+    // Reset narration divs to "pending" state
+    _setNarrationText("narration-sam",    "Scan accepted — awaiting results…", true);
+    _setNarrationText("narration-priya",  "Generating…", true);
+    _setNarrationText("narration-dr_park","Generating…", true);
+    _setNarrationText("narration-chris",  "Generating…", true);
 
     const fd = new FormData();
     fd.append("file",   file);

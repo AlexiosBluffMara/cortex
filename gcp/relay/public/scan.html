@@ -56,15 +56,15 @@
     --bar-h:    52px;
     --banner-h: 40px;
 
-    /* Persona colors */
-    --p-american:        #f59e0b;
-    --p-american-rgb:    245,158,11;
-    --p-student:         #84cc16;
-    --p-student-rgb:     132,204,22;
-    --p-neurosurgeon:    #14b8a6;
-    --p-neurosurgeon-rgb:20,184,166;
-    --p-ml:              #06b6d4;
-    --p-ml-rgb:          6,182,212;
+    /* Persona colors — company brand */
+    --p-sam:         #CC0000;   /* ISU Red */
+    --p-sam-rgb:     204,0,0;
+    --p-priya:       #4285F4;   /* Google Blue */
+    --p-priya-rgb:   66,133,244;
+    --p-dr_park:     #4E2A84;   /* Northwestern Purple */
+    --p-dr_park-rgb: 78,42,132;
+    --p-chris:       #1A73E8;   /* WBEZ Blue */
+    --p-chris-rgb:   26,115,232;
   }
 
   html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--body); overflow-x: hidden; }
@@ -269,18 +269,18 @@
   .tab:hover { color: var(--text); }
 
   /* Per-persona tab active colors */
-  .tab[data-persona="american"].active    { color: var(--p-american);    border-bottom-color: var(--p-american); }
-  .tab[data-persona="student"].active     { color: var(--p-student);     border-bottom-color: var(--p-student); }
-  .tab[data-persona="neurosurgeon"].active{ color: var(--p-neurosurgeon);border-bottom-color: var(--p-neurosurgeon); }
-  .tab[data-persona="ml_engineer"].active { color: var(--p-ml);          border-bottom-color: var(--p-ml); }
+  .tab[data-persona="sam"].active     { color: var(--p-sam);     border-bottom-color: var(--p-sam); }
+  .tab[data-persona="priya"].active   { color: var(--p-priya);   border-bottom-color: var(--p-priya); }
+  .tab[data-persona="dr_park"].active { color: var(--p-dr_park); border-bottom-color: var(--p-dr_park); }
+  .tab[data-persona="chris"].active   { color: var(--p-chris);   border-bottom-color: var(--p-chris); }
 
   .tab-dot {
     width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
   }
-  .tab[data-persona="american"]    .tab-dot { background: var(--p-american); }
-  .tab[data-persona="student"]     .tab-dot { background: var(--p-student); }
-  .tab[data-persona="neurosurgeon"].tab-dot  { background: var(--p-neurosurgeon); }
-  .tab[data-persona="ml_engineer"] .tab-dot { background: var(--p-ml); }
+  .tab[data-persona="sam"]     .tab-dot { background: var(--p-sam); }
+  .tab[data-persona="priya"]   .tab-dot { background: var(--p-priya); }
+  .tab[data-persona="dr_park"] .tab-dot { background: var(--p-dr_park); }
+  .tab[data-persona="chris"]   .tab-dot { background: var(--p-chris); }
 
   /* ── Narration body ── */
   .narr-body {
@@ -307,36 +307,41 @@
   }
 
   /* ── Narration body per-persona styles ── */
-  .narr-body.persona-american .narr-text {
-    font-family: var(--body); font-size: .9rem; line-height: 1.85;
+
+  /* Sam — ISU freshman, casual lowercase energy */
+  .narr-body.persona-sam .narr-text {
+    font-family: var(--body); font-size: .95rem; line-height: 1.9; font-weight: 500;
     color: var(--text); white-space: pre-wrap;
   }
-  .narr-body.persona-american .narr-text strong,
-  .narr-body.persona-american .narr-placeholder em { color: var(--p-american); }
+  .narr-body.persona-sam .narr-text strong,
+  .narr-body.persona-sam .narr-placeholder em { color: var(--p-sam); }
 
-  .narr-body.persona-student .narr-text {
-    font-family: var(--sans); font-size: .95rem; line-height: 1.8; font-weight: 500;
-    letter-spacing: .008em; color: var(--text); white-space: pre-wrap;
-  }
-  .narr-body.persona-student .narr-text strong,
-  .narr-body.persona-student .narr-placeholder em { color: var(--p-student); }
-
-  .narr-body.persona-neurosurgeon .narr-text {
-    font-family: var(--body); font-size: .875rem; line-height: 1.65;
+  /* Priya — Google DeepMind ML scientist, dense technical register */
+  .narr-body.persona-priya .narr-text {
+    font-family: 'JetBrains Mono', monospace; font-size: .78rem; line-height: 1.7;
     color: var(--text); white-space: pre-wrap;
   }
-  .narr-body.persona-neurosurgeon .narr-text strong,
-  .narr-body.persona-neurosurgeon .narr-placeholder em { color: var(--p-neurosurgeon); }
-  .narr-body.persona-neurosurgeon .narr-data {
-    font-family: 'JetBrains Mono', monospace; font-size: .78rem; color: var(--p-neurosurgeon);
-  }
+  .narr-body.persona-priya .narr-text strong,
+  .narr-body.persona-priya .narr-placeholder em { color: var(--p-priya); }
 
-  .narr-body.persona-ml_engineer .narr-text {
-    font-family: 'JetBrains Mono', monospace; font-size: .8rem; line-height: 1.7;
+  /* Dr. Park — Northwestern neuroscientist, clinical-academic */
+  .narr-body.persona-dr_park .narr-text {
+    font-family: var(--serif); font-size: .875rem; line-height: 1.75;
     color: var(--text); white-space: pre-wrap;
   }
-  .narr-body.persona-ml_engineer .narr-text strong,
-  .narr-body.persona-ml_engineer .narr-placeholder em { color: var(--p-ml); }
+  .narr-body.persona-dr_park .narr-text strong,
+  .narr-body.persona-dr_park .narr-placeholder em { color: var(--p-dr_park); }
+  .narr-body.persona-dr_park .narr-data {
+    font-family: 'JetBrains Mono', monospace; font-size: .75rem; color: var(--p-dr_park);
+  }
+
+  /* Chris — WBEZ science reporter, clear narrative */
+  .narr-body.persona-chris .narr-text {
+    font-family: var(--body); font-size: .9rem; line-height: 1.82;
+    color: var(--text); white-space: pre-wrap;
+  }
+  .narr-body.persona-chris .narr-text strong,
+  .narr-body.persona-chris .narr-placeholder em { color: var(--p-chris); }
 
   /* Fallback (no persona class) */
   .narr-text { font-size: .875rem; line-height: 1.75; color: var(--text); font-family: var(--body); white-space: pre-wrap; }
@@ -584,17 +589,17 @@
   <!-- ── Right: narration tabs ── -->
   <div class="panel-narr">
     <div class="tab-bar">
-      <button class="tab" data-persona="american">
-        <span class="tab-dot"></span>Alex
+      <button class="tab" data-persona="sam">
+        <span class="tab-dot"></span>Sam
       </button>
-      <button class="tab" data-persona="student">
-        <span class="tab-dot"></span>Jordan
+      <button class="tab" data-persona="priya">
+        <span class="tab-dot"></span>Priya
       </button>
-      <button class="tab" data-persona="neurosurgeon">
-        <span class="tab-dot"></span>Dr. Chen
+      <button class="tab" data-persona="dr_park">
+        <span class="tab-dot"></span>Dr. Park
       </button>
-      <button class="tab" data-persona="ml_engineer">
-        <span class="tab-dot"></span>Atlas
+      <button class="tab" data-persona="chris">
+        <span class="tab-dot"></span>Chris
       </button>
     </div>
 
@@ -751,11 +756,11 @@
           <div class="ck-block-body">
             <strong>Gemma 4</strong> multimodal LLM runs locally on the RTX 5090 via
             <span class="ck-mono">Ollama</span>. Four distinct voices:
-            <span style="color:#f59e0b">Alex</span> (E4B, casual),
-            <span style="color:#34d399">Jordan</span> (E4B, student),
-            <span style="color:#7aa0bc">Dr. Chen</span> (27B, clinical),
-            <span style="color:#a78bfa">Atlas</span> (27B, ML researcher).
-            The Atlas voice uses Nous Hermes-3 techniques for structured technical analysis.
+            <span style="color:#CC0000">Sam</span> (E4B, ISU freshman),
+            <span style="color:#4285F4">Priya</span> (27B, Google DeepMind ML scientist),
+            <span style="color:#4E2A84">Dr. Park</span> (27B, Northwestern neuroscientist),
+            <span style="color:#1A73E8">Chris</span> (E4B, WBEZ science reporter).
+            Priya's voice uses Nous Hermes-3 techniques for structured technical analysis.
           </div>
         </div>
       </div>
@@ -889,10 +894,10 @@
 
   /* ── Persona state ── */
   const PERSONAS = {
-    american:     { name: 'Alex',         role: 'High school-educated American adult', color: 'var(--p-american)' },
-    student:      { name: 'Jordan',       role: '16-year-old AP Bio student',          color: 'var(--p-student)' },
-    neurosurgeon: { name: 'Dr. Maya Chen',role: 'Attending neurosurgeon, brain imaging',color: 'var(--p-neurosurgeon)' },
-    ml_engineer:  { name: 'Atlas',        role: 'Senior ML/cloud engineer',            color: 'var(--p-ml)' },
+    sam:     { name: 'Sam',              role: 'ISU freshman, Normal IL',                       color: 'var(--p-sam)' },
+    priya:   { name: 'Priya',            role: 'ML Research Scientist, Google DeepMind Chicago', color: 'var(--p-priya)' },
+    dr_park: { name: 'Dr. Jiyeon Park',  role: 'Associate Professor of Neurology, Northwestern', color: 'var(--p-dr_park)' },
+    chris:   { name: 'Chris',            role: 'Science reporter, WBEZ Chicago',                color: 'var(--p-chris)' },
   };
 
   const VALID_PERSONAS = Object.keys(PERSONAS);
@@ -903,7 +908,7 @@
 
   /* URL param takes priority over localStorage */
   let activePersona = resolvePersona(
-    urlPersona || localStorage.getItem('cortex_persona') || 'american'
+    urlPersona || localStorage.getItem('cortex_persona') || 'sam'
   );
 
   /* ── DOM refs ── */
@@ -1051,22 +1056,22 @@
 
   /* Placeholder text per persona */
   const PLACEHOLDER = {
-    american:
-      'Alex is waiting for the brain data to come back... Once it does, you\'ll get a plain-English take on what\'s happening up there.',
-    student:
-      'Jordan\'s getting ready to break it down — once the scan finishes, you\'ll get the full scoop on which brain regions are lighting up and why.',
-    neurosurgeon:
-      'Dr. Chen is reviewing the activation maps... Clinical analysis will populate once TRIBE v2 inference completes.',
-    ml_engineer:
-      'Atlas is standing by to analyze the model output... TRIBE v2 inference pending. Tensor shape: (T × 20484) float32 @ 2 Hz.',
+    sam:
+      'sam\'s waiting for the scan to finish… gonna be honest this brain stuff is kinda wild',
+    priya:
+      'Awaiting TRIBE v2 inference. (T × 20484) float32 @ 2 Hz pending. Will evaluate signal-to-noise and deployment cost profile on completion.',
+    dr_park:
+      'Dr. Park is reviewing the activation maps. Clinical analysis will populate once TRIBE v2 inference completes across fsaverage5 vertices.',
+    chris:
+      'Chris is standing by. Once the scan finishes, you\'ll get the key finding — in plain language, with one number that makes it real.',
   };
 
-  /* Backward-compat key mapping: old 3-tier keys → new persona keys */
+  /* Backward-compat key mapping: old API keys → current persona keys */
   const LEGACY_MAP = {
-    american:     'general',
-    student:      'general',
-    neurosurgeon: 'clinical',
-    ml_engineer:  'college',
+    sam:     'general',
+    priya:   'college',
+    dr_park: 'clinical',
+    chris:   'general',
   };
 
   function getPersonaText(narrs, pid) {
