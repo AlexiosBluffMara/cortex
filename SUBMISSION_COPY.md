@@ -116,24 +116,33 @@ Post in the hackathon submission channel. Use Discord markdown.
 ```
 ## Cortex + Mercury — Nous Research × Kimi Creative Hackathon
 
-**TL;DR**: Submit any video → TRIBE v2 predicts 20,484 cortical vertices firing at 2 Hz → Gemma 4 explains it at three audience levels simultaneously. Mercury orchestrates. Kimi K2.6 wrote the viewer.
+**TL;DR**: Your brain is a movie theater with 20,484 seats. Upload any video — TRIBE v2 tracks how every seat reacts, twice per second. Gemma 4 explains it to anyone from a curious kid to a working neurologist. Mercury (our Hermes fork) ran the whole show. Kimi K2.6 built the 3D theater map.
+
+---
+
+### The Brain Cinema, in one paragraph
+
+Imagine a cinema where the audience is your brain — 20,484 people sitting in 20,484 assigned seats, each responsible for a specific cognitive job: faces, voices, motion, language, emotion. When something interesting happens on screen, blood rushes to the excited sections. TRIBE v2 (Meta's brain foundation model) is the sensor system tracking every seat in real-time, at 2 Hz. Gemma 4 is the film critic who reads the reaction printout and explains it at whatever level you need. The Three.js viewer is the live seating chart, colored hot-to-cold.
 
 ---
 
 ### What it does
 
-1. Upload any video, audio clip, or image (≤50 MB)
-2. **TRIBE v2** (Meta's brain foundation model) predicts BOLD responses at **20,484 fsaverage5 vertices × 2 Hz** — the full cortical surface, not a regional average
-3. **Gemma 4 E4B** narrates at three levels in parallel: General (high-school register) · College (named networks) · Clinical (Yeo-7, laterality, peak timing)
-4. A Three.js viewer renders per-vertex activation as a live 3D animation with ISU cardinal colormap and adaptive scale bar
+1. Upload any video, audio clip, image, or text (≤ 50 MB, ≤ 50 seconds)
+2. **TRIBE v2** predicts BOLD activation at **20,484 fsaverage5 cortical vertices × 2 Hz** — the full cortical surface, not a regional average. Five-second hemodynamic lag pre-applied.
+3. **Gemma 4 E4B** generates three narrations in parallel at **194 tok/s** on the RTX 5090:
+   - **General** — plain language, high-school register
+   - **College** — named networks, functional anatomy
+   - **Clinical** — Yeo-7 labels, laterality, peak timing, z-scores
+4. A **Three.js viewer** renders per-vertex activation as a real-time 3D animation with time scrubber and click-to-inspect on any brain region
 
-The pipeline runs entirely on a single RTX 5090 (32 GB). A GPU scheduler swaps TRIBE v2 and Gemma 4 with OOM recovery — they cannot coexist at 32 GB.
+Runs entirely on a single RTX 5090 (32 GB GDDR7). A GPU scheduler evicts Gemma to load TRIBE and swaps back in ~10 seconds.
 
 ---
 
-### The Kimi Track — exact receipts
+### The Kimi receipts
 
-Mercury dispatched specs (written by Claude Code) to **Kimi K2.6** via `tools/kimi_dispatch.py`. Kimi wrote the initial cortex viewer — 47 KB of Three.js, the 50-region atlas, the brain mesh pipeline — in a **75-minute, 14-commit sprint on Apr 28**.
+Mercury dispatched specs to **Kimi K2.6** via the Nous Portal. Kimi wrote the initial cortex viewer — 47 KB of Three.js, the 50-region atlas overlay, and the brain mesh pipeline — in a **75-minute, 14-commit sprint on April 28**.
 
 | Metric | Value |
 |---|---|
@@ -143,16 +152,16 @@ Mercury dispatched specs (written by Claude Code) to **Kimi K2.6** via `tools/ki
 | Output tokens | **564K** |
 | Cache reads | **39.5M** |
 
-The Apr 28–29 spike maps 1:1 to those 14 commits. Raw session dumps, config screenshots, and the full git log are in `kimi_proof/` in the repo.
+The April 28–29 spend spike maps 1:1 to those 14 commits. Raw session dumps, config screenshots, and the full git log are in `kimi_proof/` in the repo.
 
 ---
 
-### Mercury — the agent
+### Mercury — the agent behind the curtain
 
-- 6 client surfaces: terminal, Discord, web, iMessage, email, mobile
-- 4 skill domains: Chicago education · Chicago tax/tenant law · 3D graphics dev · hackathon packaging
-- GPU scheduler: IDLE → GEMMA_ACTIVE → TRIBE_ACTIVE (eviction-driven, swap time ~10 s)
-- Snowy The Bot is **live right now** in `#bot-test-3` on this server
+- 6 client surfaces: terminal, Discord, web, WhatsApp, email, mobile
+- 4 skill domains: neuroscience narration · 3D graphics dev · Chicago education · hackathon packaging
+- GPU scheduler: `IDLE → TRIBE_ACTIVE → GEMMA_ACTIVE` — eviction-driven, OOM recovery, GCP A100 fallback
+- **Snowy The Bot is live right now in `#bot-test-3` on this server**
 
 ---
 
@@ -166,6 +175,7 @@ The Apr 28–29 spike maps 1:1 to those 14 commits. Raw session dumps, config sc
 ---
 
 *Built by Red Team Kitchen / Alexios Bluff Mara LLC · Illinois State University 🔴*
+*Gemma is a trademark of Google LLC.*
 ```
 
 ---
@@ -173,40 +183,48 @@ The Apr 28–29 spike maps 1:1 to those 14 commits. Raw session dumps, config sc
 ## KAGGLE DISCUSSION POST — GEMMA 4 GOOD SUBMISSION
 
 ```
-# Cortex: TRIBE v2 + Gemma 4 Brain-Response Analysis (Health & Sciences)
+# Cortex: TRIBE v2 + Gemma 4 — Watch Any Brain Respond to Any Video (Health & Sciences)
 
-## What we built
+## The one-sentence version
 
-**Cortex** predicts how a human brain responds to any video, audio clip, or image — using Meta's TRIBE v2 foundation model and Google's Gemma 4 E4B — and then explains what it found to three audiences simultaneously.
+Cortex lets you upload a short video and see, in real-time 3D, which regions of a human brain respond — then explains what that means to anyone from a curious 8-year-old to a working neurologist.
 
-No fMRI machine. No hospital. ~6 minutes per scan on consumer hardware.
+## The Brain Cinema analogy (for non-technical judges)
+
+Your brain is a movie theater with 20,484 seats. Each seat is staffed by a specialist: some handle faces, some handle voices, some handle motion, some handle fear. When something interesting happens on screen, blood rushes to the excited sections — that rush is the BOLD signal, neuroscience's proxy for "this part of the brain is paying attention."
+
+**TRIBE v2** is the sensor system bolted to every seat, tracking reactions twice per second. **Gemma 4** is the film critic who reads the audience reaction printout and writes a plain-English report. **The 3D viewer** is the live seating chart, colored from cool blue (calm) to hot red (highly activated), updating as the movie plays.
 
 ## The medical case
 
-Clinical fMRI costs $3,000–$6,000 per session and requires specialized equipment. Population-level BOLD prediction won't replace it. But it opens three research doors that are currently locked:
+A clinical fMRI session costs $3,000–$6,000, requires specialized hospital equipment, and takes 90 minutes to complete. Population-level BOLD prediction will not replace it. But it opens three research doors that are currently locked:
 
-1. **Educational neuroscience**: which brain networks does a given lecture, training video, or explainer actually engage? Educators can now iterate on content the way UX designers iterate on interfaces.
-2. **Rehabilitation research**: does a therapy video reach the target motor or language regions? Quantify it without booking a scanner.
-3. **Accessibility**: screen readers and educational tools can now know which cognitive systems a piece of content will engage, not just what it visually contains.
+1. **Educational neuroscience**: which brain networks does a given lecture or training video actually engage? Educators can now iterate on content with real cognitive signal, not just A/B test engagement metrics.
+2. **Rehabilitation research**: does a therapy video reach the target motor or language regions? Quantify this without booking a scanner.
+3. **Accessibility design**: which cognitive systems does a piece of content activate? Content designers finally have a principled answer.
 
 ## Technical summary
 
-- TRIBE v2 (Meta, CC-BY-NC 4.0): V-JEPA2 vision + wav2vec audio + Llama-3.2-3B text → predicts (T × 20,484) float32 BOLD at 2 Hz on fsaverage5
-- Gemma 4 E4B: multimodal media description → 3-tier narration (General / College / Clinical) at 194 tok/s
-- GPU scheduler: swaps TRIBE v2 and Gemma 4 on 32 GB VRAM with OOM recovery
-- Three.js viewer: per-vertex real-time 3D animation with adaptive colormap
+- **TRIBE v2** (Meta, CC-BY-NC 4.0): V-JEPA2 vision encoder + wav2vec-BERT 2.0 audio encoder + Llama-3.2-3B text encoder → predicts (T × 20,484) float32 BOLD z-scores at 2 Hz on fsaverage5. Trained on 25 subjects. Five-second HRF lag pre-applied.
+- **Gemma 4 E4B**: multimodal media description + three-tier narration (General / College / Clinical) at 194 tok/s on RTX 5090 via Ollama
+- **GPU scheduler**: swaps TRIBE v2 (~22.4 GB VRAM) and Gemma 4 E4B (~10 GB VRAM) on 32 GB GDDR7, OOM recovery, GCP L4 cloud fallback
+- **Three.js viewer**: per-vertex real-time 3D brain animation with time scrubber, click-to-inspect, Yeo-7 network overlays
+- **Hardware**: RTX 5090 (32 GB GDDR7). MSRP ~$1,999. Cloud equivalent: ~$0.70/hr on GCP L4, ~$0/hr scaled to zero.
 
-## Caveats (stated explicitly in the UI)
+## Stated caveats (shown explicitly in the UI)
 
-- TRIBE v2 is trained on 25 subjects — group-averaged prediction, not diagnostic
-- Not a substitute for clinical imaging
-- All narrations include explicit population-average caveats
+- TRIBE v2 is trained on 25 subjects — group-averaged prediction, not a personal scan
+- Not a substitute for clinical imaging under any circumstances
+- Predictions cover cortical surface only — no subcortical structures
+- All narrations include explicit population-average disclaimers
 
 ## Links
 
 - Code: https://github.com/AlexiosBluffMara/cortex
 - Live demo: https://cortex.redteamkitchen.com
 - License: MIT (code) · CC-BY-NC 4.0 (TRIBE v2 weights) · Gemma Terms of Use (Gemma 4)
+
+*Gemma is a trademark of Google LLC. Built by Alexios Bluff Mara LLC (dba Red Team Kitchen) / Illinois State University.*
 ```
 
 ---

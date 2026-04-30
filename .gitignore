@@ -124,3 +124,7 @@ assets/test_*.mp4
 *.tfstate
 *.tfstate.*
 .cloudflared/
+
+# --- Runtime scan output (local dev) ---
+scans/
+firebase-debug.log

@@ -5,25 +5,67 @@ Fallback behaviour when 5090 is unreachable:
   - Narration: Gemini 1.5 Flash API (set GEMINI_API_KEY env var to enable)
 """
 from __future__ import annotations
-import asyncio, os, uuid, json, logging
+import asyncio, os, uuid, json, logging, time
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import httpx
-from fastapi import FastAPI, File, Form, UploadFile, WebSocket, WebSocketDisconnect
+from cachetools import TTLCache
+from fastapi import FastAPI, File, Form, UploadFile, WebSocket, WebSocketDisconnect, Header, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from google.cloud import firestore, storage
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 
 log = logging.getLogger("cortex-relay")
 
-TUNNEL_URL   = os.environ["TUNNEL_URL"]        # e.g. https://cortex.redteamkitchen.com
-GCS_BUCKET   = os.environ["GCS_BUCKET"]        # cortex-public-scans
-GCP_PROJECT  = os.environ["GCP_PROJECT"]       # abm-isu
-GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "")  # optional fallback narration
-MAX_MB       = 50
-TUNNEL_TIMEOUT = 10  # seconds to decide 5090 is unreachable
+TUNNEL_URL      = os.environ["TUNNEL_URL"]
+GCS_BUCKET      = os.environ["GCS_BUCKET"]
+GCP_PROJECT     = os.environ["GCP_PROJECT"]
+GEMINI_KEY      = os.environ.get("GEMINI_API_KEY", "")
+# Google OAuth client ID — set in Cloud Run env vars after creating in GCP Console
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+# Domains allowed to submit scans (pipe-separated: "philanthropytraders.com|redteamkitchen.com")
+ALLOWED_DOMAINS = set(os.environ.get("ALLOWED_DOMAINS", "philanthropytraders.com|redteamkitchen.com").split("|"))
+MAX_MB          = 50
+TUNNEL_TIMEOUT  = 10
+
+# Cache verified tokens for 5 minutes so we don't call Google on every request
+_token_cache: TTLCache = TTLCache(maxsize=256, ttl=300)
+
+
+# ─── auth ─────────────────────────────────────────────────────────────────────
+
+def _verify_google_token(token: str) -> dict:
+    """Verify a Google ID token and return the payload. Raises HTTPException on failure."""
+    if token in _token_cache:
+        return _token_cache[token]
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(503, "Google OAuth not configured on this server (GOOGLE_CLIENT_ID missing).")
+    try:
+        payload = google_id_token.verify_oauth2_token(
+            token, google_requests.Request(), GOOGLE_CLIENT_ID, clock_skew_in_seconds=10
+        )
+    except Exception as e:
+        raise HTTPException(401, f"Invalid Google token: {e}")
+    hd = payload.get("hd", "")
+    if hd not in ALLOWED_DOMAINS:
+        raise HTTPException(
+            403,
+            f"Your Google account domain '{hd}' is not authorized to submit scans. "
+            f"Sign in with a @{'/@'.join(ALLOWED_DOMAINS)} account."
+        )
+    _token_cache[token] = payload
+    return payload
+
+
+async def require_domain_auth(authorization: Optional[str] = Header(None)) -> dict:
+    """FastAPI dependency: require a valid Google ID token from an allowed domain."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Sign in with your Google (@philanthropytraders.com or @redteamkitchen.com) account to submit scans.")
+    return _verify_google_token(authorization.split("Bearer ", 1)[1])
 
 app = FastAPI(title="Cortex Relay")
 app.add_middleware(
@@ -91,7 +133,11 @@ async def proxy_file(bucket_path: str):
 # ─── scan submission ──────────────────────────────────────────────────────────
 
 @app.post("/api/scan")
-async def submit_scan(file: UploadFile = File(...), tier: int = Form(default=4)):
+async def submit_scan(
+    file: UploadFile = File(...),
+    tier: int = Form(default=4),
+    user: dict = Depends(require_domain_auth),
+):
     scan_id = uuid.uuid4().hex[:12]
     data = await file.read()
     if len(data) > MAX_MB * 1024 * 1024:
@@ -108,6 +154,8 @@ async def submit_scan(file: UploadFile = File(...), tier: int = Form(default=4))
         "tier": tier, "created_at": firestore.SERVER_TIMESTAMP,
         "upload_gcs": f"gs://{GCS_BUCKET}/uploads/{scan_id}{ext}",
         "file_url": file_url,
+        "submitted_by": user.get("email", "unknown"),
+        "submitted_by_domain": user.get("hd", "unknown"),
     })
 
     asyncio.create_task(_forward_to_5090(scan_id, data, file.filename or "upload", ext, tier))
