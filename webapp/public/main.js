@@ -298,7 +298,9 @@ function paintFrame(t) {
 // Playback
 // ---------------------------------------------------------------------------
 scrubber.addEventListener("input", () => {
-    if (st.boldTrace) paintFrame(+scrubber.value);
+    const v = +scrubber.value;
+    if (st.boldVertex) paintVertexFrame(v);
+    else if (st.boldTrace) paintFrame(v);
 });
 
 function setPlaying(on) {
@@ -612,19 +614,86 @@ tierInput.addEventListener("input", () => setTierPill(+tierInput.value));
 // Data loaders
 // ---------------------------------------------------------------------------
 async function loadBoldForScan(scanId) {
+    // Prefer the real per-vertex (T x 20484) trace if the scan has it on disk.
+    // Falls back to the 50-region simulate endpoint when the .npy is missing.
+    try {
+        const r = await fetch(`/api/scan/${encodeURIComponent(scanId)}/bold-vertex?n_t=100`);
+        if (r.ok) {
+            const buf = await r.arrayBuffer();
+            const nT  = parseInt(r.headers.get("X-N-T")    || "0", 10);
+            const nV  = parseInt(r.headers.get("X-N-Vert") || "0", 10);
+            const f32 = new Float32Array(buf);
+            if (nT && nV && f32.length === nT * nV) {
+                st.boldVertex = { n_t: nT, n_vert: nV, data: f32, tr_seconds: 0.5 };
+                st.boldTrace  = null;       // disable per-region path
+                scrubber.disabled = false;
+                scrubber.max      = String(nT - 1);
+                scrubber.value    = "0";
+                paintVertexFrame(0);
+                appendEvent(`BOLD: ${nT} TRs × ${nV} vertices (per-vertex)`, "complete");
+                return;
+            }
+            appendEvent("per-vertex shape mismatch — falling back", "warning");
+        }
+    } catch (err) {
+        appendEvent(`per-vertex fetch error — falling back: ${err.message}`, "warning");
+    }
+    // Fallback: per-region simulate (50 regions)
     try {
         const r = await fetch(`/api/scan/${encodeURIComponent(scanId)}/bold-simulate?n_t=100`);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const trace = await r.json();
-        st.boldTrace   = trace;
+        st.boldTrace  = trace;
+        st.boldVertex = null;
         scrubber.disabled = false;
         scrubber.max   = String(trace.n_t - 1);
         scrubber.value = "0";
         paintFrame(0);
         if (isMobile) drawMobileFrame(0);
-        appendEvent(`BOLD: ${trace.n_t} TRs × ${trace.n_regions} regions`, "complete");
+        appendEvent(`BOLD: ${trace.n_t} TRs × ${trace.n_regions} regions (simulated)`, "complete");
     } catch (err) {
         appendEvent(`BOLD load failed: ${err.message}`, "failed");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Per-vertex paint — true 20,484-vertex BOLD from the persisted .npy.
+// Each vertex's z-score drives its own RGB; the cortical mesh shows the full
+// fsaverage5 resolution rather than the 50-region downsample.
+// ---------------------------------------------------------------------------
+function paintVertexFrame(t) {
+    if (!st.boldVertex) return;
+    const { n_t, n_vert, data, tr_seconds } = st.boldVertex;
+    const tt = Math.max(0, Math.min(n_t - 1, t | 0));
+    timeLabel.textContent = `t = ${(tt * tr_seconds).toFixed(1)} s`;
+    if (isMobile) { drawMobileFrame(tt); return; }
+
+    const filterActive = st.activeNetworks.size > 0;
+    const rowOff = tt * n_vert;
+
+    for (const [mesh, offset] of [[st.meshLH, 0], [st.meshRH, st.lhVertCount]]) {
+        if (!mesh) continue;
+        const cb = mesh.geometry.attributes.color;
+        if (!cb) continue;
+        const count = cb.count;
+        for (let i = 0; i < count; i++) {
+            const vi = offset + i;
+            let r = BASE.r, g = BASE.g, b = BASE.b;
+            if (vi < n_vert) {
+                let render = true;
+                if (filterActive) {
+                    const ri = vi < st.vertexLabels.length ? st.vertexLabels[vi] : 0;
+                    const netKey = ri > 0 ? (st.regionNetwork[ri - 1] ?? "") : "";
+                    if (netKey && !st.activeNetworks.has(netKey)) render = false;
+                }
+                if (render) {
+                    const z = data[rowOff + vi];
+                    [r, g, b] = zToRGB(z);
+                }
+            }
+            cb.setXYZ(i, r, g, b);
+        }
+        cb.needsUpdate = true;
     }
 }
 
@@ -1201,19 +1270,30 @@ function animate() {
 })();
 
 window.loadBoldForScan = loadBoldForScan;
-window.loadScanResult = loadScanResult;
+window.loadScanResult  = loadScanResult;
+window.paintVertexFrame = paintVertexFrame;
 
-// URL param: ?scan=<id> auto-loads that scan on page load.
-// Used by the public showcase + share links so a specific completed scan can be linked.
+// URL param: ?scan=<id> auto-loads that scan AND flips the UI out of the
+// upload-prompt empty state so the brain becomes visible without any clicks.
 (function autoLoadFromUrl() {
     try {
         const params = new URLSearchParams(window.location.search);
         const scanId = params.get("scan");
         if (!scanId) return;
-        // wait one frame so the WS + initial fetches settle, then load the scan
+
+        // Hide the "Submit a media file to begin" overlay so the mesh shows
+        const ov = document.getElementById("viewer-overlay");
+        if (ov) ov.classList.add("hidden");
+
+        st.scanId = scanId;
+        appendEvent(`auto-loading scan ${scanId} from URL`, "complete");
+
+        // Wait one frame so the WS connect + initial mesh load can settle,
+        // then trigger both data loads. paintVertexFrame is called by
+        // loadBoldForScan once the buffer is ready.
         setTimeout(() => {
             try { loadScanResult(scanId); } catch (e) { console.warn("loadScanResult failed:", e); }
-            try { loadBoldForScan(scanId); } catch (e) { console.warn("loadBoldForScan failed:", e); }
+            try { loadBoldForScan(scanId);  } catch (e) { console.warn("loadBoldForScan failed:",  e); }
         }, 250);
     } catch (e) { /* no-op */ }
 })();

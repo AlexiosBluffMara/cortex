@@ -36,6 +36,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -353,6 +354,51 @@ def create_app(
         import json as _json
         return _json.loads(atlas_file.read_text(encoding="utf-8"))
 
+    @app.get("/api/scan/{scan_id}/bold-vertex")
+    async def bold_vertex(scan_id: str, n_t: int = 100) -> Response:
+        """Return the persisted per-vertex BOLD trace for `scan_id`.
+
+        Shape on disk:  (T, 20484) float32  (fsaverage5 surface).
+        Response body:  binary Float32 little-endian, row-major.
+        Headers:        X-N-T, X-N-Vert, Content-Type=application/octet-stream
+
+        If the .npy file is missing (e.g. webapp was restarted before this scan
+        completed, or persistence failed) we 404 — the client falls back to
+        the per-region `/bold-simulate` endpoint automatically.
+        """
+        scans_dir = Path("D:/cortex/scans")
+        npy = scans_dir / f"{scan_id}.npy"
+        if not npy.exists():
+            raise HTTPException(status_code=404, detail=f"per-vertex preds not on disk for {scan_id}")
+        try:
+            import numpy as _np
+            arr = _np.load(npy, mmap_mode="r")
+        except Exception as exc:                                    # noqa: BLE001
+            raise HTTPException(status_code=500, detail=f"npy load failed: {exc}") from exc
+
+        T_full = arr.shape[0]
+        n_t = max(2, min(int(n_t), T_full))
+        if n_t == T_full:
+            sliced = arr
+        else:
+            # uniform-spaced index; we don't interpolate — clean integer picks
+            idx = _np.linspace(0, T_full - 1, n_t).astype(_np.int64)
+            sliced = arr[idx]
+
+        # Force C-contiguous Float32 LE for predictable client decoding
+        sliced = _np.ascontiguousarray(sliced, dtype="<f4")
+        body = sliced.tobytes()
+        return Response(
+            content=body,
+            media_type="application/octet-stream",
+            headers={
+                "X-N-T": str(sliced.shape[0]),
+                "X-N-Vert": str(sliced.shape[1]),
+                "X-Scan-Id": scan_id,
+                "Cache-Control": "public, max-age=300",
+            },
+        )
+
     @app.get("/api/scan/{scan_id}/bold-simulate")
     async def simulate_bold(scan_id: str, n_t: int = 100) -> dict[str, Any]:
         """Return a deterministic, scan-id-keyed simulated BOLD trace for demos.
@@ -660,6 +706,20 @@ async def _run_scan_background(
             source=source,
         )
         await _emit("narrating")
+
+        # Persist the per-vertex BOLD trace so the WebUI can render the full
+        # 20,484-vertex animation (not just the 50-region downsample) and so
+        # that ?scan=<id> link-shares survive a webapp restart.
+        try:
+            import numpy as _np
+            _scans_dir = Path("D:/cortex/scans")
+            _scans_dir.mkdir(parents=True, exist_ok=True)
+            preds = getattr(result, "preds", None)
+            if preds is not None:
+                _np.save(_scans_dir / f"{scan_id}.npy", _np.asarray(preds, dtype=_np.float32))
+                log.info("[webapp] persisted preds for %s shape=%s", scan_id, preds.shape)
+        except Exception as _exc:                                  # noqa: BLE001
+            log.warning("[webapp] preds persist failed for %s: %s", scan_id, _exc)
 
         # Build full brain context so Gemma gets real data, not a generic prompt.
         loop = asyncio.get_event_loop()
