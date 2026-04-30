@@ -88,7 +88,7 @@ Built for two hackathons simultaneously.
 ↗ @KaggleCompete Gemma 4 Good — Health & Sciences
    Cortex: TRIBE v2 + Gemma 4 from media → cortex → plain English
 
-Demo: [LIVE_URL]
+Demo: https://cortex.redteamkitchen.com
 Cortex: github.com/AlexiosBluffMara/cortex
 Mercury: github.com/AlexiosBluffMara/mercury
 
@@ -160,7 +160,7 @@ The Apr 28–29 spike maps 1:1 to those 14 commits. Raw session dumps, config sc
 
 - **Cortex (TRIBE v2 pipeline)**: https://github.com/AlexiosBluffMara/cortex
 - **Mercury (Hermes fork)**: https://github.com/AlexiosBluffMara/mercury
-- **Live demo**: [LIVE_URL — replace with deployed URL]
+- **Live demo**: https://cortex.redteamkitchen.com
 - **Kimi proof**: https://github.com/AlexiosBluffMara/mercury/tree/main/kimi_proof
 
 ---
@@ -205,7 +205,7 @@ Clinical fMRI costs $3,000–$6,000 per session and requires specialized equipme
 ## Links
 
 - Code: https://github.com/AlexiosBluffMara/cortex
-- Live demo: [LIVE_URL]
+- Live demo: https://cortex.redteamkitchen.com
 - License: MIT (code) · CC-BY-NC 4.0 (TRIBE v2 weights) · Gemma Terms of Use (Gemma 4)
 ```
 
@@ -264,7 +264,7 @@ Once the live site is up, the canonical URL should be:
 
 `https://cortex.redteamkitchen.com` (Firebase Hosting + Cloudflare DNS)
 
-Replace `[LIVE_URL]` in all copy above with this URL before posting.
+Replace `https://cortex.redteamkitchen.com` in all copy above with this URL before posting.
 
 Page title for Google crawl:
 **"Cortex — Watch Your Brain Respond to Any Video | TRIBE v2 + Gemma 4 | Free"**
