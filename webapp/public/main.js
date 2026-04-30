@@ -93,11 +93,11 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
 root.appendChild(renderer.domElement);
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const keyLight = new THREE.DirectionalLight(0xfff8f0, 0.9);
+scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+const keyLight = new THREE.DirectionalLight(0xfff8f0, 1.15);
 keyLight.position.set(3, 5, 3);
 scene.add(keyLight);
-const fillLight = new THREE.DirectionalLight(0x90b0ef, 0.4);
+const fillLight = new THREE.DirectionalLight(0x90b0ef, 0.55);
 fillLight.position.set(-4, -1, -3);
 scene.add(fillLight);
 const rimLight = new THREE.DirectionalLight(0xffffff, 0.2);
@@ -164,7 +164,10 @@ document.querySelectorAll("[data-hemi]").forEach(b => {
 // ---------------------------------------------------------------------------
 // Brain mesh — fsaverage5 GLB
 // ---------------------------------------------------------------------------
-const BASE = new THREE.Color(0xc8b4c8);
+// Brighter neutral base — keeps anatomically plausible mauve but lifts
+// luminance so positive/negative activation stands off the cortex with
+// stronger contrast in the recorded video.
+const BASE = new THREE.Color(0xe6d6d8);
 
 function addColorBuffer(geom) {
     const n = geom.attributes.position.count;
@@ -231,13 +234,32 @@ async function loadBrainMesh() {
 }
 
 // ---------------------------------------------------------------------------
-// BOLD painting — diverging colormap: blue ← white → red
+// BOLD painting — high-contrast diverging colormap.
+//
+// Cool side  (z<0):  pale lilac → saturated cobalt          (#e6d6d8 → #1f5cff)
+// Neutral    (z=0):  base mauve                             (matches BASE)
+// Warm side  (z>0):  pale → saturated coral / hot orange    (#e6d6d8 → #ff3a25)
+//
+// Stronger saturation than v1 so the activation reads on a wide-shot of
+// the cortex without needing a closeup. Range clamps a touch tighter
+// (z/2.5 instead of z/3.0) to keep mid-z values visually present.
 // ---------------------------------------------------------------------------
 function zToRGB(z) {
-    const t = Math.max(-1, Math.min(1, z / 3.0));
-    if (t >= 0) return [1, 1 - t * 0.627, 1 - t * 0.627];   // white → #ef5f5f
+    const t = Math.max(-1, Math.min(1, z / 2.5));
+    if (t >= 0) {
+        // base → hot orange/red
+        return [
+            1.00,
+            0.84 - t * 0.62,    // 0.84 → 0.22
+            0.85 - t * 0.71,    // 0.85 → 0.14
+        ];
+    }
     const u = -t;
-    return [1 - u * 0.627, 1 - u * 0.38, 1];                 // white → #5f9eef
+    return [
+        0.90 - u * 0.78,        // 0.90 → 0.12
+        0.84 - u * 0.48,        // 0.84 → 0.36
+        0.85 + u * 0.15,        // 0.85 → 1.00
+    ];
 }
 
 function paintFrame(t) {
