@@ -260,8 +260,7 @@ jobs:
           # Run as the deploy SA so the revision can read Secret Manager. The
           # default Compute Engine SA does not have secretAccessor and would
           # fail on the GCP_INFERENCE_TOKEN env_from binding.
-          service_account: ${{ secrets.GCP_SA_EMAIL }}
-          flags: "--allow-unauthenticated --memory=1Gi --cpu=1 --port=8765 --min-instances=0 --max-instances=3"
+          flags: "--allow-unauthenticated --memory=1Gi --cpu=1 --port=8765 --min-instances=0 --max-instances=3 --service-account=${{ secrets.GCP_SA_EMAIL }}"
           env_vars: |
             OLLAMA_URL=${{ secrets.OLLAMA_URL }}
             GCP_INFERENCE_ENDPOINT=${{ secrets.GCP_INFERENCE_ENDPOINT }}
@@ -346,8 +345,7 @@ jobs:
           region: ${{ env.REGION }}
           image: ${{ needs.build-relay.outputs.image }}
           # Run as the deploy SA so the revision can read Secret Manager + Firestore.
-          service_account: ${{ secrets.GCP_SA_EMAIL }}
-          flags: "--allow-unauthenticated --memory=512Mi --cpu=1 --port=8080 --min-instances=0 --max-instances=5"
+          flags: "--allow-unauthenticated --memory=512Mi --cpu=1 --port=8080 --min-instances=0 --max-instances=5 --service-account=${{ secrets.GCP_SA_EMAIL }}"
           env_vars: |
             TUNNEL_URL=${{ secrets.CLOUDFLARE_TUNNEL_URL }}
             GCS_BUCKET=cortex-public-scans
