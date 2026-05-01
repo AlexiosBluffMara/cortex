@@ -833,25 +833,25 @@
                 <!-- Narration model selector -->
                 <p class="panel-title" style="margin-top:12px">Narration model</p>
                 <select id="narration-model-select" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;padding:6px 8px;cursor:pointer;">
-                    <optgroup label="── Local (free, RTX 5090) ──">
+                    <optgroup label="── Local · RTX 5090 (free) ──">
                         <option value="local:gemma4:e4b" selected>Gemma 4 E4B · Local — $0.00 / scan</option>
                         <option value="local:gemma4:26b">Gemma 4 26B · Local — $0.00 / scan</option>
                     </optgroup>
-                    <optgroup label="── Google Gemini 3.1 (API free tier) ──">
-                        <option value="gemini:gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite — ~$0.00035 / scan</option>
-                        <option value="gemini:gemini-3.1-pro-preview">Gemini 3.1 Pro — ~$0.0056 / scan</option>
-                    </optgroup>
-                    <optgroup label="── OpenRouter · Free quota (1K req/day) ──">
+                    <optgroup label="── OpenRouter · Free Gemma (1K req/day) ──">
                         <option value="openrouter:google/gemma-4-26b-a4b-it:free">Gemma 4 26B MoE · free — $0.00</option>
                         <option value="openrouter:google/gemma-4-31b-it:free">Gemma 4 31B · free — $0.00</option>
                     </optgroup>
                     <optgroup label="── OpenRouter · Paid ──">
-                        <option value="openrouter:google/gemma-4-26b-a4b-it">Gemma 4 26B MoE</option>
+                        <option value="openrouter:google/gemma-4-26b-a4b-it">Gemma 4 26B MoE · paid</option>
                         <option value="openrouter:moonshotai/kimi-k2.5-turbo">Kimi K2.5 Turbo</option>
                         <option value="openrouter:deepseek/deepseek-chat-v3-0324">DeepSeek V3</option>
                         <option value="openrouter:qwen/qwen3-235b-a22b">Qwen 3 235B A22B</option>
                         <option value="openrouter:openai/gpt-4.1-mini">GPT-4.1 mini</option>
                         <option value="openrouter:anthropic/claude-haiku-4-5">Claude Haiku 4</option>
+                    </optgroup>
+                    <optgroup label="── Gemini 3.1 (explicit request only) ──">
+                        <option value="gemini:gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite — ~$0.00035 / scan</option>
+                        <option value="gemini:gemini-3.1-pro-preview">Gemini 3.1 Pro — ~$0.0056 / scan</option>
                     </optgroup>
                 </select>
 
