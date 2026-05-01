@@ -58,22 +58,26 @@ RUN pip install --index-url https://download.pytorch.org/whl/cu128 \
 RUN git clone --depth 1 https://github.com/facebookresearch/tribev2.git /opt/tribev2 \
     && pip install --no-deps /opt/tribev2
 
-# Cortex deps — pinned exactly to pyproject.toml
+# Cortex deps. The pyproject.toml pins are bleeding-edge versions installed
+# locally from a custom wheel index (Blackwell sm_120 / pre-release channels);
+# many don't exist on the public PyPI index. Use lower-bound floors here so
+# the cloud build picks the latest *publicly* available stable version. The
+# scientific-Python stack is API-stable across minor versions so this is safe.
 COPY pyproject.toml ./
 RUN pip install \
-        "exca>=0.5.17" neuralset==0.0.2 neuraltrain==0.0.2 \
-        x-transformers==1.27.20 einops==0.8.2 pyyaml==6.0.3 \
-        transformers==5.5.4 huggingface_hub==1.11.0 safetensors==0.7.0 \
-        tokenizers==0.22.2 soundfile==0.13.1 julius==0.2.7 \
-        langdetect==1.0.9 spacy==3.8.13 \
-        nilearn==0.13.1 nibabel==5.4.2 numpy==2.4.4 scipy==1.17.1 \
-        scikit-learn==1.8.0 scikit-image==0.26.0 pandas==3.0.2 pyarrow==23.0.1 \
-        matplotlib==3.10.8 seaborn==0.13.2 pillow==11.3.0 \
-        moviepy==2.2.1 imageio-ffmpeg==0.6.0 \
-        requests==2.33.1 httpx>=0.28.0 psutil==7.2.2 python-dotenv==1.2.2 \
-        tqdm==4.67.3 \
-        fastapi>=0.136.0 uvicorn[standard]>=0.44.0 python-multipart>=0.0.20 \
-        websockets>=14.0
+        "exca>=0.5.17" "neuralset>=0.0.2" "neuraltrain>=0.0.2" \
+        "x-transformers>=1.27" "einops>=0.8" "pyyaml>=6.0" \
+        "transformers>=4.45" "huggingface_hub>=0.26" "safetensors>=0.4" \
+        "tokenizers>=0.20" "soundfile>=0.12" "julius>=0.2" \
+        "langdetect>=1.0" "spacy>=3.7" \
+        "nilearn>=0.10" "nibabel>=5.2" "numpy>=2.0,<3.0" "scipy>=1.13" \
+        "scikit-learn>=1.5" "scikit-image>=0.23" "pandas>=2.2" "pyarrow>=17" \
+        "matplotlib>=3.9" "seaborn>=0.13" "pillow>=10.4" \
+        "moviepy>=2.0" "imageio-ffmpeg>=0.5" \
+        "requests>=2.31" "httpx>=0.28" "psutil>=6.0" "python-dotenv>=1.0" \
+        "tqdm>=4.66" \
+        "fastapi>=0.110" "uvicorn[standard]>=0.30" "python-multipart>=0.0.20" \
+        "websockets>=12.0"
 
 # Cortex code itself
 COPY cortex/ ./cortex/
