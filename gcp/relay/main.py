@@ -299,39 +299,49 @@ async def submit_scan(
 
 
 async def _forward_to_5090(scan_id: str, data: bytes, filename: str, ext: str, tier: int):
-    util = await _5090_utilization()
-    if not util.get("accepting", False):
-        await db.collection("scans").document(scan_id).update({
-            "status": "queued_cloud",
-            "cost_mode": "cloud",
-            "cost_estimate_usd": COST_CLOUD_USD,
-            "status_message": (
-                f"RTX 5090 is {util.get('scheduler_state', 'unavailable')} "
-                f"(queue depth {util.get('queue_depth', '?')}). "
-                "Routed to Gemini cloud fallback."
-            ),
-        })
-        return
-
+    """Fire-and-forget background task. Top-level try/except guards against
+    silent failures: any unhandled exception (including Firestore unreachable)
+    must still try to mark the scan as failed so the gallery doesn't show it
+    stuck in 'queued' forever."""
     try:
-        async with httpx.AsyncClient(timeout=600) as client:
-            files = {"file": (filename, data, "application/octet-stream")}
-            form  = {"tier": str(tier), "source": "public-relay", "external_scan_id": scan_id}
-            r = await client.post(f"{TUNNEL_URL}/api/scan", files=files, data=form, timeout=600)
-            if r.status_code == 202:
-                body = r.json()
-                await db.collection("scans").document(scan_id).update({
-                    "local_scan_id":     body["scan_id"],
-                    "status":            "processing",
-                    "cost_mode":         "local",
-                    "cost_estimate_usd": COST_LOCAL_USD,
-                })
-            else:
-                raise RuntimeError(f"5090 returned {r.status_code}")
-    except Exception as e:
-        await db.collection("scans").document(scan_id).update({
-            "status": "failed", "error": str(e)
-        })
+        util = await _5090_utilization()
+        if not util.get("accepting", False):
+            await db.collection("scans").document(scan_id).update({
+                "status": "queued_cloud",
+                "cost_mode": "cloud",
+                "cost_estimate_usd": COST_CLOUD_USD,
+                "status_message": (
+                    f"RTX 5090 is {util.get('scheduler_state', 'unavailable')} "
+                    f"(queue depth {util.get('queue_depth', '?')}). "
+                    "Routed to Gemini cloud fallback."
+                ),
+            })
+            return
+
+        try:
+            async with httpx.AsyncClient(timeout=600) as client:
+                files = {"file": (filename, data, "application/octet-stream")}
+                form  = {"tier": str(tier), "source": "public-relay", "external_scan_id": scan_id}
+                r = await client.post(f"{TUNNEL_URL}/api/scan", files=files, data=form, timeout=600)
+                if r.status_code == 202:
+                    body = r.json()
+                    await db.collection("scans").document(scan_id).update({
+                        "local_scan_id":     body["scan_id"],
+                        "status":            "processing",
+                        "cost_mode":         "local",
+                        "cost_estimate_usd": COST_LOCAL_USD,
+                    })
+                else:
+                    raise RuntimeError(f"5090 returned {r.status_code}")
+        except Exception as e:
+            log.exception("[relay] forward to 5090 failed for %s", scan_id)
+            await db.collection("scans").document(scan_id).update({
+                "status": "failed", "error": str(e)
+            })
+    except Exception:
+        # Last-resort: even Firestore is unreachable. Log so the operator can
+        # find this scan in the relay logs by scan_id and reconcile manually.
+        log.exception("[relay] catastrophic failure forwarding %s — scan stuck in queued", scan_id)
 
 
 # ─── scan status & listing ────────────────────────────────────────────────────

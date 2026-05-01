@@ -309,6 +309,15 @@ def create_app(
             },
         )
 
+        # Mirror the queued state to Firestore so local-direct scans appear in
+        # the public gallery alongside relay-submitted scans. The relay creates
+        # this doc itself; here we cover the localhost:8765 path. Best-effort —
+        # if GCP is unavailable, the scan still runs locally.
+        if _GCP_AVAILABLE:
+            asyncio.create_task(
+                _push_queued_to_firestore(scan_id, file.filename, tier, source)
+            )
+
         # Fire-and-forget background task: run the brain scan, write result
         asyncio.create_task(_run_scan_background(app, scan_id, str(target), tier, source))
 
@@ -909,6 +918,47 @@ async def _generate_ascii_video(
             log.debug("[webapp] ascii-video skipped for %s (no output)", scan_id)
     except Exception as _e:
         log.debug("[webapp] ascii-video generation failed for %s: %s", scan_id, _e)
+
+
+async def _push_queued_to_firestore(
+    scan_id: str,
+    filename: str,
+    tier: int,
+    source: str,
+) -> None:
+    """Write a 'queued' marker for a local-direct scan to Firestore.
+
+    The relay writes this doc itself for relay-submitted scans. This helper
+    covers the localhost:8765 path so direct uploads also appear in the
+    public gallery. Best-effort — failures are logged and swallowed.
+    """
+    if not _GCP_AVAILABLE:
+        return
+    import os
+
+    project = os.environ.get("GCP_PROJECT", "abm-isu")
+    loop    = asyncio.get_event_loop()
+
+    def _sync_set():
+        fs_client = _firestore.Client(project=project)
+        fs_client.collection("scans").document(scan_id).set(
+            {
+                "id": scan_id,
+                "status": "queued",
+                "filename": filename,
+                "tier": tier,
+                "source": source,
+                "cost_mode": "local",
+                "submitted_via": "local-direct",
+                "created_at": _firestore.SERVER_TIMESTAMP,
+            },
+            merge=True,
+        )
+
+    try:
+        await loop.run_in_executor(None, _sync_set)
+    except Exception as exc:
+        log.warning("[webapp] firestore queued-mirror failed for %s: %s", scan_id, exc)
 
 
 async def _push_to_gcp(
