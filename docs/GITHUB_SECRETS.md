@@ -33,23 +33,14 @@ echo -n "hf_xxxx" | gcloud secrets create gcp-inference-token --data-file=- --pr
 
 | Secret | Example value | Used in |
 |---|---|---|
-| `OLLAMA_URL` | `https://ollama.redteamkitchen.com` | webapp Cloud Run |
-| `CLOUDFLARE_TUNNEL_URL` | `https://ollama.redteamkitchen.com` | relay Cloud Run |
-| `GCP_INFERENCE_ENDPOINT` | `https://cortex-tribe-xxx-uc.a.run.app` | webapp → worker calls |
-| `GEMINI_API_KEY` | `AIza...` | relay (narration fallback when 5090 is offline) |
-| `FIREBASE_SA_JSON` | Full JSON of Firebase service account | Firebase Hosting deploy |
+| `OLLAMA_URL` | `https://ollama.redteamkitchen.com` | webapp Cloud Run — **already set** |
+| `CLOUDFLARE_TUNNEL_URL` | `https://ollama.redteamkitchen.com` | relay Cloud Run — **already set** |
+| `GCP_INFERENCE_ENDPOINT` | `https://cortex-tribe-xxx-uc.a.run.app` | webapp → worker; set after first tribe-worker deploy |
+| `GEMINI_API_KEY` | `AIza...` | relay fallback narration (optional, omit to disable) |
 
-**Getting `FIREBASE_SA_JSON`:**
-```bash
-gcloud iam service-accounts keys create /tmp/firebase-sa.json \
-  --iam-account=github-actions-deploy@abm-isu.iam.gserviceaccount.com
-# Paste the contents of /tmp/firebase-sa.json as the secret value.
-# Delete the key file after.
-rm /tmp/firebase-sa.json
-```
-
-> NOTE: Firebase Hosting deploy uses a JSON service account key because
-> `firebase-tools` doesn't support WIF yet. Use the same SA created by setup-wif.sh.
+> `FIREBASE_SA_JSON` is NOT needed. Firebase Hosting deploy uses the WIF-granted
+> `GOOGLE_APPLICATION_CREDENTIALS` set by `google-github-actions/auth@v2`. SA key creation
+> is blocked by the org policy anyway (`constraints/iam.disableServiceAccountKeyCreation`).
 
 ---
 
@@ -90,7 +81,6 @@ Mercury's `.env` (API keys, NOUS_API_KEY, etc.) lives on the host at `~/.hermes/
 - `hf-token` → rotate at HuggingFace when a team member leaves
 - `gcp-inference-token` → this is a short-lived GCP identity token; the relay generates it on-demand via `gcloud auth print-identity-token` at startup
 - `GEMINI_API_KEY` → rotate at Google AI Studio
-- `FIREBASE_SA_JSON` → this is a long-lived key; consider rotating every 90 days
 
 ---
 

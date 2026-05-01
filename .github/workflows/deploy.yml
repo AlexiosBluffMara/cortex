@@ -330,13 +330,13 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
 
+      # firebase-tools uses GOOGLE_APPLICATION_CREDENTIALS set by the auth step
+      # above — no SA JSON key needed (org policy blocks key creation anyway).
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
       - name: Deploy Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SA_JSON }}
-          projectId: abm-isu
-          channelId: live
+        run: firebase deploy --only hosting --project abm-isu --non-interactive
 
   # ─────────────────────────────────────────────────────────────────────────────
   # JOB 5 — Post-deploy smoke test
