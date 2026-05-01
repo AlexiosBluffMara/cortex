@@ -1,0 +1,275 @@
+name: Release
+
+# Builds and publishes a public, downloadable release of Cortex:
+#   - cortex-webapp Docker image → GHCR (public, no GCP auth required)
+#   - bootstrap-cortex.sh / .ps1 → attached to the GitHub Release
+#   - RELEASE-NOTES.md          → attached to the GitHub Release
+#
+# Triggers:
+#   - `release` published (the GitHub UI / `gh release create`)
+#   - tag push matching v*.*.* (so `git tag v0.2.0 && git push --tags` fires it)
+#
+# Required repo settings:
+#   - Settings → Actions → General → Workflow permissions → "Read and write"
+#     (so GITHUB_TOKEN can push to GHCR and upload release assets).
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - "v*.*.*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write    # upload release assets, create release on tag push
+  packages: write    # push images to GHCR
+  id-token: write    # reserved for future signing (cosign / sigstore)
+
+env:
+  GHCR_IMAGE: ghcr.io/alexiosbluffmara/cortex-webapp
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Resolve the release tag (works for both `release.published` and tag push)
+  # ─────────────────────────────────────────────────────────────────────────
+  resolve:
+    name: Resolve tag + release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      release_id: ${{ steps.ensure.outputs.release_id }}
+      upload_url: ${{ steps.ensure.outputs.upload_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: meta
+        name: Resolve tag name
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag: ${TAG}"
+
+      - id: ensure
+        name: Ensure GitHub Release exists for ${{ steps.meta.outputs.tag }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # On a `release: published` event the release already exists.
+          # On a bare tag push we create a draft-less release so the upload step has a target.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists."
+          else
+            echo "Creating release $TAG from tag push…"
+            gh release create "$TAG" \
+              --title "Cortex $TAG" \
+              --notes "Release $TAG. See RELEASE-NOTES.md (attached) for the full notes." \
+              --verify-tag
+          fi
+          REL_JSON=$(gh release view "$TAG" --json id,uploadUrl)
+          echo "release_id=$(echo "$REL_JSON" | jq -r .id)" >> "$GITHUB_OUTPUT"
+          echo "upload_url=$(echo "$REL_JSON" | jq -r .uploadUrl)" >> "$GITHUB_OUTPUT"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Build the public webapp image and push to GHCR
+  # ─────────────────────────────────────────────────────────────────────────
+  build-image:
+    name: Build & push cortex-webapp → GHCR
+    needs: resolve
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tags.outputs.image_tag }}
+      image_digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: tags
+        name: Compute image tags
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.resolve.outputs.tag }}"
+          # Strip leading v if present for SemVer-style tag, keep both for compat.
+          SEMVER="${TAG#v}"
+          {
+            echo "image_tag=${{ env.GHCR_IMAGE }}:${TAG}"
+            echo "image_tag_semver=${{ env.GHCR_IMAGE }}:${SEMVER}"
+            echo "image_tag_latest=${{ env.GHCR_IMAGE }}:latest"
+          } >> "$GITHUB_OUTPUT"
+
+      - id: push
+        name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: gcp/Dockerfile.webapp
+          push: true
+          tags: |
+            ${{ steps.tags.outputs.image_tag }}
+            ${{ steps.tags.outputs.image_tag_semver }}
+            ${{ steps.tags.outputs.image_tag_latest }}
+          cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache,mode=max
+          labels: |
+            org.opencontainers.image.title=Cortex (webapp)
+            org.opencontainers.image.description=Multimodal brain-response analysis (TRIBE v2 + Gemma 4) — Alexios Bluff Mara LLC × Illinois State University
+            org.opencontainers.image.source=https://github.com/AlexiosBluffMara/cortex
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.version=${{ needs.resolve.outputs.tag }}
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Generate release assets (bootstrap scripts + notes) and upload them
+  # ─────────────────────────────────────────────────────────────────────────
+  publish-assets:
+    name: Publish bootstrap scripts + release notes
+    needs: [resolve, build-image]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stage release assets
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
+          IMAGE_TAG: ${{ needs.build-image.outputs.image_tag }}
+          IMAGE_DIGEST: ${{ needs.build-image.outputs.image_digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist-release
+
+          # Source-of-truth bootstrap scripts live in scripts/. We rewrite the
+          # default tag inside the bash script to match this release so users
+          # who download the asset get a pinned image by default.
+          sed "s|__CORTEX_DEFAULT_TAG__|${TAG}|g" scripts/bootstrap-cortex.sh \
+            > dist-release/bootstrap-cortex.sh
+          chmod +x dist-release/bootstrap-cortex.sh
+
+          sed "s|__CORTEX_DEFAULT_TAG__|${TAG}|g" scripts/bootstrap-cortex.ps1 \
+            > dist-release/bootstrap-cortex.ps1
+
+          # Build RELEASE-NOTES.md from the template, substituting the tag/digest.
+          {
+            echo "# Cortex ${TAG}"
+            echo
+            echo "Multimodal brain-response analysis (TRIBE v2 + Gemma 4)."
+            echo
+            echo "Research conducted by **Alexios Bluff Mara LLC (dba Red Team Kitchen)** in association with **Illinois State University**, Bloomington–Normal, IL."
+            echo
+            echo "Brain Cinema project page: <https://alexiosbluffmara.github.io/cortex/>"
+            echo
+            echo "---"
+            echo
+            echo "## What you get"
+            echo
+            echo "- A public Docker image on GHCR (no GCP auth required)."
+            echo "- A bootstrap script for Linux / macOS / Windows-Git-Bash / WSL."
+            echo "- A PowerShell variant for Windows users without a bash shell."
+            echo
+            echo "Cortex itself is Apache-2.0. The model weights it pulls (TRIBE v2 from Meta, Gemma 4 from Google) carry their own upstream licenses and are **not** redistributed inside the image — the bootstrap script downloads them on first run."
+            echo
+            echo "## Image"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Image | \`${IMAGE_TAG}\` |"
+            echo "| Also tagged | \`${{ env.GHCR_IMAGE }}:latest\` |"
+            echo "| Digest | \`${IMAGE_DIGEST}\` |"
+            echo "| Registry | GHCR (public, anonymous pull OK) |"
+            echo "| License | Apache-2.0 (code), upstream licenses (weights) |"
+            echo
+            echo "Pull directly:"
+            echo
+            echo "\`\`\`bash"
+            echo "docker pull ${IMAGE_TAG}"
+            echo "\`\`\`"
+            echo
+            echo "## Quick install (≈6 min to first scan)"
+            echo
+            echo "**Linux / macOS / Git Bash / WSL:**"
+            echo
+            echo "\`\`\`bash"
+            echo "curl -fsSL https://github.com/AlexiosBluffMara/cortex/releases/download/${TAG}/bootstrap-cortex.sh -o bootstrap-cortex.sh"
+            echo "chmod +x bootstrap-cortex.sh"
+            echo "export HF_TOKEN=hf_xxx   # required to fetch TRIBE v2 (Meta, CC-BY-NC 4.0)"
+            echo "./bootstrap-cortex.sh"
+            echo "\`\`\`"
+            echo
+            echo "**Windows PowerShell:**"
+            echo
+            echo "\`\`\`powershell"
+            echo "Invoke-WebRequest -Uri https://github.com/AlexiosBluffMara/cortex/releases/download/${TAG}/bootstrap-cortex.ps1 -OutFile bootstrap-cortex.ps1"
+            echo "\$env:HF_TOKEN = 'hf_xxx'"
+            echo ".\\bootstrap-cortex.ps1"
+            echo "\`\`\`"
+            echo
+            echo "## Hardware tier table"
+            echo
+            echo "RTX 5090 (32 GB) is the **baseline**, not the ceiling. Anything bigger runs both models resident with no swap."
+            echo
+            echo "| Tier | GPU example | VRAM | Mode | Notes |"
+            echo "| --- | --- | --- | --- | --- |"
+            echo "| Minimum | RTX 4090 / 5080 | 16–24 GB | **Unsupported** | bootstrap exits with a clear error |"
+            echo "| Baseline | **RTX 5090** | 32 GB | swap | TRIBE (~22 GB) ↔ Gemma 4 E4B (~10 GB) sequential, ~10 s swap |"
+            echo "| Workstation | RTX 6000 Ada / L40S | 48 GB | both-resident | both models loaded; no swap |"
+            echo "| Datacenter | A100 40 GB | 40 GB | both-resident | tight fit, single-batch |"
+            echo "| Datacenter | A100 80 GB / H100 | 80 GB | both-resident | full multi-batch + Gemma 4 26B |"
+            echo "| HPC | ACCESS-CI A100 / H100 nodes | 80 GB | both-resident | shared-filesystem cache supported |"
+            echo
+            echo "## Offline / air-gapped bootstrap"
+            echo
+            echo "The bootstrap script honors three env vars for offline operation:"
+            echo
+            echo "- \`CORTEX_OFFLINE=1\` — skip every network pull. Image, weights, and Ollama models must already be present locally."
+            echo "- \`HF_HUB_OFFLINE=1\` — passed through to the HuggingFace SDK; uses the existing \`~/.cortex/cache/tribev2/\` cache. The script warns if the cache is empty."
+            echo "- \`CORTEX_CACHE_DIR=/scratch/cortex\` — relocate the cache (default \`~/.cortex/cache\`). Useful on HPC nodes where \`\$HOME\` is small."
+            echo
+            echo "Recommended air-gapped procedure:"
+            echo
+            echo "1. On a connected workstation, run the bootstrap once with \`CORTEX_OFFLINE=0\` to populate \`~/.cortex/cache/\`."
+            echo "2. Save the image: \`docker save ${IMAGE_TAG} | gzip > cortex-webapp-${TAG}.tar.gz\`"
+            echo "3. Copy the cache dir + the tarball to the air-gapped host."
+            echo "4. \`docker load < cortex-webapp-${TAG}.tar.gz\` then run with \`CORTEX_OFFLINE=1\`."
+            echo
+            echo "## License + attribution"
+            echo
+            echo "- Cortex code: Apache-2.0."
+            echo "- TRIBE v2 weights: CC-BY-NC 4.0 (Meta) — non-commercial use only. See <https://huggingface.co/facebook/tribe-v2>."
+            echo "- Gemma 4: Gemma Terms of Use (Google). *Gemma is a trademark of Google LLC.*"
+            echo "- Cortex is a project of **Alexios Bluff Mara LLC (dba Red Team Kitchen)**."
+            echo "- Research conducted in association with **Illinois State University**."
+            echo
+          } > dist-release/RELEASE-NOTES.md
+
+          ls -la dist-release/
+
+      - name: Upload assets to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" \
+            dist-release/bootstrap-cortex.sh \
+            dist-release/bootstrap-cortex.ps1 \
+            dist-release/RELEASE-NOTES.md \
+            --clobber
+          echo "Uploaded 3 assets to release $TAG."

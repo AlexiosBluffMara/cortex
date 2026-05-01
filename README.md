@@ -13,6 +13,31 @@ Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma
 
 ---
 
+## Quick install (release)
+
+If you just want to run Cortex, grab the latest release from <https://github.com/AlexiosBluffMara/cortex/releases> — one bootstrap script, one image pull, ~6 min to first scan.
+
+```bash
+# Linux / macOS / Git Bash / WSL
+curl -fsSL https://github.com/AlexiosBluffMara/cortex/releases/latest/download/bootstrap-cortex.sh -o bootstrap-cortex.sh
+chmod +x bootstrap-cortex.sh
+export HF_TOKEN=hf_xxx   # required to fetch TRIBE v2 (Meta, CC-BY-NC 4.0)
+./bootstrap-cortex.sh
+```
+
+```powershell
+# Windows PowerShell
+Invoke-WebRequest -Uri https://github.com/AlexiosBluffMara/cortex/releases/latest/download/bootstrap-cortex.ps1 -OutFile bootstrap-cortex.ps1
+$env:HF_TOKEN = 'hf_xxx'
+.\bootstrap-cortex.ps1
+```
+
+The script auto-detects your GPU and picks the right execution mode (swap on a 32 GB RTX 5090, both-resident on ≥48 GB cards). Air-gapped operators: see `CORTEX_OFFLINE=1` in the release notes.
+
+If you want to **develop on Cortex** instead, jump to the [Quickstart](#quickstart) section below.
+
+---
+
 ## The Brain Cinema — how Cortex works
 
 Picture a movie theater. Your brain is the audience. Every seat in that theater corresponds to one tiny patch of your brain's outer surface — the cortex. Cortex (the tool) is the camera system and the film critic rolled into one.
