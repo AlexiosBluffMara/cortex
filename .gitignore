@@ -81,6 +81,9 @@ data/*.log
 data/*.jsonl
 data/*.md
 data/cortex_train*.jsonl
+data/*.db
+data/*.db-shm
+data/*.db-wal
 outputs/
 !outputs/.gitkeep
 logs/
