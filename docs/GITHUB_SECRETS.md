@@ -76,6 +76,33 @@ Mercury's `.env` (API keys, NOUS_API_KEY, etc.) lives on the host at `~/.hermes/
 
 ---
 
+## One-time Firebase Hosting bootstrap (manual)
+
+The deploy pipeline tries to attach Firebase to the `abm-isu` GCP project
+automatically (`firebase projects:addfirebase`), but that command fails in
+CI because attaching Firebase requires the user to accept Firebase ToS,
+which can only be done interactively in the Firebase Console.
+
+**One-time fix** — visit
+[console.firebase.google.com](https://console.firebase.google.com/),
+click **Add project**, choose **abm-isu** from the existing GCP project list,
+accept the ToS, and finish the wizard. After that, the deploy pipeline's
+`Ensure Firebase project link + Hosting site` step succeeds idempotently
+on every subsequent run.
+
+Alternative: the user can also run from a local shell with gcloud auth:
+
+```bash
+firebase login
+firebase projects:addfirebase abm-isu
+firebase hosting:sites:create abm-isu --project abm-isu
+```
+
+Once the site exists, `firebase deploy --only hosting --project abm-isu`
+in CI just works.
+
+---
+
 ## Secret rotation checklist
 
 - `hf-token` → rotate at HuggingFace when a team member leaves
