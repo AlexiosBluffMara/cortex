@@ -385,7 +385,7 @@ async def list_scans(limit: int = 50):
             k: d[k] for k in [
                 "id", "status", "status_message", "filename", "peak_t", "tr_seconds",
                 "thumbnail_url", "file_url", "created_at", "narrations", "n_vertices",
-                "cost_mode", "cost_estimate_usd", "submitted_from_country",
+                "top_rois", "cost_mode", "cost_estimate_usd", "submitted_from_country",
             ] if k in d
         })
     return {"scans": results}
@@ -399,22 +399,30 @@ async def get_scan(scan_id: str):
     d = doc.to_dict()
     d["id"] = scan_id
 
-    if d.get("status") == "processing" and d.get("local_scan_id"):
+    _needs_local_fetch = (
+        (d.get("status") == "processing") or
+        (d.get("status") == "complete" and d.get("local_scan_id") and
+         not d.get("top_rois") and not d.get("thumbnail_url"))
+    )
+    if _needs_local_fetch and d.get("local_scan_id"):
         try:
             async with httpx.AsyncClient(timeout=5) as c:
                 r = await c.get(f"{TUNNEL_URL}/api/scan/{d['local_scan_id']}")
                 if r.status_code == 200:
                     local = r.json()
                     for k in ["status", "peak_t", "n_t", "n_vertices", "narrations",
-                               "tr_seconds", "bold_url", "thumbnail_url"]:
-                        if k in local:
+                               "tr_seconds", "bold_url", "thumbnail_url", "top_rois"]:
+                        if k in local and local[k] is not None:
                             d[k] = local[k]
-                    if local.get("status") == "complete":
-                        await db.collection("scans").document(scan_id).update({
+                    if local.get("status") in ("complete", "done"):
+                        update = {
                             k: local[k] for k in
-                            ["status", "peak_t", "n_t", "narrations", "tr_seconds"]
-                            if k in local
-                        })
+                            ["status", "peak_t", "n_t", "narrations", "tr_seconds",
+                             "top_rois", "thumbnail_url"]
+                            if k in local and local[k] is not None
+                        }
+                        if update:
+                            await db.collection("scans").document(scan_id).update(update)
         except Exception:
             pass
     return d

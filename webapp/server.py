@@ -311,6 +311,7 @@ def create_app(
         tier: int = Form(default=1, ge=0, le=6),
         source: str = Form(default="webui"),
         narration_model: str = Form(default="local:gemma4:e4b"),
+        external_scan_id: str = Form(default=""),
     ) -> JSONResponse:
         if not file.filename:
             err = invalid_file_type("(no filename)", component="webapp")
@@ -371,7 +372,10 @@ def create_app(
             )
 
         # Fire-and-forget background task: run the brain scan, write result
-        asyncio.create_task(_run_scan_background(app, scan_id, str(target), tier, source, narration_model))
+        asyncio.create_task(_run_scan_background(
+            app, scan_id, str(target), tier, source, narration_model,
+            external_scan_id=external_scan_id or None,
+        ))
 
         await app.state.hub.broadcast(
             {"type": "scan_queued", "scan_id": scan_id, "filename": file.filename}
@@ -1148,9 +1152,11 @@ async def _push_to_gcp(
     scan_id: str,
     result: Any,
     narrations: dict[str, str],
-) -> None:
+    external_scan_id: str | None = None,
+) -> str | None:
+    """Push scan results to GCS + Firestore. Returns thumbnail_url if generated."""
     if not _GCP_AVAILABLE:
-        return
+        return None
     import io
     import os
 
@@ -1244,7 +1250,21 @@ async def _push_to_gcp(
 
         fs_client.collection("scans").document(scan_id).set(update, merge=True)
 
-    await loop.run_in_executor(None, _sync_push)
+        # If this scan was submitted via the public relay, also write back to
+        # the relay's Firestore doc so thumbnail_url + top_rois appear there.
+        if external_scan_id and external_scan_id != scan_id:
+            relay_update = {k: update[k] for k in
+                            ["status", "narrations", "top_rois", "peak_t", "tr_seconds",
+                             "thumbnail_url", "npy_url"]
+                            if k in update}
+            if relay_update:
+                fs_client.collection("scans").document(external_scan_id).set(
+                    relay_update, merge=True
+                )
+
+        return update.get("thumbnail_url")
+
+    return await loop.run_in_executor(None, _sync_push)
 
 
 async def _run_scan_background(
@@ -1254,6 +1274,7 @@ async def _run_scan_background(
     tier: int,
     source: str,
     narration_model: str = "local:gemma4:e4b",
+    external_scan_id: str | None = None,
 ) -> None:
     """Run a brain scan in the background and stream progress to WebSocket clients."""
     suffix = Path(media_path).suffix.lower()
@@ -1342,7 +1363,9 @@ async def _run_scan_background(
         log.info("[webapp] scan %s complete", scan_id)
 
         try:
-            await _push_to_gcp(scan_id, result, narrations)
+            thumb_url = await _push_to_gcp(scan_id, result, narrations, external_scan_id)
+            if thumb_url:
+                await registry.update(scan_id, thumbnail_url=thumb_url)
             log.info("[webapp] GCP push complete for %s", scan_id)
         except Exception as _gcp_exc:
             log.warning("[webapp] GCP push failed for %s: %s", scan_id, _gcp_exc)
