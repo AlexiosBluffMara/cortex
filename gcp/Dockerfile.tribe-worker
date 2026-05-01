@@ -61,7 +61,7 @@ RUN git clone --depth 1 https://github.com/facebookresearch/tribev2.git /opt/tri
 # Cortex deps — pinned exactly to pyproject.toml
 COPY pyproject.toml ./
 RUN pip install \
-        exca==0.5.22 neuralset==0.0.2 neuraltrain==0.0.2 \
+        "exca>=0.5.17" neuralset==0.0.2 neuraltrain==0.0.2 \
         x-transformers==1.27.20 einops==0.8.2 pyyaml==6.0.3 \
         transformers==5.5.4 huggingface_hub==1.11.0 safetensors==0.7.0 \
         tokenizers==0.22.2 soundfile==0.13.1 julius==0.2.7 \
