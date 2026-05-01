@@ -52,7 +52,7 @@ def main() -> int:
 
     # Mirror train_cortex.py import order: env → torch → unsloth → everything else.
     os.environ.setdefault("UNSLOTH_RETURN_LOGITS", "1")
-    import torch  # noqa: F401
+    import torch
     from unsloth import FastLanguageModel
     from unsloth.chat_templates import get_chat_template
 
@@ -81,7 +81,7 @@ def main() -> int:
     if not args.skip_merge:
         print(f"[finalize] merging to BF16 -> {merged_dir}")
         model.save_pretrained_merged(str(merged_dir), tokenizer)
-        print(f"[finalize] BF16 merge OK")
+        print("[finalize] BF16 merge OK")
 
     if not args.skip_gguf:
         print(f"[finalize] exporting GGUF ({args.gguf}) -> {gguf_dir}")

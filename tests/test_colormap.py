@@ -1,5 +1,4 @@
 """Tests for colormap math — no GPU required."""
-import math
 
 
 def z_to_rgb(z: float, z_scale: float = 1.0):
@@ -14,19 +13,19 @@ def z_to_rgb(z: float, z_scale: float = 1.0):
 
 
 def test_zero_z_returns_neutral():
-    r, g, b = z_to_rgb(0.0)
+    r, g, _b = z_to_rgb(0.0)
     assert abs(r - 1.0) < 0.01
     assert abs(g - 0.84) < 0.01
 
 
 def test_positive_z_goes_warm():
-    r, g, b = z_to_rgb(2.0)
+    r, _g, b = z_to_rgb(2.0)
     assert r > 0.9
     assert b < 0.5  # warm orange, low blue
 
 
 def test_negative_z_goes_cool():
-    r, g, b = z_to_rgb(-2.0)
+    r, _g, b = z_to_rgb(-2.0)
     assert r < 0.5  # cool blue, low red
     assert b > 0.8
 

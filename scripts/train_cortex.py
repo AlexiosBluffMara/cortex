@@ -33,9 +33,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from collections.abc import Sequence
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -342,16 +342,17 @@ def run(config: TrainConfig) -> dict[str, Any]:
     # Order: env var → torch → unsloth → transformers/trl/datasets.
     import os
     os.environ.setdefault("UNSLOTH_RETURN_LOGITS", "1")
-    import torch  # noqa: F401  (must precede unsloth)
+    import torch
+    from datasets import Dataset
+    from transformers import DataCollatorForSeq2Seq, TrainerCallback
+    from trl import SFTConfig, SFTTrainer
+
     # FastLanguageModel is the text-only path. The multimodal `FastModel`
     # expects an 'images' column even for text-only data, which fails our
     # ShareGPT-format dataset. Gemma 4 E4B's text-only fine-tune is the
     # right path for cortex-gemma-4-e4b.
     from unsloth import FastLanguageModel  # MUST come before transformers/trl
     from unsloth.chat_templates import get_chat_template
-    from datasets import Dataset
-    from transformers import DataCollatorForSeq2Seq, TrainerCallback
-    from trl import SFTConfig, SFTTrainer
 
     # Live metrics callback: writes per-step loss/lr/vram to a JSONL file the
     # supervisor can tail in real time. Failure to write is non-fatal — the

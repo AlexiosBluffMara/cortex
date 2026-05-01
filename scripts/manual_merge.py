@@ -51,8 +51,8 @@ def main() -> int:
     # Pure transformers + peft; do NOT import unsloth here.
     os.environ.setdefault("PYTHONUTF8", "1")
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import PeftModel
+    from transformers import AutoModelForCausalLM, AutoTokenizer
 
     print(f"[manual-merge] loading base {args.base_model} (BF16)")
     base = AutoModelForCausalLM.from_pretrained(

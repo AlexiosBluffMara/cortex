@@ -3,8 +3,19 @@
     "public": "gcp/public",
     "ignore": ["firebase.json", "**/.*"],
     "rewrites": [
-      {"source": "/api/**", "run": {"serviceId": "cortex-relay", "region": "us-central1"}},
-      {"source": "**", "destination": "/gallery.html"}
+      {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "cortex-relay",
+          "region": "us-central1"
+        }
+      }
+    ],
+    "headers": [
+      {
+        "source": "**/*.html",
+        "headers": [{"key": "Cache-Control", "value": "no-cache, no-store"}]
+      }
     ]
   }
 }

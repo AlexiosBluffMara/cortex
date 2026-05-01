@@ -1,6 +1,6 @@
 """Smoke-level e2e test: hit the running server."""
-import pytest
 import httpx
+import pytest
 
 BASE = "http://127.0.0.1:8765"
 

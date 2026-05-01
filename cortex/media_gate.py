@@ -10,7 +10,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import config, ollama_client, prompts
-from .gemma_vision import _probe_duration, extract_audio_segment, extract_keyframes, transcribe_audio
+from .gemma_vision import (
+    _probe_duration,
+    extract_audio_segment,
+    extract_keyframes,
+    transcribe_audio,
+)
 
 
 @dataclass
@@ -80,8 +85,9 @@ def _image_to_jpeg_b64(image_path: Path) -> str:
     if image_path.suffix.lower() in _NATIVE:
         return base64.b64encode(image_path.read_bytes()).decode()
     try:
-        from PIL import Image
         import io
+
+        from PIL import Image
         with Image.open(image_path) as img:
             buf = io.BytesIO()
             img.convert("RGB").save(buf, format="JPEG", quality=85)
@@ -95,7 +101,7 @@ def classify_image(image_path: Path) -> MediaDescription:
     try:
         images_b64 = [_image_to_jpeg_b64(image_path)]
     except OSError:
-        return MediaDescription(**{**DEFAULT.__dict__})
+        return MediaDescription(**DEFAULT.__dict__)
 
     user = "This is a still image (not a video clip). Classify and describe the stimulus."
     data = ollama_client.generate_json(

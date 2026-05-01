@@ -114,7 +114,8 @@ def main() -> int:
     # Mirror train_cortex import order: env -> torch -> unsloth -> rest.
     os.environ.setdefault("UNSLOTH_RETURN_LOGITS", "1")
     os.environ.setdefault("PYTHONUTF8", "1")
-    import torch  # noqa: F401
+    import torch
+
     # unsloth_zoo refuses to import until unsloth has loaded — so we import
     # unsloth first, THEN patch unsloth_zoo's saving_utils, THEN proceed.
     from unsloth import FastLanguageModel

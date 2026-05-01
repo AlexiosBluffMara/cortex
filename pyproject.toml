@@ -184,6 +184,7 @@ ignore = [
     "B904",      # raise...from — many existing call sites swallow chaining intentionally
     "B905",      # zip without strict= — not load-bearing in this codebase
     "RUF012",    # mutable class attrs (dataclass-friendly)
+    "RUF001",    # ambiguous unicode in string literals (we use × for resolution notation)
     "RUF002",    # ambiguous unicode in docstrings (we use × for resolution)
     "RUF003",    # ambiguous unicode in comments
     "SIM102",    # nested-if vs `and` — readability call, current style is fine
@@ -206,8 +207,10 @@ ignore = [
 "cortex/model_manager.py" = ["B007"]
 "cortex/gemma_vision.py" = ["E402"]
 "cortex/request_queue.py" = ["RUF006"]
-"webapp/server.py" = ["RUF006"]
+"webapp/server.py" = ["RUF006", "ASYNC240"]
 "gcp/cloud_run/inference_api.py" = ["RUF006"]
+"gcp/relay/main.py" = ["RUF006"]    # fire-and-forget asyncio.create_task is intentional
+"cortex/ascii_video.py" = ["F401"]   # PIL optional import in try/except block
 
 [tool.ruff.format]
 quote-style = "double"

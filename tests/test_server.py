@@ -1,9 +1,7 @@
 """Unit tests for the Cortex FastAPI server."""
 from __future__ import annotations
 
-import asyncio
 import io
-import sys
 import unittest.mock as mock
 from typing import Any
 
@@ -35,8 +33,12 @@ _STUB_MODULES = {
 }
 
 with mock.patch.dict("sys.modules", _STUB_MODULES):
-    from cortex.gpu_scheduler import GPUScheduler, GPUState, get_scheduler  # noqa: F401 — actually the mock
-    from cortex.request_queue import RequestQueue, RequestType, get_queue    # noqa: F401
+    from cortex.gpu_scheduler import (  # noqa: F401 — actually the mock
+        GPUScheduler,
+        GPUState,
+        get_scheduler,
+    )
+    from cortex.request_queue import RequestQueue, RequestType, get_queue  # noqa: F401
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +73,7 @@ class FakeQueue:
 def app():
     with mock.patch.dict("sys.modules", _STUB_MODULES):
         import importlib
+
         import webapp.server as _srv
         importlib.reload(_srv)
         _app = _srv.create_app(

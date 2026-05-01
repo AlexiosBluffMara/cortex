@@ -177,8 +177,9 @@ def main() -> int:
     # difference between this diagnostic and production code.
     import sys as _sys
     _sys.path.insert(0, ".")
-    from scripts.train_cortex import load_sharegpt_jsonl, to_gemma_chat_format
     from pathlib import Path as _Path
+
+    from scripts.train_cortex import load_sharegpt_jsonl, to_gemma_chat_format
 
     real_path = _Path("data/cortex_train.jsonl")
     examples = load_sharegpt_jsonl(real_path)[:50]

@@ -17,9 +17,9 @@ Or from Python:
     render_bold_explainer(bold_npy="scans/abc123.npy", peak_t=11)
 """
 from __future__ import annotations
+
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -60,7 +60,6 @@ def bold_to_network_traces(
     If bold has 20484 vertices, downsample to 400 Schaefer regions first.
     Returns dict {network_key: ndarray(T,)}.
     """
-    T = bold.shape[0]
     n_v = bold.shape[1]
 
     # Schaefer-400 → Yeo-7 assignment (simplified: divide 400 ROIs into 7 groups)
@@ -375,7 +374,7 @@ def render_bold_explainer(
 
     try:
         bold = np.load(bold_npy)
-    except Exception as e:
+    except Exception:
         return None
 
     # Write Manim script to temp location

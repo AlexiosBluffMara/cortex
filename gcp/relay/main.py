@@ -11,20 +11,32 @@ Fallback when 5090 is unreachable:
   - Narration: Gemini 3.1 Flash API (set GEMINI_API_KEY env var to enable)
 """
 from __future__ import annotations
-import asyncio, os, uuid, logging
+
+import asyncio
+import logging
+import os
+import uuid
 from pathlib import Path
-from typing import Optional
 
 import httpx
 from cachetools import TTLCache
-from fastapi import FastAPI, File, Form, Request, UploadFile, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import (
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from google.cloud import firestore, storage
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 log = logging.getLogger("cortex-relay")
 
@@ -37,9 +49,9 @@ MAX_MB       = 50
 TUNNEL_TIMEOUT = 10
 
 # Optional comma-separated IP blocklist — set in Cloud Run env vars without redeploy
-_IP_BLOCKLIST: set[str] = set(
+_IP_BLOCKLIST: set[str] = {
     ip.strip() for ip in os.environ.get("IP_BLOCKLIST", "").split(",") if ip.strip()
-)
+}
 
 # ─── cost constants ───────────────────────────────────────────────────────────
 # Local (RTX 5090 ~300W × ~30s at $0.15/kWh) — electricity only, no compute cost
@@ -331,7 +343,8 @@ async def list_scans(limit: int = 50):
     ).limit(limit)
     results = []
     async for doc in docs.stream():
-        d = doc.to_dict(); d["id"] = doc.id
+        d = doc.to_dict()
+        d["id"] = doc.id
         results.append({
             k: d[k] for k in [
                 "id", "status", "status_message", "filename", "peak_t", "tr_seconds",
@@ -347,7 +360,8 @@ async def get_scan(scan_id: str):
     doc = await db.collection("scans").document(scan_id).get()
     if not doc.exists:
         return JSONResponse({"error": "not found"}, status_code=404)
-    d = doc.to_dict(); d["id"] = scan_id
+    d = doc.to_dict()
+    d["id"] = scan_id
 
     if d.get("status") == "processing" and d.get("local_scan_id"):
         try:
@@ -480,7 +494,8 @@ async def ws_scan(ws: WebSocket, scan_id: str):
         for _ in range(120):  # max 10 min polling
             doc = await db.collection("scans").document(scan_id).get()
             if doc.exists:
-                d = doc.to_dict(); d["id"] = scan_id
+                d = doc.to_dict()
+                d["id"] = scan_id
                 await ws.send_json(d)
                 if d.get("status") in ("complete", "failed"):
                     break

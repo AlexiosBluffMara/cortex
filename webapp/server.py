@@ -28,7 +28,8 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from google.cloud import firestore as _firestore, storage as _gcs
+    from google.cloud import firestore as _firestore
+    from google.cloud import storage as _gcs
     _GCP_AVAILABLE = True
 except ImportError:
     _GCP_AVAILABLE = False
@@ -38,25 +39,27 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Response,
     UploadFile,
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from cortex import media_gate as _media_gate
+from cortex import prompts as _prompts
+from cortex import tiers as _tiers
+from cortex.analysis import analyse
 from cortex.errors import (
     CortexError,
     ErrorCode,
     file_too_large,
     invalid_file_type,
 )
-from cortex.analysis import analyse
 from cortex.gpu_scheduler import GPUScheduler, GPUState, get_scheduler
 from cortex.logger import log
-from cortex import media_gate as _media_gate, prompts as _prompts, tiers as _tiers
 from cortex.request_queue import RequestQueue, RequestType, get_queue
 
 # ---------------------------------------------------------------------------
@@ -530,7 +533,7 @@ def create_app(
         try:
             import numpy as _np
             arr = _np.load(npy, mmap_mode="r")
-        except Exception as exc:                                    # noqa: BLE001
+        except Exception as exc:
             raise HTTPException(status_code=500, detail=f"npy load failed: {exc}") from exc
 
         T_full = arr.shape[0]
@@ -880,7 +883,7 @@ async def _generate_manim_video(
             )
             if out:
                 log.info("[webapp] manim %s generated for %s → %s", scene, scan_id, out)
-    except Exception as _e:                                         # noqa: BLE001
+    except Exception as _e:
         log.debug("[webapp] manim generation failed for %s: %s", scan_id, _e)
 
 
@@ -904,7 +907,7 @@ async def _generate_ascii_video(
             log.info("[webapp] ascii-video generated for %s → %s", scan_id, out)
         else:
             log.debug("[webapp] ascii-video skipped for %s (no output)", scan_id)
-    except Exception as _e:                                         # noqa: BLE001
+    except Exception as _e:
         log.debug("[webapp] ascii-video generation failed for %s: %s", scan_id, _e)
 
 
@@ -915,7 +918,9 @@ async def _push_to_gcp(
 ) -> None:
     if not _GCP_AVAILABLE:
         return
-    import os, io
+    import io
+    import os
+
     import numpy as _np
 
     bucket_name = os.environ.get("GCS_BUCKET", "cortex-public-scans")
@@ -1061,7 +1066,7 @@ async def _run_scan_background(
                 asyncio.create_task(_generate_manim_video(
                     scan_id, getattr(result, "peak_t", None)
                 ))
-        except Exception as _exc:                                  # noqa: BLE001
+        except Exception as _exc:
             log.warning("[webapp] preds persist failed for %s: %s", scan_id, _exc)
 
         # Build full brain context so Gemma gets real data, not a generic prompt.

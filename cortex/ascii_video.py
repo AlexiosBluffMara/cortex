@@ -15,13 +15,9 @@ Colormap (ISU-branded diverging):
 Skill-doc source: Nous Research Hermes Agent ascii-video skill (April 2026)
 """
 from __future__ import annotations
-import io
-import os
-import math
+
 import subprocess
-import sys
 from pathlib import Path
-from typing import Sequence
 
 import numpy as np
 
@@ -146,7 +142,7 @@ def _render_with_pil(
     font_w: int, font_h: int,
     cols: int, rows: int,
 ) -> None:
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
 
     img  = Image.fromarray(canvas)
     draw = ImageDraw.Draw(img)
@@ -286,7 +282,7 @@ def render_bold_ascii_video(
 
     # Frame order: start at peak if provided, then cycle through all frames
     if peak_t is not None:
-        order = list(range(peak_t, T)) + list(range(0, peak_t))
+        order = list(range(peak_t, T)) + list(range(peak_t))
     else:
         order = list(range(T))
 
