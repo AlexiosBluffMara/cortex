@@ -191,6 +191,14 @@ Cortex is a dual submission:
 
 ---
 
+## Run your own copy
+
+Run `bash scripts/replicate.sh` to spin up your own GCP project with the full Cortex infrastructure stack — APIs, Workload Identity Federation for GitHub Actions, Artifact Registry, Secret Manager, GCS bucket, Firestore, Firebase Hosting, and the GitHub Secrets the deploy workflow reads. See [`docs/REPLICATE.md`](docs/REPLICATE.md) for prerequisites, the manual steps the script can't automate (Firebase ToS, Cloudflare Tunnel cert), and a teardown script.
+
+Tested on macOS, Linux, and Windows (Git Bash). A PowerShell variant `scripts/replicate.ps1` is provided for Windows users without WSL. Free tier covers most workloads — Cloud Run scales to zero between requests.
+
+---
+
 ## License
 
 Code: MIT. TRIBE v2 model weights: CC-BY-NC 4.0 (Meta — non-commercial use only). Gemma 4: Gemma Terms of Use (Google). *Gemma is a trademark of Google LLC.*
