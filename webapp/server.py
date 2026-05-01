@@ -251,6 +251,56 @@ def create_app(
             "vram": vram,
         }
 
+    @app.get("/api/gpu/telemetry")
+    async def gpu_telemetry() -> dict[str, Any]:
+        """Live nvidia-smi telemetry for the Twitch / OBS overlay at /specs.html.
+
+        Returns: temp_c, power_w, clock_mhz, mem_clock_mhz, fan_pct, util_gpu_pct.
+        Falls back to {} when nvidia-smi is unavailable (e.g. CPU-only host).
+        """
+        import shutil
+        import subprocess
+
+        nvsmi = shutil.which("nvidia-smi")
+        if not nvsmi:
+            return {}
+
+        try:
+            out = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: subprocess.run(
+                    [
+                        nvsmi,
+                        "--query-gpu="
+                        "temperature.gpu,power.draw,clocks.gr,clocks.mem,fan.speed,utilization.gpu",
+                        "--format=csv,noheader,nounits",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=2,
+                ),
+            )
+            line = (out.stdout or "").strip().splitlines()[0]
+            parts = [p.strip() for p in line.split(",")]
+
+            def _f(s: str) -> float | None:
+                try:
+                    return float(s)
+                except (ValueError, TypeError):
+                    return None
+
+            return {
+                "temp_c":        _f(parts[0]),
+                "power_w":       _f(parts[1]),
+                "clock_mhz":     _f(parts[2]),
+                "mem_clock_mhz": _f(parts[3]),
+                "fan_pct":       _f(parts[4]),
+                "util_gpu_pct":  _f(parts[5]),
+            }
+        except Exception as exc:
+            log.debug("[webapp] nvidia-smi telemetry failed: %s", exc)
+            return {}
+
     # -----------------------------------------------------------------------
     # Scan submission
     # -----------------------------------------------------------------------

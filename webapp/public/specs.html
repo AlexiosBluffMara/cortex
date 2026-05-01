@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RTK · Powerstation Specs</title>
+<meta name="description" content="Live hardware spec overlay — Alexios Bluff Mara × Illinois State University research powerstation">
+
+<!-- ISU brand fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=PT+Serif:wght@700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  /*
+   * Twitch / OBS browser-source overlay. Designed to be loaded as a 1280×720
+   * browser source. Background is transparent so it can sit over a stream;
+   * use ?bg=solid query param for a solid card on a fixed scene.
+   */
+  :root {
+    --cardinal: #CC0000;
+    --cardinal-bright: #ee2d3f;
+    --gold: #F6A917;
+    --blue: #56758f;
+    --bg: rgba(10, 11, 14, 0.92);
+    --bg-solid: #0a0b0e;
+    --surface: rgba(20, 21, 28, 0.85);
+    --border: rgba(204, 0, 0, 0.20);
+    --border-strong: rgba(238, 45, 63, 0.45);
+    --text: #f0f2f6;
+    --muted: #8b8d96;
+    --good: #4ad596;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: transparent;
+    color: var(--text);
+    font-family: "Open Sans", system-ui, sans-serif;
+    line-height: 1.5;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  body.solid { background: var(--bg-solid); }
+
+  .card {
+    position: absolute;
+    top: 16px; left: 16px; right: 16px;
+    max-width: 1248px; margin: 0 auto;
+    background: var(--bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-strong);
+    border-radius: 16px;
+    padding: 18px 24px 16px;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.55);
+  }
+
+  /* Collab strip */
+  .collab {
+    display: flex; align-items: baseline; gap: 12px;
+    font-family: "PT Serif", serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+  .collab .lhs { color: var(--text); }
+  .collab .x  { color: var(--cardinal-bright); font-family: "JetBrains Mono", monospace; }
+  .collab .rhs { color: var(--text); }
+  .collab .meta {
+    margin-left: auto;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.7rem;
+    text-transform: none;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+
+  /* Title strip */
+  h1 {
+    font-family: "PT Serif", serif;
+    font-size: 1.55rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    margin-bottom: 14px;
+  }
+  h1 em {
+    font-style: italic;
+    color: var(--gold);
+  }
+
+  /* 6-column grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+  }
+  .cell {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    min-height: 76px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .cell.span-2 { grid-column: span 2; }
+  .cell .label {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.10em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .cell .value {
+    font-family: "PT Serif", serif;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text);
+    line-height: 1.15;
+  }
+  .cell .sub {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.74rem;
+    color: var(--gold);
+    margin-top: 2px;
+  }
+  .cell.cardinal { border-color: rgba(204,0,0,0.55); }
+  .cell.cardinal .value { color: var(--cardinal-bright); }
+  .cell.gold { border-color: rgba(246,169,23,0.45); }
+  .cell.gold .value { color: var(--gold); }
+
+  /* Live state row */
+  .live {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .live .cell {
+    min-height: 60px;
+    padding: 8px 11px;
+  }
+  .live .cell .value {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 1.05rem;
+    color: var(--gold);
+  }
+  .live .cell .label {
+    font-size: 0.58rem;
+  }
+
+  /* Status pill */
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(74, 213, 150, 0.14);
+    border: 1px solid var(--good);
+    color: var(--good);
+    border-radius: 99px;
+    padding: 3px 10px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+  }
+  .status-pill.warn { background: rgba(246,169,23,0.14); border-color: var(--gold); color: var(--gold); }
+  .status-pill.err  { background: rgba(204,0,0,0.18); border-color: var(--cardinal); color: var(--cardinal-bright); }
+  .status-pill .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: currentColor;
+    animation: pulse 1.6s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50%     { opacity: 0.45; }
+  }
+
+  /* Compact mode (?compact=1) — for smaller OBS overlays */
+  body.compact .grid { grid-template-columns: repeat(4, 1fr); }
+  body.compact .live { grid-template-columns: repeat(4, 1fr); }
+  body.compact h1 { font-size: 1.2rem; margin-bottom: 10px; }
+  body.compact .card { padding: 14px 18px 12px; }
+
+  /* No-frame mode (?frame=0) — drops the card chrome, transparent strip only */
+  body.noframe .card {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    padding: 14px 18px;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+
+  <div class="collab">
+    <span class="lhs">Alexios Bluff Mara</span>
+    <span class="x">×</span>
+    <span class="rhs">Illinois State University</span>
+    <span class="meta">RTK · Powerstation · v1</span>
+  </div>
+
+  <h1>The 5090 <em>Powerstation</em> · Live Hardware</h1>
+
+  <!-- Static specs grid -->
+  <div class="grid">
+    <div class="cell cardinal span-2">
+      <div class="label">GPU</div>
+      <div class="value">NVIDIA RTX 5090</div>
+      <div class="sub">32 GB GDDR7 · sm_120 (Blackwell) · 600 W TDP</div>
+    </div>
+    <div class="cell">
+      <div class="label">CPU</div>
+      <div class="value">Ryzen 7 9800X3D</div>
+      <div class="sub">8c / 16t · 4.7 GHz · 3D V-Cache</div>
+    </div>
+    <div class="cell">
+      <div class="label">RAM</div>
+      <div class="value">64 GB DDR5</div>
+      <div class="sub">2× 32 GB · 4800 MHz · ECC off</div>
+    </div>
+    <div class="cell">
+      <div class="label">Motherboard</div>
+      <div class="value">MSI X870E-P</div>
+      <div class="sub">PRO Series · AM5 · WiFi 7</div>
+    </div>
+    <div class="cell">
+      <div class="label">OS</div>
+      <div class="value">Windows 11 Pro</div>
+      <div class="sub">Build 26200 · WSL2 · CUDA 12.8</div>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:10px;">
+    <div class="cell gold span-2">
+      <div class="label">Storage · NVMe</div>
+      <div class="value">2× Samsung 990 EVO+ 4 TB</div>
+      <div class="sub">PCIe 5.0 · ~14 GB/s read · 8 TB total local</div>
+    </div>
+    <div class="cell">
+      <div class="label">Storage · External</div>
+      <div class="value">SanDisk Extreme</div>
+      <div class="sub">7.28 TB · USB 3.2 · model dataset</div>
+    </div>
+    <div class="cell">
+      <div class="label">Network</div>
+      <div class="value">2.5 GbE Realtek</div>
+      <div class="sub">Cloudflare Tunnel · Tailscale mesh</div>
+    </div>
+    <div class="cell">
+      <div class="label">Tunnel</div>
+      <div class="value">cfargotunnel</div>
+      <div class="sub">10c2805b · ord07/12/15 · QUIC</div>
+    </div>
+    <div class="cell">
+      <div class="label">Compute Tier</div>
+      <div class="value">5090 = baseline</div>
+      <div class="sub">→ scale: A100 · H100 · ACCESS HPC</div>
+    </div>
+  </div>
+
+  <!-- Live state -->
+  <div class="live" id="live">
+    <div class="cell">
+      <div class="label">Status</div>
+      <div class="value"><span id="status-pill" class="status-pill"><span class="dot"></span><span id="status-text">connecting</span></span></div>
+    </div>
+    <div class="cell">
+      <div class="label">VRAM Free</div>
+      <div class="value" id="vram-free">— GB</div>
+    </div>
+    <div class="cell">
+      <div class="label">VRAM Used</div>
+      <div class="value" id="vram-used">— GB</div>
+    </div>
+    <div class="cell">
+      <div class="label">Scheduler</div>
+      <div class="value" id="sched-state">—</div>
+    </div>
+    <div class="cell">
+      <div class="label">Temp</div>
+      <div class="value" id="temp">— °C</div>
+    </div>
+    <div class="cell">
+      <div class="label">Power</div>
+      <div class="value" id="power">— W</div>
+    </div>
+    <div class="cell">
+      <div class="label">Clock</div>
+      <div class="value" id="clock">— MHz</div>
+    </div>
+    <div class="cell">
+      <div class="label">Queue</div>
+      <div class="value" id="queue">—</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ── URL flags ────────────────────────────────────────────────────────────
+  const params = new URLSearchParams(location.search);
+  if (params.get("bg")      === "solid") document.body.classList.add("solid");
+  if (params.get("compact") === "1")     document.body.classList.add("compact");
+  if (params.get("frame")   === "0")     document.body.classList.add("noframe");
+
+  // ── Endpoints ────────────────────────────────────────────────────────────
+  // /api/utilization comes from cortex/webapp — gives scheduler state, queue,
+  // and VRAM. nvidia-smi telemetry (temp/power/clock) needs a side-channel
+  // metrics endpoint; if it's not available we just leave dashes.
+  const STATE_URL    = "/api/utilization";
+  const NVSMI_URL    = "/api/gpu/telemetry";   // optional; may 404
+  const REFRESH_MS   = 3000;
+
+  const $ = id => document.getElementById(id);
+
+  function setStatus(kind, text) {
+    const pill = $("status-pill");
+    pill.classList.remove("warn", "err");
+    if (kind === "warn") pill.classList.add("warn");
+    if (kind === "err")  pill.classList.add("err");
+    $("status-text").textContent = text;
+  }
+
+  async function refresh() {
+    try {
+      const r = await fetch(STATE_URL, { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      const vram = d.vram || {};
+      $("vram-free").textContent = (vram.free_gb ?? "—") + " GB";
+      $("vram-used").textContent = (vram.used_gb ?? "—") + " GB";
+      $("sched-state").textContent = d.scheduler_state || "idle";
+      $("queue").textContent       = (d.queue_depth ?? 0) + " / " + (d.max_queue ?? 8);
+      const accepting = d.accepting === true;
+      setStatus(accepting ? "ok" : "warn", accepting ? "5090 LIVE" : "BUSY");
+    } catch (e) {
+      setStatus("err", "OFFLINE");
+      $("vram-free").textContent = "—";
+      $("vram-used").textContent = "—";
+      $("sched-state").textContent = "—";
+      $("queue").textContent = "—";
+    }
+
+    // nvidia-smi telemetry (optional)
+    try {
+      const r = await fetch(NVSMI_URL, { cache: "no-store" });
+      if (r.ok) {
+        const t = await r.json();
+        $("temp").textContent  = (t.temp_c    ?? "—") + " °C";
+        $("power").textContent = (t.power_w   ?? "—") + " W";
+        $("clock").textContent = (t.clock_mhz ?? "—") + " MHz";
+      }
+    } catch (e) { /* silent — telemetry endpoint is optional */ }
+  }
+
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>
