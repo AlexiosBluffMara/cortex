@@ -182,6 +182,12 @@ async def sitemap():
 async def health():
     return {"ok": True, "tunnel": TUNNEL_URL, "5090_online": await _5090_alive()}
 
+@app.get("/api/status")
+async def status():
+    """Alias for /api/health — kept for backwards-compat with older gallery clients."""
+    alive = await _5090_alive()
+    return {"ok": alive, "5090_online": alive, "gpu_online": alive, "tunnel": TUNNEL_URL}
+
 @app.get("/api/info")
 async def info():
     return {

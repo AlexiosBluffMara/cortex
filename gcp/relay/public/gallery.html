@@ -655,7 +655,7 @@
       GitHub
     </a>
     <span class="isu-dot">&#9679;</span>
-    <span class="footer-link" style="cursor:default">Iowa State University</span>
+    <span class="footer-link" style="cursor:default">Illinois State University</span>
   </div>
 </footer>
 
@@ -771,9 +771,9 @@
   const gpuBadge = document.getElementById('gpuBadge');
   async function checkGpu() {
     try {
-      const r = await fetch(`${API}/status`, { signal: AbortSignal.timeout(4000) });
+      const r = await fetch(`${API}/health`, { signal: AbortSignal.timeout(4000) });
       const d = await r.json();
-      const online = d.gpu_online === true || d.status === 'online';
+      const online = d['5090_online'] === true || d.ok === true;
       gpuBadge.classList.toggle('online', online);
       document.getElementById('gpuLabel').textContent = online ? 'RTX 5090 online' : 'RTX 5090 offline';
     } catch (_) {
