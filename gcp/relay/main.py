@@ -8,7 +8,7 @@ Open access — no auth required. Protection layers:
 
 Fallback when 5090 is unreachable:
   - Scan submission: marked 'queued_cloud'
-  - Narration: Gemini 3.1 Flash API (set GEMINI_API_KEY env var to enable)
+  - Narration: Gemini 3.1 Flash Lite (gemini-3.1-flash-lite-preview) — set GEMINI_API_KEY env var to enable
 """
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ TUNNEL_URL   = os.environ["TUNNEL_URL"]
 GCS_BUCKET   = os.environ["GCS_BUCKET"]
 GCP_PROJECT  = os.environ["GCP_PROJECT"]
 GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")
 MAX_MB       = 50
 TUNNEL_TIMEOUT = 10
 
