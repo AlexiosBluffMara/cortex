@@ -1144,9 +1144,10 @@ async function submitMediaFile(file, { btnEl, resetLabel } = {}) {
     _setNarrationText("narration-chris",  "Generating…", true);
 
     const fd = new FormData();
-    fd.append("file",   file);
-    fd.append("tier",   tierInput.value);
-    fd.append("source", "webui");
+    fd.append("file",            file);
+    fd.append("tier",            tierInput.value);
+    fd.append("source",          "webui");
+    fd.append("narration_model", window._selectedNarrationModel || "local:gemma4:e4b");
 
     try {
         const resp = await fetch("/api/scan", { method: "POST", body: fd });
@@ -1469,9 +1470,10 @@ textSubmitBtn?.addEventListener("click", async () => {
     _setNarrationText("narration-college", "Analyzing text stimulus…", true);
 
     const fd = new FormData();
-    fd.append("text",   text);
-    fd.append("tier",   tierInput.value);
-    fd.append("source", "webui");
+    fd.append("text",            text);
+    fd.append("tier",            tierInput.value);
+    fd.append("source",          "webui");
+    fd.append("narration_model", window._selectedNarrationModel || "local:gemma4:e4b");
 
     try {
         const resp = await fetch("/api/text-scan", { method: "POST", body: fd });

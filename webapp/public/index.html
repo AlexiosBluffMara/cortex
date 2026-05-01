@@ -829,7 +829,111 @@
                     <span class="tier-label">6 researcher</span>
                 </div>
                 <output id="tier-display">4</output>
+
+                <!-- Narration model selector -->
+                <p class="panel-title" style="margin-top:12px">Narration model</p>
+                <select id="narration-model-select" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;padding:6px 8px;cursor:pointer;">
+                    <optgroup label="── Local (free, RTX 5090) ──">
+                        <option value="local:gemma4:e4b" selected>Gemma 4 E4B · Local — $0.00 / scan</option>
+                        <option value="local:gemma4:26b">Gemma 4 26B · Local — $0.00 / scan</option>
+                    </optgroup>
+                    <optgroup label="── Google Gemini 3.1 (API free tier) ──">
+                        <option value="gemini:gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite — ~$0.00035 / scan</option>
+                        <option value="gemini:gemini-3.1-pro-preview">Gemini 3.1 Pro — ~$0.0056 / scan</option>
+                    </optgroup>
+                    <optgroup label="── OpenRouter · Free quota (1K req/day) ──">
+                        <option value="openrouter:google/gemma-4-26b-a4b-it:free">Gemma 4 26B MoE · free — $0.00</option>
+                        <option value="openrouter:google/gemma-4-31b-it:free">Gemma 4 31B · free — $0.00</option>
+                    </optgroup>
+                    <optgroup label="── OpenRouter · Paid ──">
+                        <option value="openrouter:google/gemma-4-26b-a4b-it">Gemma 4 26B MoE</option>
+                        <option value="openrouter:moonshotai/kimi-k2.5-turbo">Kimi K2.5 Turbo</option>
+                        <option value="openrouter:deepseek/deepseek-chat-v3-0324">DeepSeek V3</option>
+                        <option value="openrouter:qwen/qwen3-235b-a22b">Qwen 3 235B A22B</option>
+                        <option value="openrouter:openai/gpt-4.1-mini">GPT-4.1 mini</option>
+                        <option value="openrouter:anthropic/claude-haiku-4-5">Claude Haiku 4</option>
+                    </optgroup>
+                </select>
+
+                <!-- Real-time cost estimator -->
+                <div id="cost-estimate" style="margin-top:8px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:11px;line-height:1.7;color:var(--muted);">
+                    <div style="display:flex;justify-content:space-between;"><span>Model</span><span id="ce-model" style="color:var(--text);font-weight:600;text-align:right;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Gemma 4 E4B · Local</span></div>
+                    <div style="display:flex;justify-content:space-between;"><span>Narration cost</span><span id="ce-narration" style="color:var(--text);font-weight:600;">$0.00000</span></div>
+                    <div style="display:flex;justify-content:space-between;"><span>TRIBE v2 electricity</span><span style="color:var(--text);font-weight:600;">$0.00006</span></div>
+                    <div style="display:flex;justify-content:space-between;"><span>HW depreciation</span><span style="color:var(--text);font-weight:600;">$0.00080</span></div>
+                    <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:4px;padding-top:4px;"><span style="font-weight:700;color:var(--text);">Total / scan</span><span id="ce-total" style="color:var(--accent);font-weight:700;">$0.00086</span></div>
+                </div>
             </div>
+
+            <script>
+            (function() {
+                // Per-token cost in USD (input+output blended, ~8800 tokens per scan: 4×(~1200 in + 1000 out))
+                // 4 personas × ~2200 tokens each = 8800 total
+                const TOKENS = 8800;
+                const FIXED = 0.00006 + 0.00080; // electricity + depreciation
+                const RATES = {
+                    // local — free
+                    'local:gemma4:e4b':  0,
+                    'local:gemma4:26b':  0,
+                    // gemini — per-token blended $/tok
+                    'gemini:gemini-3.1-flash-lite-preview': 0.00000004,  // ~$0.04/1M
+                    'gemini:gemini-3.1-pro-preview':        0.00000064,  // ~$0.64/1M
+                    // openrouter free
+                    'openrouter:google/gemma-4-26b-a4b-it:free': 0,
+                    'openrouter:google/gemma-4-31b-it:free':      0,
+                    // openrouter paid ($/tok blended)
+                    'openrouter:google/gemma-4-26b-a4b-it':         0.00000020,
+                    'openrouter:moonshotai/kimi-k2.5-turbo':        0.00000100,
+                    'openrouter:deepseek/deepseek-chat-v3-0324':    0.00000027,
+                    'openrouter:qwen/qwen3-235b-a22b':              0.00000060,
+                    'openrouter:openai/gpt-4.1-mini':               0.00000040,
+                    'openrouter:anthropic/claude-haiku-4-5':        0.00000080,
+                };
+                const LABELS = {
+                    'local:gemma4:e4b':  'Gemma 4 E4B · Local',
+                    'local:gemma4:26b':  'Gemma 4 26B · Local',
+                    'gemini:gemini-3.1-flash-lite-preview': 'Gemini 3.1 Flash Lite',
+                    'gemini:gemini-3.1-pro-preview':        'Gemini 3.1 Pro',
+                    'openrouter:google/gemma-4-26b-a4b-it:free': 'Gemma 4 26B MoE · free',
+                    'openrouter:google/gemma-4-31b-it:free':      'Gemma 4 31B · free',
+                    'openrouter:google/gemma-4-26b-a4b-it':         'Gemma 4 26B MoE',
+                    'openrouter:moonshotai/kimi-k2.5-turbo':        'Kimi K2.5 Turbo',
+                    'openrouter:deepseek/deepseek-chat-v3-0324':    'DeepSeek V3',
+                    'openrouter:qwen/qwen3-235b-a22b':              'Qwen 3 235B A22B',
+                    'openrouter:openai/gpt-4.1-mini':               'GPT-4.1 mini',
+                    'openrouter:anthropic/claude-haiku-4-5':        'Claude Haiku 4',
+                };
+                function fmt(v) {
+                    if (v === 0) return '$0.00000';
+                    if (v < 0.001) return '$' + v.toFixed(5);
+                    return '$' + v.toFixed(4);
+                }
+                function updateEstimate() {
+                    const sel = document.getElementById('narration-model-select');
+                    const val = sel ? sel.value : 'local:gemma4:e4b';
+                    const rate = RATES[val] !== undefined ? RATES[val] : 0;
+                    const narration = rate * TOKENS;
+                    const total = narration + FIXED;
+                    const ceModel = document.getElementById('ce-model');
+                    const ceNarr  = document.getElementById('ce-narration');
+                    const ceTotal = document.getElementById('ce-total');
+                    if (ceModel) ceModel.textContent = LABELS[val] || val;
+                    if (ceNarr)  ceNarr.textContent  = fmt(narration);
+                    if (ceTotal) ceTotal.textContent = fmt(total);
+                    // also expose on window so main.js can read it
+                    window._selectedNarrationModel = val;
+                }
+                document.addEventListener('DOMContentLoaded', function() {
+                    const sel = document.getElementById('narration-model-select');
+                    if (sel) {
+                        sel.addEventListener('change', updateEstimate);
+                        updateEstimate();
+                    }
+                });
+                // run immediately too (for module scripts that load before DOMContentLoaded fires)
+                if (document.readyState !== 'loading') updateEstimate();
+            })();
+            </script>
 
         </aside>
 

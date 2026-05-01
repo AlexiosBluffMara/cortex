@@ -310,6 +310,7 @@ def create_app(
         file: UploadFile = File(...),
         tier: int = Form(default=1, ge=0, le=6),
         source: str = Form(default="webui"),
+        narration_model: str = Form(default="local:gemma4:e4b"),
     ) -> JSONResponse:
         if not file.filename:
             err = invalid_file_type("(no filename)", component="webapp")
@@ -355,6 +356,7 @@ def create_app(
                 "filename": file.filename,
                 "tier": tier,
                 "source": source,
+                "narration_model": narration_model,
                 "size_mb": round(size / (1024 * 1024), 2),
             },
         )
@@ -369,7 +371,7 @@ def create_app(
             )
 
         # Fire-and-forget background task: run the brain scan, write result
-        asyncio.create_task(_run_scan_background(app, scan_id, str(target), tier, source))
+        asyncio.create_task(_run_scan_background(app, scan_id, str(target), tier, source, narration_model))
 
         await app.state.hub.broadcast(
             {"type": "scan_queued", "scan_id": scan_id, "filename": file.filename}
@@ -670,6 +672,7 @@ def create_app(
         text: str = Form(...),
         tier: int = Form(default=1, ge=0, le=6),
         source: str = Form(default="webui"),
+        narration_model: str = Form(default="local:gemma4:e4b"),
     ) -> JSONResponse:
         if not text.strip():
             return JSONResponse({"error": "empty text"}, status_code=400)
@@ -682,11 +685,12 @@ def create_app(
                 "filename": "<text stimulus>",
                 "tier": tier,
                 "source": source,
+                "narration_model": narration_model,
                 "text": text.strip()[:1000],
             },
         )
         asyncio.create_task(
-            _run_text_scan_background(app, scan_id, text.strip()[:1000], tier, source)
+            _run_text_scan_background(app, scan_id, text.strip()[:1000], tier, source, narration_model)
         )
         await app.state.hub.broadcast(
             {"type": "scan_queued", "scan_id": scan_id, "filename": "<text stimulus>"}
@@ -831,12 +835,115 @@ def _extract_document_text(path: Path) -> str:
     return path.read_text(encoding='utf-8', errors='replace')[:4000]
 
 
+async def _narrate_with_model(
+    model: str,
+    prompt: str,
+    system: str,
+    tier: int,
+    num_predict: int,
+    temperature: float,
+    queue: "RequestQueue",
+    source: str,
+) -> str:
+    """Route a narration request to local Ollama, Gemini API, or OpenRouter."""
+    prefix = model.split(":")[0]
+
+    if prefix == "local":
+        return await queue.submit(
+            request_type=RequestType.NARRATE,
+            payload={
+                "prompt":      prompt,
+                "system":      system,
+                "tier":        tier,
+                "num_predict": num_predict,
+                "temperature": temperature,
+                "model":       model[len("local:"):],  # e.g. "gemma4:e4b"
+            },
+            priority=0 if source == "webui" else 5,
+            source=source,
+        )
+
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user",   "content": prompt},
+    ]
+
+    if prefix == "gemini":
+        import os
+        import httpx
+        gemini_model = model[len("gemini:"):]
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{gemini_model}:generateContent?key={api_key}"
+        )
+        body = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "systemInstruction": {"parts": [{"text": system}]},
+            "generationConfig": {"maxOutputTokens": num_predict, "temperature": temperature},
+        }
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(url, json=body)
+            resp.raise_for_status()
+            data = resp.json()
+        return data["candidates"][0]["content"]["parts"][0]["text"]
+
+    if prefix == "openrouter":
+        import os
+        import httpx
+        or_model = model[len("openrouter:"):]
+        api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        if not api_key:
+            # fall back: try reading from ~/.hermes/.env
+            env_path = Path.home() / ".hermes" / ".env"
+            if env_path.exists():
+                for line in env_path.read_text().splitlines():
+                    if line.startswith("OPENROUTER_API_KEY="):
+                        api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        break
+        body = {
+            "model": or_model,
+            "messages": messages,
+            "max_tokens": num_predict,
+            "temperature": temperature,
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "https://cortex.redteamkitchen.com",
+            "X-Title": "Cortex",
+        }
+        async with httpx.AsyncClient(timeout=90) as client:
+            resp = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                json=body,
+                headers=headers,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        return data["choices"][0]["message"]["content"]
+
+    # Unknown prefix — fall back to local queue
+    return await queue.submit(
+        request_type=RequestType.NARRATE,
+        payload={
+            "prompt":      prompt,
+            "system":      system,
+            "tier":        tier,
+            "num_predict": num_predict,
+            "temperature": temperature,
+        },
+        priority=0 if source == "webui" else 5,
+        source=source,
+    )
+
+
 async def _run_image_scan_background(
     app: FastAPI,
     scan_id: str,
     media_path: str,
     tier: int,
     source: str,
+    narration_model: str = "local:gemma4:e4b",
 ) -> None:
     """Image scan: Gemma vision describes the image, then Gemma narrates neural correlates."""
     queue: RequestQueue = app.state.queue
@@ -866,16 +973,14 @@ async def _run_image_scan_background(
 
         narrations: dict[str, str] = {}
         for persona_id, (tier_n, sys_prompt) in _prompts.PERSONA_CONFIGS.items():
-            narrations[persona_id] = await queue.submit(
-                request_type=RequestType.NARRATE,
-                payload={
-                    "prompt":      user_prompt,
-                    "system":      sys_prompt,
-                    "tier":        tier_n,
-                    "num_predict": _tiers._TIER_NUM_PREDICT[tier_n],
-                    "temperature": _tiers._TIER_TEMPERATURE[tier_n],
-                },
-                priority=0 if source == "webui" else 5,
+            narrations[persona_id] = await _narrate_with_model(
+                model=narration_model,
+                prompt=user_prompt,
+                system=sys_prompt,
+                tier=tier_n,
+                num_predict=_tiers._TIER_NUM_PREDICT[tier_n],
+                temperature=_tiers._TIER_TEMPERATURE[tier_n],
+                queue=queue,
                 source=source,
             )
 
@@ -897,8 +1002,9 @@ async def _run_document_scan_background(
     media_path: str,
     tier: int,
     source: str,
+    narration_model: str = "local:gemma4:e4b",
 ) -> None:
-    """Document scan: extract text, then Gemma narrates expected neural correlates."""
+    """Document scan: extract text, then narrates expected neural correlates."""
     queue: RequestQueue = app.state.queue
     registry: ScanRegistry = app.state.registry
     hub: WebSocketHub = app.state.hub
@@ -923,16 +1029,14 @@ async def _run_document_scan_background(
 
         narrations: dict[str, str] = {}
         for persona_id, (tier_n, sys_prompt) in _prompts.PERSONA_CONFIGS.items():
-            narrations[persona_id] = await queue.submit(
-                request_type=RequestType.NARRATE,
-                payload={
-                    "prompt":      user_prompt,
-                    "system":      sys_prompt,
-                    "tier":        tier_n,
-                    "num_predict": _tiers._TIER_NUM_PREDICT[tier_n],
-                    "temperature": _tiers._TIER_TEMPERATURE[tier_n],
-                },
-                priority=0 if source == "webui" else 5,
+            narrations[persona_id] = await _narrate_with_model(
+                model=narration_model,
+                prompt=user_prompt,
+                system=sys_prompt,
+                tier=tier_n,
+                num_predict=_tiers._TIER_NUM_PREDICT[tier_n],
+                temperature=_tiers._TIER_TEMPERATURE[tier_n],
+                queue=queue,
                 source=source,
             )
 
@@ -1149,13 +1253,14 @@ async def _run_scan_background(
     media_path: str,
     tier: int,
     source: str,
+    narration_model: str = "local:gemma4:e4b",
 ) -> None:
     """Run a brain scan in the background and stream progress to WebSocket clients."""
     suffix = Path(media_path).suffix.lower()
     if suffix in _IMAGE_EXTS:
-        return await _run_image_scan_background(app, scan_id, media_path, tier, source)
+        return await _run_image_scan_background(app, scan_id, media_path, tier, source, narration_model)
     if suffix in _DOCUMENT_EXTS:
-        return await _run_document_scan_background(app, scan_id, media_path, tier, source)
+        return await _run_document_scan_background(app, scan_id, media_path, tier, source, narration_model)
 
     queue: RequestQueue = app.state.queue
     registry: ScanRegistry = app.state.registry
@@ -1209,16 +1314,14 @@ async def _run_scan_background(
 
         narrations: dict[str, str] = {}
         for persona_id, (tier_n, sys_prompt) in _prompts.PERSONA_CONFIGS.items():
-            narrations[persona_id] = await queue.submit(
-                request_type=RequestType.NARRATE,
-                payload={
-                    "prompt":      user_prompt,
-                    "system":      sys_prompt,
-                    "tier":        tier_n,
-                    "num_predict": _tiers._TIER_NUM_PREDICT[tier_n],
-                    "temperature": _tiers._TIER_TEMPERATURE[tier_n],
-                },
-                priority=0 if source == "webui" else 5,
+            narrations[persona_id] = await _narrate_with_model(
+                model=narration_model,
+                prompt=user_prompt,
+                system=sys_prompt,
+                tier=tier_n,
+                num_predict=_tiers._TIER_NUM_PREDICT[tier_n],
+                temperature=_tiers._TIER_TEMPERATURE[tier_n],
+                queue=queue,
                 source=source,
             )
 
@@ -1267,6 +1370,7 @@ async def _run_text_scan_background(
     text: str,
     tier: int,
     source: str,
+    narration_model: str = "local:gemma4:e4b",
 ) -> None:
     queue: RequestQueue = app.state.queue
     registry: ScanRegistry = app.state.registry
@@ -1288,16 +1392,14 @@ async def _run_text_scan_background(
         user_prompt   = _prompts.TIER_USER_TEMPLATE.format(label="text stimulus", brain_context=brain_ctx)
         system_prompt = _prompts.ALL_TIER_SYSTEMS[max(0, min(6, tier))]
 
-        narration = await queue.submit(
-            request_type=RequestType.NARRATE,
-            payload={
-                "prompt":      user_prompt,
-                "system":      system_prompt,
-                "tier":        tier,
-                "num_predict": _tiers._TIER_NUM_PREDICT[tier],
-                "temperature": _tiers._TIER_TEMPERATURE[tier],
-            },
-            priority=0 if source == "webui" else 5,
+        narration = await _narrate_with_model(
+            model=narration_model,
+            prompt=user_prompt,
+            system=system_prompt,
+            tier=tier,
+            num_predict=_tiers._TIER_NUM_PREDICT[tier],
+            temperature=_tiers._TIER_TEMPERATURE[tier],
+            queue=queue,
             source=source,
         )
 
