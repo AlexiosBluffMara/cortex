@@ -824,7 +824,7 @@
   }
 
   function renderCard(scan) {
-    const href = `/scan.html?id=${scan.id}`;
+    const href = `${RELAY}/scan/${scan.id}?id=${scan.id}`;
     const thumb = scan.thumbnail_url
       ? `<img src="${scan.thumbnail_url}" alt="thumbnail" loading="lazy">`
       : `<div class="card-thumb-placeholder"><svg class="brain-icon" viewBox="0 0 24 24" fill="var(--text-dim)"><path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26C17.81 13.47 19 11.38 19 9c0-3.87-3.13-7-7-7z"/></svg></div>`;
@@ -998,7 +998,7 @@
           submitStatus.textContent = `${d.status || 'queued'} — ${scan_id}`;
           if (d.status === 'complete') {
             ws.close(); closeModal(); loadScans();
-            window.location.href = `/scan.html?id=${scan_id}&persona=${encodeURIComponent(persona)}`;
+            window.location.href = `${RELAY}/scan/${scan_id}?id=${scan_id}&persona=${encodeURIComponent(persona)}`;
           }
           if (d.status === 'failed') {
             ws.close();
@@ -1028,7 +1028,7 @@
         submitStatus.textContent = `${d.status} — ${scanId}`;
         if (d.status === 'complete') {
           clearInterval(iv); closeModal(); loadScans();
-          window.location.href = `/scan.html?id=${scanId}&persona=${encodeURIComponent(persona)}`;
+          window.location.href = `${RELAY}/scan/${scanId}?id=${scanId}&persona=${encodeURIComponent(persona)}`;
         }
         if (d.status === 'failed') {
           clearInterval(iv);

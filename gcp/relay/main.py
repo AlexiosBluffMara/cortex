@@ -138,6 +138,15 @@ async def root():
 async def gallery():
     return (_STATIC / "gallery.html").read_text()
 
+@app.get("/scan.html")
+async def scan_html_compat(id: str = "", persona: str = ""):
+    """Backwards-compat: /scan.html?id=X → /scan/X?id=X&persona=..."""
+    from fastapi.responses import RedirectResponse
+    if not id:
+        return RedirectResponse("/gallery")
+    qs = f"?id={id}" + (f"&persona={persona}" if persona else "")
+    return RedirectResponse(f"/scan/{id}{qs}", status_code=302)
+
 @app.get("/scan/{scan_id}", response_class=HTMLResponse)
 async def scan_page(scan_id: str):
     return (_STATIC / "scan.html").read_text()

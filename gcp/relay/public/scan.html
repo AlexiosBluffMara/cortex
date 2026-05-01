@@ -827,7 +827,12 @@
 
   /* ── Scan ID + persona from URL ── */
   const params = new URLSearchParams(location.search);
-  const scanId = params.get('id');
+  let scanId = params.get('id');
+  // Also accept /scan/{id} path form (relay serves scan.html at that route)
+  if (!scanId) {
+    const m = location.pathname.match(/\/scan\/([a-zA-Z0-9]+)/);
+    if (m) scanId = m[1];
+  }
   const urlPersona = params.get('persona');
 
   if (!scanId) {
