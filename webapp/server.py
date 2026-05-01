@@ -694,6 +694,35 @@ def create_app(
         return JSONResponse({"ok": True, "scan_id": scan_id, "status": "queued"}, status_code=202)
 
     # -----------------------------------------------------------------------
+    # TRIBE v2 fine-tune kickoff (called by training_trigger.py from the cloud)
+    # -----------------------------------------------------------------------
+
+    @app.post("/api/training/start")
+    async def start_training(payload: dict[str, Any]) -> JSONResponse:
+        scan_ids = list(payload.get("scan_ids", []))
+        if not scan_ids:
+            return JSONResponse({"error": "scan_ids required"}, status_code=400)
+        # Schedule it through the request queue so we don't collide with
+        # in-flight inference jobs on the GPU.
+        job_id = f"train-{uuid.uuid4().hex[:10]}"
+        log.info(
+            "[webapp] training/start job=%s scans=%d mode=%s",
+            job_id, len(scan_ids), payload.get("mode", "fmri-fine-tune"),
+        )
+
+        async def _kickoff() -> None:
+            from cortex.train_tribe import _run as run_train  # noqa: PLC0415
+
+            try:
+                run_train(scan_ids)
+            except Exception as exc:  # noqa: BLE001
+                log.exception("[webapp] training failed: %s", exc)
+
+        asyncio.create_task(_kickoff())
+        return JSONResponse({"ok": True, "job_id": job_id, "n_scans": len(scan_ids)},
+                            status_code=202)
+
+    # -----------------------------------------------------------------------
     # WebSocket
     # -----------------------------------------------------------------------
 

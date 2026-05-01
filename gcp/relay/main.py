@@ -13,6 +13,8 @@ Fallback when 5090 is unreachable:
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
+import hashlib
 import logging
 import os
 import uuid
@@ -34,6 +36,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from google.cloud import firestore, storage
+from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -47,6 +50,13 @@ GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-preview")
 MAX_MB       = 50
 TUNNEL_TIMEOUT = 10
+
+# fMRI uploads — separate CMEK-encrypted bucket, never the public scan bucket
+FMRI_BUCKET = os.environ.get("FMRI_BUCKET", "cortex-fmri-uploads")
+FMRI_REGION = os.environ.get("FMRI_REGION", "us-central1")
+FMRI_KEYRING = os.environ.get("FMRI_KEYRING", "cortex-fmri-keys")
+FMRI_SIGNED_URL_TTL_MIN = 15
+FMRI_MAX_GB = 2  # signed-URL hard cap
 
 # Optional comma-separated IP blocklist — set in Cloud Run env vars without redeploy
 _IP_BLOCKLIST: set[str] = {
@@ -115,6 +125,7 @@ if _STATIC.exists():
 db     = firestore.AsyncClient(project=GCP_PROJECT)
 gcs    = storage.Client(project=GCP_PROJECT)
 bucket = gcs.bucket(GCS_BUCKET)
+fmri_bucket = gcs.bucket(FMRI_BUCKET)
 
 
 # ─── static pages ─────────────────────────────────────────────────────────────
@@ -493,6 +504,152 @@ async def _gemini_narration(filename: str) -> dict:
             except Exception:
                 results[persona_id] = "(narration unavailable)"
     return results
+
+
+# ─── WebSocket status feed ────────────────────────────────────────────────────
+
+# ─── fMRI upload pipeline ─────────────────────────────────────────────────────
+
+ALLOWED_FMRI_EXTS = {"nii", "nii.gz", "dcm", "dicom", "zip", "mat", "edf"}
+
+
+class UploadUrlRequest(BaseModel):
+    user_id: str = Field(..., min_length=10, max_length=32)  # Discord snowflake
+    format_hint: str = Field(..., min_length=2, max_length=12)
+    opted_in_research: bool = False
+
+
+def _is_discord_snowflake(uid: str) -> bool:
+    return uid.isdigit() and 17 <= len(uid) <= 20
+
+
+def _user_kms_key_path(user_id: str) -> str:
+    """Stable per-user key ID derived from the Discord user ID.
+
+    Key naming uses the SHA-256 of the Discord ID (truncated) so we never
+    write the raw user ID into KMS resource paths.
+    """
+    digest = hashlib.sha256(user_id.encode("utf-8")).hexdigest()[:24]
+    key_id = f"u-{digest}"
+    return (
+        f"projects/{GCP_PROJECT}/locations/{FMRI_REGION}"
+        f"/keyRings/{FMRI_KEYRING}/cryptoKeys/{key_id}"
+    )
+
+
+@app.post("/api/fmri/upload-url")
+@limiter.limit("3/hour")
+async def request_upload_url(request: Request, req: UploadUrlRequest) -> JSONResponse:
+    """Mint a 15-minute signed PUT URL into the CMEK-encrypted fMRI bucket."""
+    if not _is_discord_snowflake(req.user_id):
+        raise HTTPException(400, "user_id is not a valid Discord snowflake")
+    fmt = req.format_hint.lower().lstrip(".")
+    if fmt not in ALLOWED_FMRI_EXTS:
+        raise HTTPException(400, f"format_hint must be one of {sorted(ALLOWED_FMRI_EXTS)}")
+
+    scan_id = uuid.uuid4().hex
+    object_name = f"users/{req.user_id}/scans/{scan_id}.{fmt}"
+
+    expires_at = dt.datetime.now(dt.UTC) + dt.timedelta(minutes=FMRI_SIGNED_URL_TTL_MIN)
+    try:
+        blob = fmri_bucket.blob(object_name)
+        upload_url = blob.generate_signed_url(
+            version="v4",
+            expiration=expires_at,
+            method="PUT",
+            content_type="application/octet-stream",
+        )
+    except Exception as exc:
+        log.exception("[fmri] signed-url generation failed")
+        raise HTTPException(500, "could not mint signed URL") from exc
+
+    await db.collection("fmri_scans").document(scan_id).set({
+        "scan_id": scan_id,
+        "owner": req.user_id,
+        "format_hint": fmt,
+        "object_path": object_name,
+        "bucket": FMRI_BUCKET,
+        "kms_key": _user_kms_key_path(req.user_id),
+        "status": "pending_upload",
+        "opted_in_research": bool(req.opted_in_research),
+        "requested_at": firestore.SERVER_TIMESTAMP,
+        "expires_at": expires_at.isoformat(),
+    })
+
+    return JSONResponse({
+        "upload_url": upload_url,
+        "scan_id": scan_id,
+        "object_path": object_name,
+        "expires_at": expires_at.isoformat(),
+        "method": "PUT",
+        "max_bytes": FMRI_MAX_GB * 1024 * 1024 * 1024,
+    })
+
+
+@app.get("/api/fmri/my-uploads/{user_id}")
+@limiter.limit("30/hour")
+async def list_user_uploads(request: Request, user_id: str) -> JSONResponse:
+    if not _is_discord_snowflake(user_id):
+        raise HTTPException(400, "user_id is not a valid Discord snowflake")
+    docs = (
+        db.collection("fmri_scans")
+        .where("owner", "==", user_id)
+        .order_by("requested_at", direction=firestore.Query.DESCENDING)
+        .limit(50)
+    )
+    out = []
+    async for doc in docs.stream():
+        d = doc.to_dict()
+        out.append({
+            k: d.get(k)
+            for k in (
+                "scan_id", "status", "format_hint", "n_timepoints",
+                "tr_s", "opted_in_research", "requested_at", "validated_at",
+                "errors",
+            )
+        })
+    return JSONResponse({"uploads": out})
+
+
+@app.post("/api/fmri/opt-in/{user_id}")
+@limiter.limit("10/hour")
+async def toggle_opt_in(request: Request, user_id: str, opt_in: bool = False) -> JSONResponse:
+    if not _is_discord_snowflake(user_id):
+        raise HTTPException(400, "invalid user_id")
+    await db.collection("fmri_users").document(user_id).set(
+        {"opted_in_research": bool(opt_in), "updated_at": firestore.SERVER_TIMESTAMP},
+        merge=True,
+    )
+    return JSONResponse({"user_id": user_id, "opted_in_research": bool(opt_in)})
+
+
+@app.delete("/api/fmri/scan/{scan_id}")
+@limiter.limit("10/hour")
+async def soft_delete_scan(request: Request, scan_id: str, user_id: str) -> JSONResponse:
+    if not _is_discord_snowflake(user_id):
+        raise HTTPException(400, "invalid user_id")
+    doc_ref = db.collection("fmri_scans").document(scan_id)
+    snap = await doc_ref.get()
+    if not snap.exists:
+        raise HTTPException(404, "scan not found")
+    d = snap.to_dict() or {}
+    if d.get("owner") != user_id:
+        raise HTTPException(403, "not owner")
+    await doc_ref.update({
+        "status": "soft_deleted",
+        "deleted_at": firestore.SERVER_TIMESTAMP,
+    })
+    # Object is left in place; lifecycle rule clears it after 30 days.
+    return JSONResponse({"scan_id": scan_id, "status": "soft_deleted"})
+
+
+@app.post("/api/fmri/training-tick")
+async def training_tick(request: Request) -> JSONResponse:
+    """Cloud Scheduler hook: scan Firestore and trigger training when ready."""
+    from cortex.training_trigger import sweep_pending_scans
+
+    result = await sweep_pending_scans(db, tunnel_url=TUNNEL_URL)
+    return JSONResponse(result)
 
 
 # ─── WebSocket status feed ────────────────────────────────────────────────────

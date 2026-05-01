@@ -1,0 +1,24 @@
+displayName: tribe-v2-finetune-cloud-fallback
+jobSpec:
+  workerPoolSpecs:
+    - machineSpec:
+        machineType: n1-highmem-8
+        acceleratorType: NVIDIA_TESLA_A100
+        acceleratorCount: 1
+      replicaCount: 1
+      pythonPackageSpec:
+        executorImageUri: us-docker.pkg.dev/vertex-ai/training/pytorch-gpu.2-2:latest
+        packageUris:
+          - gs://abm-isu-vertex/cortex-train-tribe.tar.gz
+        pythonModule: cortex.train_tribe
+        args:
+          - --scan-ids
+          # Filled in at submit time by training_trigger._trigger_vertex
+        env:
+          - name: CORTEX_TRIBE_CACHE
+            value: /gcs/cortex-fmri-uploads/training-cache
+          - name: GCP_PROJECT
+            value: abm-isu
+  serviceAccount: github-actions-deploy@abm-isu.iam.gserviceaccount.com
+  baseOutputDirectory:
+    outputUriPrefix: gs://abm-isu-vertex/runs/

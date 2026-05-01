@@ -1,0 +1,18 @@
+name: cortex-fmri-validate
+entryPoint: on_finalize
+runtime: python312
+region: us-central1
+serviceAccount: github-actions-deploy@abm-isu.iam.gserviceaccount.com
+memory: 1024M
+timeout: 540s
+eventTrigger:
+  eventType: google.cloud.pubsub.topic.v1.messagePublished
+  pubsubTopic: projects/abm-isu/topics/cortex-fmri-finalized
+  retryPolicy: RETRY_POLICY_RETRY
+environmentVariables:
+  GCP_PROJECT: abm-isu
+  HEADER_BYTES: "16777216"
+secretEnvironmentVariables:
+  - key: MERCURY_DM_WEBHOOK
+    secret: cortex-mercury-dm-webhook
+    version: latest

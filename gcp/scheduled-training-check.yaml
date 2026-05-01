@@ -1,0 +1,23 @@
+# Cloud Scheduler spec for the fMRI training-trigger sweep.
+#
+#   gcloud scheduler jobs create http cortex-training-trigger \
+#     --project=abm-isu --location=us-central1 \
+#     --schedule="0 */6 * * *" --time-zone="UTC" \
+#     --uri="https://cortex.redteamkitchen.com/api/fmri/training-tick" \
+#     --http-method=POST \
+#     --oidc-service-account-email=github-actions-deploy@abm-isu.iam.gserviceaccount.com
+#
+# Every 6 hours the relay walks Firestore for un-trained opted-in scans and
+# decides between the local 5090 and the Vertex AI fallback.
+name: cortex-training-trigger
+schedule: "0 */6 * * *"
+timeZone: UTC
+target:
+  http:
+    uri: https://cortex.redteamkitchen.com/api/fmri/training-tick
+    httpMethod: POST
+    oidcToken:
+      serviceAccountEmail: github-actions-deploy@abm-isu.iam.gserviceaccount.com
+  retryConfig:
+    retryCount: 3
+    minBackoffDuration: 60s
