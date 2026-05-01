@@ -38,6 +38,7 @@ gcloud services enable \
   cloudbuild.googleapis.com \
   firestore.googleapis.com \
   firebase.googleapis.com \
+  artifactregistry.googleapis.com \
   --project="${PROJECT_ID}" --quiet
 
 # 2. Create Workload Identity Pool (idempotent)
@@ -94,9 +95,9 @@ ROLES=(
   roles/secretmanager.secretAccessor     # read secrets at deploy time
   roles/cloudbuild.builds.editor         # trigger Cloud Build jobs
   roles/iam.serviceAccountUser           # act-as the SA in Cloud Run
-  roles/firestore.dataEditor             # write Firestore job records
+  roles/datastore.user                   # write Firestore job records (project-level Firestore role)
   roles/firebase.admin                   # Firebase Hosting deploy
-  roles/artifactregistry.writer          # push container images
+  roles/artifactregistry.admin           # push + create-on-push container images (gcr.io is deprecated)
 )
 
 for ROLE in "${ROLES[@]}"; do

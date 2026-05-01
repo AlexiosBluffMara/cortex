@@ -22,9 +22,13 @@ permissions:
 env:
   PROJECT_ID: abm-isu
   REGION: us-central1
-  WEBAPP_IMAGE: gcr.io/abm-isu/cortex-webapp
-  WORKER_IMAGE: gcr.io/abm-isu/cortex-tribe-worker
-  RELAY_IMAGE: gcr.io/abm-isu/cortex-relay
+  # Artifact Registry (gcr.io is being deprecated; new GCP projects can't push to it).
+  # Repo is auto-created by the `ensure-ar-repo` job below if it doesn't exist.
+  AR_HOST: us-central1-docker.pkg.dev
+  AR_REPO: us-central1-docker.pkg.dev/abm-isu/cortex
+  WEBAPP_IMAGE: us-central1-docker.pkg.dev/abm-isu/cortex/cortex-webapp
+  WORKER_IMAGE: us-central1-docker.pkg.dev/abm-isu/cortex/cortex-tribe-worker
+  RELAY_IMAGE: us-central1-docker.pkg.dev/abm-isu/cortex/cortex-relay
 
 # ─────────────────────────────────────────────────────────────────────────────
 # JOB 1 — Quality gate
@@ -59,11 +63,42 @@ jobs:
         run: pytest tests/unit/ -q -m "not gpu and not ollama and not tribe and not network" --tb=short
 
   # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 1.5 — Ensure Artifact Registry repo exists (idempotent bootstrap)
+  # ─────────────────────────────────────────────────────────────────────────────
+  ensure-ar-repo:
+    name: Ensure Artifact Registry repo
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Create AR repo if missing
+        run: |
+          set -euo pipefail
+          if gcloud artifacts repositories describe cortex \
+              --location=us-central1 --project=abm-isu &>/dev/null; then
+            echo "AR repo 'cortex' already exists."
+          else
+            echo "Creating AR repo 'cortex' in us-central1..."
+            gcloud artifacts repositories create cortex \
+              --repository-format=docker \
+              --location=us-central1 \
+              --project=abm-isu \
+              --description="Cortex container images (webapp/worker/relay)"
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────────
   # JOB 2a — Build & push webapp image
   # ─────────────────────────────────────────────────────────────────────────────
   build-webapp:
     name: Build webapp image
-    needs: gate
+    needs: ensure-ar-repo
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.tag.outputs.image }}
@@ -82,8 +117,8 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure Docker for GCR
-        run: gcloud auth configure-docker gcr.io --quiet
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Set image tag
         id: tag
@@ -111,7 +146,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   build-worker:
     name: Build tribe-worker image (CUDA 12.8)
-    needs: gate
+    needs: ensure-ar-repo
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.tag.outputs.image }}
@@ -129,8 +164,8 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure Docker for GCR
-        run: gcloud auth configure-docker gcr.io --quiet
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Set image tag
         id: tag
@@ -159,7 +194,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   build-relay:
     name: Build relay image
-    needs: gate
+    needs: ensure-ar-repo
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.tag.outputs.image }}
@@ -175,8 +210,8 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure Docker for GCR
-        run: gcloud auth configure-docker gcr.io --quiet
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Set image tag
         id: tag
