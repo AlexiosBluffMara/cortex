@@ -158,7 +158,7 @@ class GPUScheduler:
             "total_gb": self.TOTAL_VRAM_GB,
             "used_gb": round(used, 2),
             "free_gb": round(free, 2),
-            "tribe_fits": free >= self.TRIBE_VRAM_GB,
+            "tribe_fits": free >= (self.TRIBE_VRAM_GB + self.VRAM_SAFETY_MARGIN_GB),
             "gemma_e4b_fits": free >= self.GEMMA_E4B_VRAM_GB,
             "swap_metrics": {
                 "total_swaps": self._metrics.total_swaps,
