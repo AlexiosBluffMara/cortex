@@ -47,7 +47,7 @@ TUNNEL_URL   = os.environ["TUNNEL_URL"]
 GCS_BUCKET   = os.environ["GCS_BUCKET"]
 GCP_PROJECT  = os.environ["GCP_PROJECT"]
 GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-preview")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 MAX_MB       = 50
 TUNNEL_TIMEOUT = 10
 
