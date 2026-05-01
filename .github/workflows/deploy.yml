@@ -375,14 +375,23 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      - name: Ensure Hosting site exists (idempotent)
+      - name: Ensure Firebase project link + Hosting site (idempotent)
         run: |
-          # firebase.json declares hosting.site: "abm-isu". Create that site if
-          # the project doesn't have it yet — required for the very first deploy
-          # of a new Firebase project. Subsequent runs no-op via the `|| true`.
+          # Step 1: attach the GCP project to Firebase. This is a no-op if the
+          # project is already a Firebase project; returns 409 with "already exists".
+          # The 404 we saw earlier means the GCP project hasn't been added to
+          # Firebase yet — this command fixes that on first run.
+          firebase projects:addfirebase abm-isu --non-interactive 2>&1 \
+            | tee /tmp/addfirebase.log || true
+          if grep -q "already a Firebase project\|already exists" /tmp/addfirebase.log; then
+            echo "Project is already a Firebase project."
+          fi
+
+          # Step 2: create the Hosting site if it doesn't exist. Same idempotency
+          # pattern — succeeds first time, gracefully no-ops on re-runs.
           firebase hosting:sites:create abm-isu --project abm-isu --non-interactive 2>&1 \
             | tee /tmp/site_create.log \
-            || grep -q "already exists\|already taken" /tmp/site_create.log
+            || grep -q "already exists\|already taken\|HTTP Error: 409" /tmp/site_create.log
 
       - name: Deploy Firebase Hosting
         run: firebase deploy --only hosting --project abm-isu --non-interactive
