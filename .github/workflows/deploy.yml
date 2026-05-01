@@ -148,6 +148,12 @@ jobs:
     name: Build tribe-worker image (CUDA 12.8)
     needs: ensure-ar-repo
     runs-on: ubuntu-latest
+    # The cloud TRIBE worker is OPTIONAL — the primary path is local-5090
+    # via Cloudflare Tunnel. The cloud worker provides redundancy when the
+    # 5090 is offline, but its build needs FB-internal wheels (neuralset
+    # depends on exca>=0.5.20 which only exists on a private index). Treat
+    # build failures as non-blocking; the rest of the pipeline still ships.
+    continue-on-error: true
     outputs:
       image: ${{ steps.tag.outputs.image }}
 
@@ -287,6 +293,9 @@ jobs:
   deploy-worker:
     name: Deploy tribe-worker → Cloud Run (L4 GPU)
     needs: build-worker
+    # Skip when the build step failed (non-blocking redundancy path).
+    if: ${{ needs.build-worker.result == 'success' }}
+    continue-on-error: true
     runs-on: ubuntu-latest
     outputs:
       url: ${{ steps.deploy.outputs.url }}
@@ -401,7 +410,8 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   smoke:
     name: Post-deploy smoke test
-    needs: [deploy-webapp, deploy-worker, deploy-hosting]
+    # Don't block on the optional tribe-worker — only require webapp + hosting.
+    needs: [deploy-webapp, deploy-hosting]
     runs-on: ubuntu-latest
 
     steps:
@@ -431,12 +441,19 @@ jobs:
           print('Health check passed:', d)
           "
 
-      - name: Smoke test tribe-worker /healthz (authenticated)
+      - name: Smoke test tribe-worker /healthz (optional, only if deployed)
+        continue-on-error: true
         run: |
-          WORKER_URL=$(gcloud run services describe cortex-tribe-worker \
-            --region=${{ env.REGION }} \
-            --project=${{ env.PROJECT_ID }} \
-            --format="value(status.url)")
+          # The tribe-worker is the OPTIONAL cloud redundancy path. Skip the
+          # check gracefully if the service doesn't exist (build-worker may
+          # have failed on FB-internal wheels — the primary local-5090 path
+          # is what serves the public demo).
+          if ! WORKER_URL=$(gcloud run services describe cortex-tribe-worker \
+              --region=${{ env.REGION }} --project=${{ env.PROJECT_ID }} \
+              --format="value(status.url)" 2>/dev/null); then
+            echo "::notice ::cortex-tribe-worker not deployed; skipping (cloud redundancy is optional)"
+            exit 0
+          fi
           TOKEN=$(gcloud auth print-identity-token)
           echo "Testing ${WORKER_URL}/healthz"
           curl -sf --retry 3 --retry-delay 3 \
