@@ -1,8 +1,13 @@
 # Cortex — Watch Your Brain Respond to Any Video
 
+**`ALEXIOS BLUFF MARA × ILLINOIS STATE UNIVERSITY`**
+*Research conducted in association with [Illinois State University](https://illinoisstate.edu), Bloomington–Normal, IL.*
+
+---
+
 > Upload a short video. In about six minutes, 20,484 seats in your personal Brain Cinema light up in real-time 3D — and an AI film critic explains what just happened, to anyone from a curious 8-year-old to a working neurologist.
 
-Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma-4-good-hackathon) (Health & Sciences track) and the [Nous Research × Kimi Creative Hackathon](https://nousresearch.com) (Creative track) by **Alexios Bluff Mara LLC (dba Red Team Kitchen) / Illinois State University**.
+Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma-4-good-hackathon) (Health & Sciences track) and the [Nous Research × Kimi Creative Hackathon](https://nousresearch.com) (Creative track) by **Alexios Bluff Mara LLC (dba Red Team Kitchen)**.
 
 *Gemma is a trademark of Google LLC.*
 
@@ -40,9 +45,9 @@ Cortex does not replace a clinical scan. It is not a diagnostic tool. Its predic
 - **Rehabilitation research**: does a therapy video reach the target motor or language regions? Quantify it without booking a scanner.
 - **Media and accessibility**: which cognitive systems does a piece of content activate? Designers, filmmakers, and accessibility engineers can answer this question for the first time without a neuroscience lab.
 
-The hardware that runs this costs around $2,000 at MSRP — street price $2,500–3,000 for the RTX 5090. The equivalent cloud capacity on a Google Cloud L4 GPU costs about $0.70/hour, or roughly $504/month running 24/7. At scale-to-zero it approaches $0.
+**Hardware: RTX 5090 (32 GB) is the baseline, not the ceiling.** The 5090 is what you need at minimum to run the full TRIBE-and-Gemma swap pipeline locally. From there, every modern NVIDIA accelerator — RTX 6000 Ada, L40S, A100 (40 GB or 80 GB), H100 (80 GB) — runs Cortex faster, with both models resident simultaneously, no swap. We're targeting deployment on national HPC resources via [ACCESS-CI](https://access-ci.org) at UIUC and partner institutions, where a single A100 makes the per-scan budget effectively zero.
 
-The direction is unmistakable.
+The direction is unmistakable: brain-response analysis at the cost of electricity, on hardware academic researchers already have.
 
 ---
 
