@@ -1,0 +1,443 @@
+/*
+ * Red Team Kitchen — public site stylesheet.
+ * Shared across index.html, cortex.html, mercury.html, research.html, contact.html.
+ *
+ * Visual system: Illinois State University brand (published values).
+ *  - Cardinal Red #CC0000 (primary accent)
+ *  - ISU Gold     #F6A917 (highlights / call-outs)
+ *  - ISU Blue     #56758f (subtle secondary)
+ *  - Open Sans for body, PT Serif for editorial display, JetBrains Mono for data.
+ *
+ * Tone: research-academic, calm, confident. Plenty of whitespace.
+ * UNIQLO-style collab framing in the top strip.
+ */
+:root {
+  --bg: #0a0b0e;
+  --surface: #14151c;
+  --surface2: #1c1e28;
+  --border: #262834;
+  --border-strong: #383a47;
+
+  --cardinal: #CC0000;
+  --cardinal-bright: #ee2d3f;
+  --cardinal-deep: #9c0d1d;
+  --isu-gold: #F6A917;
+  --isu-gold-bright: #ffc24a;
+  --isu-blue: #56758f;
+  --isu-blue-bright: #7ea2c0;
+
+  --text: #f0f2f6;
+  --muted: #8b8d96;
+
+  --max: 1080px;
+  --radius: 14px;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg); color: var(--text);
+  font-family: "Open Sans", ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+a {
+  color: var(--cardinal-bright);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(238, 45, 63, 0.25);
+  transition: border-color .15s ease, color .15s ease;
+}
+a:hover { color: #ff5f6e; border-bottom-color: var(--cardinal-bright); }
+.wrap { max-width: var(--max); margin: 0 auto; padding: 80px 32px 96px; }
+
+/* ───── UNIQLO-style collab strip (top of every page) ───── */
+.collab-strip {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 22px 32px;
+  text-align: center;
+}
+.collab-mark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 14px;
+  font-family: "PT Serif", serif;
+  font-weight: 700;
+  font-size: clamp(0.95rem, 1.6vw, 1.15rem);
+  color: var(--text);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.collab-mark .x {
+  font-family: "JetBrains Mono", monospace;
+  color: var(--cardinal-bright);
+  font-weight: 600;
+  font-size: 1em;
+  transform: translateY(-0.05em);
+}
+.collab-mark .lhs { color: var(--text); }
+.collab-mark .rhs {
+  color: var(--text);
+  border-bottom: 1px solid transparent;
+  text-decoration: none;
+}
+.collab-mark .rhs:hover { border-bottom-color: var(--cardinal-bright); }
+.collab-meta {
+  margin-top: 6px;
+  font-family: "Open Sans", sans-serif;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* ───── Site nav under the collab strip ───── */
+.sitenav {
+  border-bottom: 1px solid var(--border);
+  padding: 14px 32px;
+  text-align: center;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}
+.sitenav a {
+  color: var(--muted);
+  border-bottom: none;
+  margin: 0 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+}
+.sitenav a:hover { color: var(--cardinal-bright); }
+.sitenav a.active { color: var(--text); }
+
+/* ───── Hero ───── */
+header { margin-bottom: 96px; }
+header .pills { margin-bottom: 28px; }
+header .pill {
+  display: inline-block;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--muted);
+  margin: 0 6px 8px 0;
+  letter-spacing: 0.02em;
+}
+header .pill.brand {
+  color: var(--cardinal-bright);
+  border-color: rgba(238, 45, 63, 0.30);
+  background: rgba(238, 45, 63, 0.06);
+}
+header .pill.gold {
+  color: var(--isu-gold);
+  border-color: rgba(246, 169, 23, 0.35);
+  background: rgba(246, 169, 23, 0.06);
+}
+header .pill.blue {
+  color: var(--isu-blue-bright);
+  border-color: rgba(126, 162, 192, 0.35);
+  background: rgba(126, 162, 192, 0.06);
+}
+header h1 {
+  font-family: "PT Serif", "Open Sans", serif;
+  font-size: clamp(2.6rem, 5.5vw, 4.4rem);
+  font-weight: 700;
+  margin: 12px 0 20px;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--text);
+}
+header h1 em { font-style: italic; color: var(--cardinal-bright); }
+header h1 .gold { color: var(--isu-gold); font-style: normal; }
+header .tag {
+  color: var(--text);
+  font-size: clamp(1.05rem, 1.7vw, 1.3rem);
+  margin-bottom: 36px;
+  max-width: 740px;
+  line-height: 1.55;
+}
+header .tag strong { color: var(--isu-gold); font-weight: 600; }
+header .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+
+.cta {
+  display: inline-block;
+  padding: 12px 22px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.cta:hover { transform: translateY(-1px); }
+.cta.primary {
+  background: var(--cardinal);
+  color: #fff;
+  border-bottom: 1px solid var(--cardinal);
+}
+.cta.primary:hover { background: var(--cardinal-bright); color: #fff; border-bottom-color: var(--cardinal-bright); }
+.cta.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+.cta.ghost:hover { background: var(--surface); border-color: var(--cardinal-bright); }
+
+/* ───── Sections ───── */
+section { margin-top: 96px; }
+section h2 {
+  font-family: "PT Serif", serif;
+  font-size: 1.85rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 22px;
+  color: var(--text);
+}
+section h2 .accent { color: var(--cardinal-bright); }
+section > p, section > .panel > p {
+  color: #cdd0d8;
+  max-width: 780px;
+  margin: 0 0 16px;
+}
+section > p:first-of-type { margin-top: 0; }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 30px 34px;
+}
+.panel.tinted {
+  background: linear-gradient(180deg, rgba(238, 45, 63, 0.04) 0%, var(--surface) 100%);
+  border-color: rgba(238, 45, 63, 0.18);
+}
+.panel.gold {
+  background: linear-gradient(180deg, rgba(246, 169, 23, 0.05) 0%, var(--surface) 100%);
+  border-color: rgba(246, 169, 23, 0.20);
+}
+.panel.blue {
+  background: linear-gradient(180deg, rgba(86, 117, 143, 0.06) 0%, var(--surface) 100%);
+  border-color: rgba(86, 117, 143, 0.22);
+}
+.panel h3 {
+  font-family: "PT Serif", serif;
+  font-size: 1.2rem;
+  margin: 24px 0 10px;
+  color: var(--text);
+  font-weight: 700;
+}
+.panel h3:first-child { margin-top: 0; }
+.panel ul { padding-left: 22px; color: #cdd0d8; }
+.panel li { margin: 6px 0; }
+
+/* ───── Project cards (landing page) ───── */
+.projects {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+.project {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 30px 32px;
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  transition: border-color 0.15s ease, transform 0.1s ease, background 0.15s ease;
+}
+.project:hover { transform: translateY(-2px); }
+.project .tag {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+.project .name {
+  font-family: "PT Serif", serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.project .blurb {
+  color: #cdd0d8;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  flex-grow: 1;
+  margin-bottom: 16px;
+}
+.project .more {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.78rem;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.project.cardinal { border-color: rgba(238, 45, 63, 0.22); background: linear-gradient(180deg, rgba(238, 45, 63, 0.05) 0%, var(--surface) 65%); }
+.project.cardinal:hover { border-color: var(--cardinal-bright); }
+.project.cardinal .tag { color: var(--cardinal-bright); }
+.project.cardinal .more { color: var(--cardinal-bright); }
+.project.gold { border-color: rgba(246, 169, 23, 0.22); background: linear-gradient(180deg, rgba(246, 169, 23, 0.05) 0%, var(--surface) 65%); }
+.project.gold:hover { border-color: var(--isu-gold); }
+.project.gold .tag { color: var(--isu-gold); }
+.project.gold .more { color: var(--isu-gold); }
+.project.blue { border-color: rgba(126, 162, 192, 0.25); background: linear-gradient(180deg, rgba(86, 117, 143, 0.07) 0%, var(--surface) 65%); }
+.project.blue:hover { border-color: var(--isu-blue-bright); }
+.project.blue .tag { color: var(--isu-blue-bright); }
+.project.blue .more { color: var(--isu-blue-bright); }
+
+/* ───── Big numbers (receipts strip) ───── */
+.receipts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+  margin-top: 8px;
+}
+.receipts .cell {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  transition: border-color 0.15s ease;
+}
+.receipts .cell:hover { border-color: var(--cardinal-deep); }
+.receipts .cell .num {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 1.95rem;
+  font-weight: 600;
+  color: var(--cardinal-bright);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.receipts .cell .lbl {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+/* ───── Pull quote ───── */
+.pull {
+  border-left: 3px solid var(--isu-gold);
+  padding: 12px 22px;
+  margin: 24px 0;
+  font-family: "PT Serif", serif;
+  font-style: italic;
+  font-size: 1.1rem;
+  color: var(--text);
+  line-height: 1.55;
+  max-width: 780px;
+}
+
+/* ───── Media ───── */
+img.full, img.placeholder {
+  width: 100%; height: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  display: block;
+}
+img.placeholder { background: var(--surface2); min-height: 240px; }
+figcaption { color: var(--muted); margin-top: 12px; font-size: 0.9rem; }
+
+/* ───── Code ───── */
+pre {
+  background: #06070a;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px 26px;
+  overflow-x: auto;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  color: #d8dde5;
+}
+code {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.92em;
+}
+pre code { font-size: inherit; }
+
+/* ───── Brand bar / footer ───── */
+.brand-bar {
+  margin-top: 80px; padding-top: 32px;
+  border-top: 1px solid var(--border);
+  display: flex; flex-wrap: wrap; gap: 24px;
+  align-items: center; justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.brand-bar strong { color: var(--text); font-weight: 600; }
+.brand-bar .swatch {
+  display: inline-block;
+  width: 10px; height: 10px;
+  background: var(--cardinal);
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+footer {
+  color: var(--muted);
+  margin-top: 56px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+  font-size: 0.86rem;
+}
+footer p { margin: 6px 0; max-width: 780px; }
+footer a { color: var(--cardinal-bright); border-bottom-color: rgba(238, 45, 63, 0.20); }
+
+/* ───── Department list (research / contact) ───── */
+.depts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.dept {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 22px;
+}
+.dept .label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.74rem;
+  color: var(--isu-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+.dept .name {
+  font-family: "PT Serif", serif;
+  font-size: 1.05rem;
+  color: var(--text);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.dept a { font-size: 0.86rem; word-break: break-all; }
+
+@media (max-width: 600px) {
+  .wrap { padding: 48px 20px 72px; }
+  header { margin-bottom: 64px; }
+  section { margin-top: 64px; }
+  .panel { padding: 22px 24px; }
+  pre { padding: 16px 18px; }
+  .collab-strip { padding: 16px 20px; }
+  .collab-mark { gap: 8px; font-size: 0.82rem; }
+  .collab-meta { font-size: 0.66rem; letter-spacing: 0.12em; }
+  .sitenav { padding: 12px 16px; }
+  .sitenav a { margin: 0 8px; font-size: 0.72rem; }
+  .project { padding: 22px 24px; }
+}
+</content>
+</invoke>

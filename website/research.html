@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research — Red Team Kitchen</title>
+<meta name="description" content="ABM LLC's research posture: hardware-flexible, open-source, local-first, deployable from a single RTX 5090 to ACCESS-CI HPC nodes via partner institutions.">
+
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+
+<div class="collab-strip">
+  <div class="collab-mark">
+    <span class="lhs">Alexios Bluff Mara</span>
+    <span class="x">×</span>
+    <a class="rhs" href="https://illinoisstate.edu">Illinois State University</a>
+  </div>
+  <div class="collab-meta">Research Collaboration · Cardinal &amp; Code</div>
+</div>
+
+<nav class="sitenav">
+  <a href="/">Home</a>
+  <a href="/cortex.html">Cortex</a>
+  <a href="/mercury.html">Mercury</a>
+  <a href="/research.html" class="active">Research</a>
+  <a href="/contact.html">Contact</a>
+</nav>
+
+<div class="wrap">
+
+<header>
+  <div class="pills">
+    <span class="pill blue">Research posture</span>
+    <span class="pill gold">RTX 5090 → ACCESS-CI HPC</span>
+    <span class="pill">Open-source · Local-first</span>
+  </div>
+  <h1>Hardware-flexible research,<br>built where <em>cardinal</em> meets <span class="gold">code.</span></h1>
+  <p class="tag">
+    The lab's research posture in three words:
+    <strong>hardware-flexible, open-source, local-first</strong>. Same code
+    path across a single Blackwell card, a Cloud Run L4 burst node, and an
+    HPC partition.
+  </p>
+</header>
+
+<section>
+  <h2>From an RTX 5090 to a national HPC partition</h2>
+  <p>
+    The baseline workstation is a single RTX 5090 — 32 GB GDDR7, Blackwell
+    sm_120 — sitting under a desk in Chicago. That's where the model graphs
+    are tuned and the inference pipelines validated. From there, the same
+    code path scales out two ways:
+  </p>
+  <div class="panel">
+    <ul>
+      <li><strong style="color: var(--text);">Burst capacity</strong> on Google Cloud Run L4 GPU nodes — about $0.70/hour, scale-to-zero when idle, used as a fallback when the local card is busy.</li>
+      <li><strong style="color: var(--text);">National HPC capacity</strong> via <a href="https://access-ci.org">ACCESS-CI</a>, the NSF-funded successor to XSEDE, accessed through partner institutions including UIUC. A100 / H100 partitions handle full-resolution prediction grids and large batched inference jobs.</li>
+      <li><strong style="color: var(--text);">Air-gapped HPC</strong> deployment is supported. Cortex ships a deployable container with model weights baked in — operators can <code>docker load</code> on a fresh node and have the pipeline live in minutes, useful where outbound HuggingFace downloads aren't permitted.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>Offline-capable by design</h2>
+  <p>
+    Academic networks and HPC partitions often block outbound traffic. The
+    lab's projects are built to run with <strong>no internet
+    connection</strong> after first install: model weights cached locally,
+    inference and narration both on-device, no cloud round-trips in the
+    hot path. Mercury takes this further — its production runtime never
+    leaves the operator's hardware. Cortex's local mode is identical in
+    posture; the hosted demo at
+    <a href="https://cortex.redteamkitchen.com">cortex.redteamkitchen.com</a>
+    is a convenience layer, not a requirement.
+  </p>
+</section>
+
+<section>
+  <h2>Open-source posture</h2>
+  <p>
+    Code: Apache-2.0 (Cortex) and MIT (Mercury). Every commit, every issue,
+    every model config is public on the
+    <a href="https://github.com/AlexiosBluffMara">AlexiosBluffMara GitHub
+    organization</a>. Third-party model weights ship under their respective
+    licenses — TRIBE v2 under CC-BY-NC 4.0 (Meta), Gemma 4 under the Gemma
+    Terms of Use (Google) — and are documented in each project's
+    <code>NOTICE</code> file.
+  </p>
+</section>
+
+<section>
+  <h2>ISU departments and facilities</h2>
+  <p>
+    The academic homes the research draws from. None of these endorse the
+    lab's work; they are listed because they are the units the research
+    intersects with.
+  </p>
+  <div class="depts">
+    <div class="dept">
+      <div class="label">Department</div>
+      <div class="name">School of Information Technology</div>
+      <a href="https://illinoisstate.edu/departments/sit/">illinoisstate.edu/departments/sit</a>
+    </div>
+    <div class="dept">
+      <div class="label">Department</div>
+      <div class="name">Department of Psychology</div>
+      <a href="https://psychology.illinoisstate.edu/">psychology.illinoisstate.edu</a>
+    </div>
+    <div class="dept">
+      <div class="label">Department</div>
+      <div class="name">School of Biological Sciences</div>
+      <a href="https://bio.illinoisstate.edu/">bio.illinoisstate.edu</a>
+    </div>
+    <div class="dept">
+      <div class="label">Facility</div>
+      <div class="name">Milner Library</div>
+      <a href="https://library.illinoisstate.edu/">library.illinoisstate.edu</a>
+    </div>
+    <div class="dept">
+      <div class="label">Facility</div>
+      <div class="name">College of Applied Science &amp; Technology</div>
+      <a href="https://cast.illinoisstate.edu/">cast.illinoisstate.edu</a>
+    </div>
+    <div class="dept">
+      <div class="label">Compute</div>
+      <div class="name">ACCESS-CI</div>
+      <a href="https://access-ci.org">access-ci.org</a>
+    </div>
+  </div>
+</section>
+
+<div class="brand-bar">
+  <div>
+    <span class="swatch" aria-hidden="true"></span>
+    <strong>Research conducted in association with</strong>
+    <a href="https://illinoisstate.edu" style="color: var(--text); border-bottom-color: rgba(204,0,0,0.30);">Illinois State University</a>,
+    Bloomington–Normal, IL.
+  </div>
+  <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;">
+    Alexios Bluff Mara LLC · 2026
+  </div>
+</div>
+
+<footer>
+  <p>Brand accent colors reference Illinois State University's published values; ISU logos and wordmarks are not used. Alexios Bluff Mara LLC is not officially affiliated with Illinois State University — research is conducted <em>in association with</em> the university.</p>
+</footer>
+
+</div>
+</body>
+</html>
+</content>
+</invoke>

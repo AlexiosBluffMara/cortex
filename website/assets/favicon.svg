@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Red Team Kitchen monogram — RTK in PT-Serif-flavoured slab.
+  Original work, not derived from any ISU mark.
+  Background: bg #0a0b0e. Letterform: cardinal #CC0000.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="10" fill="#0a0b0e"/>
+  <g fill="#CC0000" font-family="Georgia, 'PT Serif', serif" font-weight="700" font-size="26" text-anchor="middle">
+    <text x="32" y="40" letter-spacing="-1">RTK</text>
+  </g>
+  <rect x="8" y="50" width="48" height="3" fill="#F6A917"/>
+</svg>
+</content>
+</invoke>

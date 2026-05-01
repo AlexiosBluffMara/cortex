@@ -1,0 +1,11 @@
+# Cloudflare Pages redirects.
+# Format: <source> <destination> <status>
+# Docs: https://developers.cloudflare.com/pages/configuration/redirects/
+
+# Pretty paths → .html (so /cortex resolves to /cortex.html, etc.)
+/cortex      /cortex.html      200
+/mercury     /mercury.html     200
+/research    /research.html    200
+/contact     /contact.html     200
+</content>
+</invoke>
