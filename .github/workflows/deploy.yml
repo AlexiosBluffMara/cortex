@@ -1,0 +1,392 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: "Skip unit tests (use only for hotfixes)"
+        type: boolean
+        default: false
+
+# One deploy at a time — never cancel a running deploy.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write   # required for Workload Identity Federation
+
+env:
+  PROJECT_ID: abm-isu
+  REGION: us-central1
+  WEBAPP_IMAGE: gcr.io/abm-isu/cortex-webapp
+  WORKER_IMAGE: gcr.io/abm-isu/cortex-tribe-worker
+  RELAY_IMAGE: gcr.io/abm-isu/cortex-relay
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 1 — Quality gate
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  gate:
+    name: Quality gate (lint + unit tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install test + lint deps
+        run: |
+          pip install --upgrade pip
+          pip install \
+            pytest pytest-asyncio pytest-mock pytest-timeout pytest-cov \
+            requests numpy pandas \
+            "ruff>=0.9.0"
+
+      - name: ruff check
+        run: ruff check .
+
+      - name: Unit tests
+        if: ${{ !inputs.skip_tests }}
+        run: pytest tests/unit/ -q -m "not gpu and not ollama and not tribe and not network" --tb=short
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 2a — Build & push webapp image
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-webapp:
+    name: Build webapp image
+    needs: gate
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.tag.outputs.image }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Authenticate to Google Cloud (WIF)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker gcr.io --quiet
+
+      - name: Set image tag
+        id: tag
+        run: |
+          SHA="${GITHUB_SHA::8}"
+          echo "image=${{ env.WEBAPP_IMAGE }}:${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Build webapp image (with layer cache)
+        run: |
+          docker pull ${{ env.WEBAPP_IMAGE }}:latest || true
+          docker build \
+            --file gcp/Dockerfile.webapp \
+            --cache-from ${{ env.WEBAPP_IMAGE }}:latest \
+            --tag ${{ steps.tag.outputs.image }} \
+            --tag ${{ env.WEBAPP_IMAGE }}:latest \
+            .
+
+      - name: Push
+        run: |
+          docker push ${{ steps.tag.outputs.image }}
+          docker push ${{ env.WEBAPP_IMAGE }}:latest
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 2b — Build & push tribe-worker image
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-worker:
+    name: Build tribe-worker image (CUDA 12.8)
+    needs: gate
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.tag.outputs.image }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker gcr.io --quiet
+
+      - name: Set image tag
+        id: tag
+        run: |
+          SHA="${GITHUB_SHA::8}"
+          echo "image=${{ env.WORKER_IMAGE }}:${SHA}" >> "$GITHUB_OUTPUT"
+
+      # TRIBE worker image is ~6 GB (CUDA 12.8 base). Cache aggressively.
+      - name: Build worker image
+        run: |
+          docker pull ${{ env.WORKER_IMAGE }}:latest || true
+          docker build \
+            --file gcp/Dockerfile.tribe-worker \
+            --cache-from ${{ env.WORKER_IMAGE }}:latest \
+            --tag ${{ steps.tag.outputs.image }} \
+            --tag ${{ env.WORKER_IMAGE }}:latest \
+            .
+
+      - name: Push
+        run: |
+          docker push ${{ steps.tag.outputs.image }}
+          docker push ${{ env.WORKER_IMAGE }}:latest
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 2c — Build & push relay image
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-relay:
+    name: Build relay image
+    needs: gate
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.tag.outputs.image }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker gcr.io --quiet
+
+      - name: Set image tag
+        id: tag
+        run: |
+          SHA="${GITHUB_SHA::8}"
+          echo "image=${{ env.RELAY_IMAGE }}:${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Build relay image
+        run: |
+          docker pull ${{ env.RELAY_IMAGE }}:latest || true
+          docker build \
+            --file gcp/relay/Dockerfile \
+            --cache-from ${{ env.RELAY_IMAGE }}:latest \
+            --tag ${{ steps.tag.outputs.image }} \
+            --tag ${{ env.RELAY_IMAGE }}:latest \
+            gcp/relay/
+
+      - name: Push
+        run: |
+          docker push ${{ steps.tag.outputs.image }}
+          docker push ${{ env.RELAY_IMAGE }}:latest
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 3a — Deploy webapp to Cloud Run
+  # ─────────────────────────────────────────────────────────────────────────────
+  deploy-webapp:
+    name: Deploy webapp → Cloud Run
+    needs: build-webapp
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: cortex-webapp
+          region: ${{ env.REGION }}
+          image: ${{ needs.build-webapp.outputs.image }}
+          flags: "--allow-unauthenticated --memory=1Gi --cpu=1 --port=8765 --min-instances=0 --max-instances=3"
+          env_vars: |
+            OLLAMA_URL=${{ secrets.OLLAMA_URL }}
+            GCP_INFERENCE_ENDPOINT=${{ secrets.GCP_INFERENCE_ENDPOINT }}
+            GEMMA_FAST_MODEL=gemma4:e4b
+            GEMMA_DEEP_MODEL=gemma4:26b
+            GEMMA_EXPERT_MODEL=gemma4:31b
+            GCP_PROJECT_ID=abm-isu
+            GCP_GCS_BUCKET=cortex-public-scans
+            GCP_REGION=us-central1
+            TRIBE_MAX_DURATION_S=50
+            LOG_LEVEL=INFO
+            LOG_JSON=true
+            WEBAPP_HOST=0.0.0.0
+            WEBAPP_PORT=8765
+          secrets: |
+            GCP_INFERENCE_TOKEN=gcp-inference-token:latest
+
+      - name: Log deployed URL
+        run: echo "Webapp deployed to ${{ steps.deploy.outputs.url }}"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 3b — Deploy TRIBE worker to Cloud Run (GPU)
+  # ─────────────────────────────────────────────────────────────────────────────
+  deploy-worker:
+    name: Deploy tribe-worker → Cloud Run (L4 GPU)
+    needs: build-worker
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # deploy-cloudrun action doesn't support GPU flags yet — use gcloud CLI.
+      - name: Deploy tribe-worker with GPU
+        id: deploy
+        run: |
+          URL=$(gcloud run deploy cortex-tribe-worker \
+            --image="${{ needs.build-worker.outputs.image }}" \
+            --region="${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}" \
+            --gpu=1 \
+            --gpu-type=nvidia-l4 \
+            --memory=16Gi \
+            --cpu=4 \
+            --no-cpu-throttling \
+            --min-instances=0 \
+            --max-instances=2 \
+            --port=8080 \
+            --no-allow-unauthenticated \
+            --update-env-vars="TRIBE_MAX_DURATION_S=50,GCP_GCS_BUCKET=cortex-public-scans,LOG_JSON=true" \
+            --update-secrets="GCP_INFERENCE_TOKEN=gcp-inference-token:latest,HF_TOKEN=hf-token:latest" \
+            --format="value(status.url)" 2>&1 | tail -1)
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Worker deployed to $URL"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 3c — Deploy relay to Cloud Run
+  # ─────────────────────────────────────────────────────────────────────────────
+  deploy-relay:
+    name: Deploy relay → Cloud Run
+    needs: build-relay
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: cortex-relay
+          region: ${{ env.REGION }}
+          image: ${{ needs.build-relay.outputs.image }}
+          flags: "--allow-unauthenticated --memory=512Mi --cpu=1 --port=8080 --min-instances=0 --max-instances=5"
+          env_vars: |
+            TUNNEL_URL=${{ secrets.CLOUDFLARE_TUNNEL_URL }}
+            GCS_BUCKET=cortex-public-scans
+            GCP_PROJECT=abm-isu
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            LOG_JSON=true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 4 — Deploy Firebase Hosting (static frontend + rewrites)
+  # ─────────────────────────────────────────────────────────────────────────────
+  deploy-hosting:
+    name: Deploy Firebase Hosting
+    needs: [deploy-webapp, deploy-relay]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Deploy Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SA_JSON }}
+          projectId: abm-isu
+          channelId: live
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 5 — Post-deploy smoke test
+  # ─────────────────────────────────────────────────────────────────────────────
+  smoke:
+    name: Post-deploy smoke test
+    needs: [deploy-webapp, deploy-worker, deploy-hosting]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Wait for webapp cold start (up to 30s)
+        run: sleep 10
+
+      - name: Smoke test webapp /api/health
+        run: |
+          URL="${{ needs.deploy-webapp.outputs.url }}"
+          echo "Testing ${URL}/api/health"
+          curl -sf --retry 5 --retry-delay 5 --retry-connrefused \
+            "${URL}/api/health" \
+            | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert d.get('status') == 'ok', f'Unexpected health response: {d}'
+          print('Health check passed:', d)
+          "
+
+      - name: Smoke test tribe-worker /healthz (authenticated)
+        run: |
+          WORKER_URL=$(gcloud run services describe cortex-tribe-worker \
+            --region=${{ env.REGION }} \
+            --project=${{ env.PROJECT_ID }} \
+            --format="value(status.url)")
+          TOKEN=$(gcloud auth print-identity-token)
+          echo "Testing ${WORKER_URL}/healthz"
+          curl -sf --retry 3 --retry-delay 3 \
+            -H "Authorization: Bearer $TOKEN" \
+            "${WORKER_URL}/healthz" \
+            | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          print('Worker health:', d)
+          assert d.get('status') in ('ok', 'ready', 'healthy'), f'Worker unhealthy: {d}'
+          "
