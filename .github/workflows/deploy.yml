@@ -375,6 +375,15 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
+      - name: Ensure Hosting site exists (idempotent)
+        run: |
+          # firebase.json declares hosting.site: "abm-isu". Create that site if
+          # the project doesn't have it yet — required for the very first deploy
+          # of a new Firebase project. Subsequent runs no-op via the `|| true`.
+          firebase hosting:sites:create abm-isu --project abm-isu --non-interactive 2>&1 \
+            | tee /tmp/site_create.log \
+            || grep -q "already exists\|already taken" /tmp/site_create.log
+
       - name: Deploy Firebase Hosting
         run: firebase deploy --only hosting --project abm-isu --non-interactive
 

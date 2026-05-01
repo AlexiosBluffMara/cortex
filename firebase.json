@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "abm-isu",
     "public": "gcp/public",
     "ignore": ["firebase.json", "**/.*"],
     "rewrites": [

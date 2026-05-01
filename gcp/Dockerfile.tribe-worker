@@ -56,7 +56,7 @@ RUN pip install --index-url https://download.pytorch.org/whl/cu128 \
 # TRIBE v2 source is gitignored from this repo (CC-BY-NC 4.0 weights). Clone
 # it at build time so the worker has it.
 RUN git clone --depth 1 https://github.com/facebookresearch/tribev2.git /opt/tribev2 \
-    && pip install --no-deps -e /opt/tribev2
+    && pip install --no-deps /opt/tribev2
 
 # Cortex deps — pinned exactly to pyproject.toml
 COPY pyproject.toml ./
