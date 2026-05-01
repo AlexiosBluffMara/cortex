@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cortex — watch your brain respond to any video</title>
+<meta name="description" content="Upload a short video. In about six minutes, 20,484 seats in your personal Brain Cinema light up in real-time 3D — and an AI film critic explains what just happened, to anyone from a curious 8-year-old to a working neurologist.">
+<meta property="og:title" content="Cortex — watch your brain respond to any video">
+<meta property="og:description" content="Upload a video. 20,484 cortical vertices light up in 3D. Gemma narrates what your brain saw, at three levels: general, college, clinical.">
+<meta property="og:image" content="https://raw.githubusercontent.com/AlexiosBluffMara/cortex/main/docs/og.png">
+<meta name="twitter:card" content="summary_large_image">
+
+<!-- Illinois State University web fonts: Open Sans (primary sans), PT Serif (serif), JetBrains Mono (data/code). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  /*
+   * Cortex public landing — Illinois State University brand.
+   *  Cardinal Red #CC0000, ISU Gold #F6A917, ISU Blue #56758f
+   *  Open Sans body · PT Serif display · JetBrains Mono data
+   *
+   * Tone matches the Cortex README: explain a brain-foundation-model output
+   * to someone who has never read an fMRI paper. Lean on the "Brain Cinema"
+   * metaphor — a movie theatre with 20,484 seats, a film critic in the back.
+   */
+  :root {
+    --bg: #0a0b0e;
+    --surface: #14151c;
+    --surface2: #1c1e28;
+    --border: #262834;
+    --border-strong: #383a47;
+
+    /* ISU brand */
+    --cardinal: #CC0000;
+    --cardinal-bright: #ee2d3f;
+    --cardinal-deep: #9c0d1d;
+    --isu-gold: #F6A917;
+    --isu-blue: #56758f;
+
+    /* Diverging brain-activation colormap — distinct from chrome accent */
+    --positive: #ff3a25;
+    --negative: #1f5cff;
+    --good: #4ad596;
+
+    --text: #f0f2f6;
+    --muted: #8b8d96;
+
+    --max: 1080px;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: "Open Sans", ui-sans-serif, system-ui, sans-serif;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  a {
+    color: var(--cardinal-bright);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(238, 45, 63, 0.25);
+    transition: border-color .15s ease, color .15s ease;
+  }
+  a:hover { color: #ff5f6e; border-bottom-color: var(--cardinal-bright); }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 80px 32px 96px; }
+
+  /* ───── Hero ───── */
+  header { margin-bottom: 96px; }
+  header .pills { margin-bottom: 28px; }
+  header .pill {
+    display: inline-block;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--muted);
+    margin: 0 6px 8px 0;
+    letter-spacing: 0.02em;
+  }
+  header .pill.brand {
+    color: var(--cardinal-bright);
+    border-color: rgba(238, 45, 63, 0.30);
+    background: rgba(238, 45, 63, 0.06);
+  }
+  header .pill.gold {
+    color: var(--isu-gold);
+    border-color: rgba(246, 169, 23, 0.35);
+    background: rgba(246, 169, 23, 0.06);
+  }
+  header h1 {
+    font-family: "PT Serif", "Open Sans", serif;
+    font-size: clamp(2.6rem, 5.5vw, 4.4rem);
+    font-weight: 700;
+    margin: 12px 0 20px;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    color: var(--text);
+  }
+  header h1 em {
+    font-style: italic;
+    color: var(--cardinal-bright);
+  }
+  header .tag {
+    color: var(--text);
+    font-size: clamp(1.05rem, 1.7vw, 1.3rem);
+    margin-bottom: 36px;
+    max-width: 740px;
+    line-height: 1.55;
+  }
+  header .tag strong { color: var(--isu-gold); font-weight: 600; }
+  header .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+  .cta {
+    display: inline-block;
+    padding: 12px 22px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease;
+  }
+  .cta:hover { transform: translateY(-1px); }
+  .cta.primary {
+    background: var(--cardinal);
+    color: #fff;
+    border-bottom: 1px solid var(--cardinal);
+  }
+  .cta.primary:hover { background: var(--cardinal-bright); color: #fff; border-bottom-color: var(--cardinal-bright); }
+  .cta.ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+  }
+  .cta.ghost:hover { background: var(--surface); border-color: var(--cardinal-bright); }
+
+  /* ───── Sections ───── */
+  section { margin-top: 96px; }
+  section h2 {
+    font-family: "PT Serif", serif;
+    font-size: 1.85rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 22px;
+    color: var(--text);
+  }
+  section h2 .accent { color: var(--cardinal-bright); }
+  section > p {
+    color: #cdd0d8;
+    max-width: 780px;
+    margin: 0 0 16px;
+  }
+  section > p:first-of-type { margin-top: 0; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 30px 34px;
+  }
+  .panel.tinted {
+    background: linear-gradient(180deg, rgba(238, 45, 63, 0.04) 0%, var(--surface) 100%);
+    border-color: rgba(238, 45, 63, 0.18);
+  }
+  .panel.gold {
+    background: linear-gradient(180deg, rgba(246, 169, 23, 0.05) 0%, var(--surface) 100%);
+    border-color: rgba(246, 169, 23, 0.20);
+  }
+  .panel h3 {
+    font-family: "PT Serif", serif;
+    font-size: 1.2rem;
+    margin: 24px 0 10px;
+    color: var(--text);
+    font-weight: 700;
+  }
+  .panel h3:first-child { margin-top: 0; }
+  .panel ul { padding-left: 22px; color: #cdd0d8; }
+  .panel li { margin: 6px 0; }
+
+  /* ───── Big numbers ───── */
+  .receipts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+    margin-top: 8px;
+  }
+  .receipts .cell {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    transition: border-color 0.15s ease;
+  }
+  .receipts .cell:hover { border-color: var(--cardinal-deep); }
+  .receipts .cell .num {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 1.95rem;
+    font-weight: 600;
+    color: var(--cardinal-bright);
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .receipts .cell .lbl {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 8px;
+    font-weight: 500;
+  }
+
+  /* ───── Tier cards ───── */
+  .tiers {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .tier {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px 26px;
+  }
+  .tier .head {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.85rem;
+    color: var(--isu-gold);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .tier .title {
+    font-family: "PT Serif", serif;
+    font-size: 1.2rem;
+    color: var(--text);
+    margin-bottom: 12px;
+    font-weight: 700;
+  }
+  .tier .body {
+    color: #cdd0d8;
+    font-size: 0.92rem;
+    line-height: 1.6;
+    font-style: italic;
+  }
+
+  /* ───── Limits table ───── */
+  .limits {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 14px;
+    font-size: 0.92rem;
+  }
+  .limits th, .limits td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+  .limits th {
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.74rem;
+    font-weight: 600;
+  }
+  .limits td:first-child { color: var(--text); font-weight: 500; }
+  .limits td:last-child {
+    font-family: "JetBrains Mono", monospace;
+    color: var(--isu-gold);
+    font-size: 0.88rem;
+  }
+
+  /* ───── Pull quote ───── */
+  .pull {
+    border-left: 3px solid var(--isu-gold);
+    padding: 12px 22px;
+    margin: 24px 0;
+    font-family: "PT Serif", serif;
+    font-style: italic;
+    font-size: 1.1rem;
+    color: var(--text);
+    line-height: 1.55;
+  }
+
+  /* ───── Code ───── */
+  pre {
+    background: #06070a;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.7;
+    color: #d8dde5;
+  }
+  code {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.92em;
+  }
+  pre code { font-size: inherit; }
+
+  /* ───── Brand bar / footer ───── */
+  .brand-bar {
+    margin-top: 80px; padding-top: 32px;
+    border-top: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; gap: 24px;
+    align-items: center; justify-content: space-between;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .brand-bar strong { color: var(--text); font-weight: 600; }
+  .brand-bar .swatch {
+    display: inline-block;
+    width: 10px; height: 10px;
+    background: var(--cardinal);
+    border-radius: 2px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+
+  footer {
+    color: var(--muted);
+    margin-top: 56px;
+    padding-top: 28px;
+    border-top: 1px solid var(--border);
+    font-size: 0.86rem;
+  }
+  footer p { margin: 6px 0; max-width: 780px; }
+  footer a { color: var(--cardinal-bright); border-bottom-color: rgba(238, 45, 63, 0.20); }
+
+  @media (max-width: 600px) {
+    .wrap { padding: 48px 20px 72px; }
+    header { margin-bottom: 64px; }
+    section { margin-top: 64px; }
+    .panel { padding: 22px 24px; }
+    pre { padding: 16px 18px; }
+    .limits th, .limits td { padding: 8px 10px; font-size: 0.84rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ═══════════════════════════════════ Hero ═══════════════════════════════════ -->
+<header>
+  <div class="pills">
+    <span class="pill brand">Gemma 4 Good · Health &amp; Sciences</span>
+    <span class="pill gold">Submission · May 18, 2026 · Kaggle</span>
+    <span class="pill">v0.1.0 · Apache-2.0</span>
+  </div>
+  <h1>Watch your brain<br>respond to <em>any video.</em></h1>
+  <p class="tag">
+    Upload a short clip. In about six minutes, <strong>20,484 seats in
+    your personal Brain Cinema light up</strong> in real-time 3D — and
+    Gemma 4, the AI film critic, explains what just happened, in language
+    a curious 8-year-old or a working neurologist can both read.
+  </p>
+  <div class="ctas">
+    <a class="cta primary" href="https://cortex.redteamkitchen.com">Try the live demo</a>
+    <a class="cta ghost" href="https://github.com/AlexiosBluffMara/cortex">View source on GitHub</a>
+    <a class="cta ghost" href="https://github.com/AlexiosBluffMara/mercury">See the sister project · Mercury</a>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════ Brain Cinema ═══════════════════════════════════ -->
+<section>
+  <h2>The Brain Cinema <span class="accent">— how Cortex works</span></h2>
+  <p>
+    Picture a movie theater. Your brain is the audience. Every seat in
+    that theater corresponds to one tiny patch of your brain's outer
+    surface — the cortex. Cortex (the tool) is the camera system and the
+    film critic rolled into one.
+  </p>
+  <p>
+    <strong style="color: var(--isu-gold);">The movie</strong> is whatever
+    you upload: a short video clip, an audio recording, an image, or a
+    block of text.
+  </p>
+  <p>
+    <strong style="color: var(--isu-gold);">The audience</strong> is your
+    brain — 20,484 people in 20,484 assigned seats, each responsible for
+    a specific job: seeing faces, recognizing voices, feeling suspense,
+    processing language. When something interesting happens on screen,
+    certain sections lean forward. Blood rushes to those seats. That rush
+    of blood is called the BOLD signal — the audience's live reaction
+    meter.
+  </p>
+  <p>
+    <strong style="color: var(--isu-gold);">TRIBE v2</strong> is the
+    high-speed sensor system in every seat. Trained by Meta on 25 human
+    subjects, it watches the movie at the front of the theater and
+    predicts, twice per second, how excited each audience member is going
+    to get — 3.5 to 5 seconds before their reaction visibly peaks.
+    (Biology is slow: when neurons fire, the blood that feeds them takes
+    a few seconds to arrive. Cortex has already corrected for it.)
+  </p>
+  <p>
+    <strong style="color: var(--isu-gold);">Gemma 4</strong> is the film
+    critic in the back booth. After the screening, Gemma reads the
+    audience-reaction printout and explains what happened — at three
+    levels of detail, depending on whom the explanation is for.
+  </p>
+
+  <div class="pull">
+    "Twenty thousand seats. One movie. One critic. About six minutes."
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════ Three tiers ═══════════════════════════════════ -->
+<section>
+  <h2>The three narration tiers</h2>
+  <p>
+    Three different film critics writing about the same screening. Same
+    facts. Different reader. Pick the one that fits the audience.
+  </p>
+  <div class="tiers">
+    <div class="tier">
+      <div class="head">tier · general</div>
+      <div class="title">For a curious high-schooler</div>
+      <div class="body">"The audience in the back-left section lit up — those are the people responsible for recognizing faces. A close-up just appeared on screen, and 3.5 seconds later that section leaned forward in their seats."</div>
+    </div>
+    <div class="tier">
+      <div class="head">tier · college</div>
+      <div class="title">For someone who took bio or psych</div>
+      <div class="body">"Primary visual and fusiform face regions showed strong bilateral activation within the visual network (peak z = 4.2 at t = 7), consistent with face-selective response in the ventral visual stream."</div>
+    </div>
+    <div class="tier">
+      <div class="head">tier · clinical</div>
+      <div class="title">For a clinician or researcher</div>
+      <div class="body">"Yeo-7 Visual network activation (bilateral occipital, fusiform): peak BOLD at t = 7 (3.5 s post-stimulus, 5 s HRF lag pre-applied). Left-lateralized superior temporal gyrus response suggests auditory-linguistic processing."</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════ Why it matters ═══════════════════════════════════ -->
+<section>
+  <h2>Why it matters medically</h2>
+  <p>
+    A clinical fMRI session — a real brain scan in a real hospital —
+    costs between $3,000 and $6,000, takes 90 minutes, and requires a
+    radiologist to interpret. That price tag puts brain science out of
+    reach for most of the world.
+  </p>
+  <p>
+    Cortex does <strong style="color: var(--cardinal-bright);">not</strong>
+    replace a clinical scan. It is not a diagnostic tool. Its predictions
+    are averaged across 25 subjects, not tuned to your individual brain.
+    But it opens research doors that are currently locked:
+  </p>
+  <div class="panel" style="margin-top: 16px;">
+    <ul>
+      <li><strong style="color: var(--text);">Educational neuroscience.</strong> Which brain networks does a given lecture, training video, or online course actually engage? Educators can iterate on content the way product designers iterate on interfaces — with signal, not guesswork.</li>
+      <li><strong style="color: var(--text);">Rehabilitation research.</strong> Does a therapy video reach the target motor or language regions? Quantify it without booking a scanner.</li>
+      <li><strong style="color: var(--text);">Media and accessibility.</strong> Which cognitive systems does a piece of content activate? Designers, filmmakers, and accessibility engineers can answer this question for the first time without a neuroscience lab.</li>
+    </ul>
+  </div>
+  <p style="margin-top: 24px;">
+    The hardware that runs this costs around $2,000 at MSRP — street
+    price $2,500–3,000 for the RTX 5090. The equivalent cloud capacity on
+    a Google Cloud L4 GPU costs about $0.70/hour, or roughly $504/month
+    running 24/7. At scale-to-zero it approaches $0.
+    <strong style="color: var(--isu-gold);">The direction is unmistakable.</strong>
+  </p>
+</section>
+
+<!-- ═══════════════════════════════════ NOT ═══════════════════════════════════ -->
+<section>
+  <h2>What Cortex is <span class="accent">not</span></h2>
+  <div class="panel tinted">
+    <ul>
+      <li><strong style="color: var(--text);">Not a diagnostic tool.</strong> Nothing Cortex produces should be used to diagnose, treat, or screen for any medical condition.</li>
+      <li><strong style="color: var(--text);">Not a personal brain scan.</strong> TRIBE v2 is trained on 25 subjects and outputs a population-averaged prediction. It predicts how a statistically average human brain responds to your video — not how <em>your</em> specific brain responds.</li>
+      <li><strong style="color: var(--text);">Not a replacement for fMRI.</strong> Clinical fMRI measures actual blood flow in your brain. Cortex predicts what blood flow would look like, based on a model trained on a small group of people watching TV shows and movies.</li>
+      <li><strong style="color: var(--text);">Not subcortical.</strong> The predictions cover the cortical surface only — the outer rind of the brain. Deep structures like the amygdala, hippocampus, and thalamus are not modeled.</li>
+      <li><strong style="color: var(--text);">Not trained on medical data.</strong> TRIBE v2 was trained on subjects watching the TV series <em>Friends</em> and feature films, not on patients or clinical stimuli.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════ Numbers ═══════════════════════════════════ -->
+<section>
+  <h2>Model limits <span class="accent">— the spec sheet, in plain English</span></h2>
+  <table class="limits">
+    <thead><tr><th>What</th><th>Number</th></tr></thead>
+    <tbody>
+      <tr><td>Sampling rate (TRIBE v2)</td><td>2 Hz · one prediction every 0.5 s</td></tr>
+      <tr><td>Hemodynamic lag (already corrected)</td><td>5 seconds</td></tr>
+      <tr><td>What "t = 7" means</td><td>3.5 s into the movie</td></tr>
+      <tr><td>Cortical vertices predicted</td><td>20,484 (fsaverage5, both hemispheres)</td></tr>
+      <tr><td>Subjects in training data</td><td>25 (Courtois NeuroMod)</td></tr>
+      <tr><td>Maximum input length</td><td>50 seconds (100 timepoints, hard limit)</td></tr>
+      <tr><td>Input types</td><td>video · audio · image · text</td></tr>
+      <tr><td>Subcortical coverage</td><td>none</td></tr>
+      <tr><td>Diagnostic use</td><td>not permitted</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════ Architecture ═══════════════════════════════════ -->
+<section>
+  <h2>Architecture</h2>
+  <p>The pipeline, end to end:</p>
+  <pre><code>Upload
+  └─ media_gate          Gemma 4 multimodal — describes what it sees
+       └─ TRIBE v2        Predicts (T × 20,484) BOLD z-scores at 2 Hz
+            └─ BrainAnalysis   Schaefer-400 parcellation, Yeo-7 networks, top ROIs
+                 └─ Gemma narrate × 3 tiers   General · College · Clinical
+                      └─ WebSocket → Three.js viewer   Per-vertex 3D animation</code></pre>
+  <p>
+    The GPU scheduler swaps TRIBE v2 (~22.4 GB VRAM) and Gemma 4 E4B
+    (~10 GB VRAM) sequentially on a 32 GB card — they cannot coexist.
+    Swap takes about 10 seconds. The state machine is simple:
+    <code>IDLE → GEMMA_ACTIVE → TRIBE_ACTIVE</code>, with eviction-driven
+    swaps and a Google Cloud Run L4 fallback when the local GPU is busy.
+  </p>
+</section>
+
+<!-- ═══════════════════════════════════ Mercury sister ═══════════════════════════════════ -->
+<section>
+  <h2>Mercury <span class="accent">— the agent that drives Cortex</span></h2>
+  <div class="panel gold">
+    <p style="color: var(--text);">
+      The Three.js brain viewer in the demo video was written by
+      <strong>Kimi K2.6</strong> via the Nous Portal, dispatched by
+      <strong>Mercury</strong> (a Hermes Agent fork) — 14 commits, 75
+      minutes, $22.04. Mercury runs as a personal agent across six
+      surfaces (terminal, Discord, web, iMessage, email, mobile) and
+      drives the Cortex pipeline through a single skill called
+      <code>cortex-bridge</code>.
+    </p>
+    <p>
+      <a href="https://github.com/AlexiosBluffMara/mercury">github.com/AlexiosBluffMara/mercury</a>
+      &nbsp;·&nbsp;
+      <a href="https://alexiosbluffmara.github.io/mercury/">alexiosbluffmara.github.io/mercury</a>
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════ Try it ═══════════════════════════════════ -->
+<section id="try">
+  <h2>Try it</h2>
+  <div class="panel">
+    <h3>The live demo</h3>
+    <p>The hosted version runs on Google Cloud Run with the same Gemma 4 model. Just open it and upload a clip:</p>
+    <p><a class="cta primary" href="https://cortex.redteamkitchen.com" style="display: inline-block; margin-top: 4px;">cortex.redteamkitchen.com</a></p>
+    <h3>Run it locally</h3>
+    <p>You'll need an NVIDIA GPU with 24 GB+ VRAM (RTX 4090, 5090, or A6000), Python 3.11+, and Ollama installed.</p>
+    <pre><code># 1. Clone Cortex
+git clone https://github.com/AlexiosBluffMara/cortex
+cd cortex
+
+# 2. Make a Python environment
+python -m venv .venv
+source .venv/bin/activate    # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+
+# 3. Pull the fast narration model
+ollama pull gemma4:e4b
+
+# 4. Start the server
+uvicorn webapp.server:app --host 0.0.0.0 --port 8765
+# Open http://localhost:8765</code></pre>
+    <p>TRIBE v2 weights install separately under CC-BY-NC 4.0 — see <code>NOTICE</code> for the license terms.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════ Brand bar ═══════════════════════════════════ -->
+<div class="brand-bar">
+  <div>
+    <span class="swatch" aria-hidden="true"></span>
+    <strong>Submitted in partial fulfillment</strong> of coursework at Illinois State University, Bloomington–Normal.
+  </div>
+  <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;">
+    v0.1.0 · Apache-2.0
+  </div>
+</div>
+
+<footer>
+  <p>Code: Apache-2.0. TRIBE v2 model weights: CC-BY-NC 4.0 (Meta — non-commercial use only). Gemma 4: Gemma Terms of Use (Google). <em>Gemma is a trademark of Google LLC.</em></p>
+  <p>Built by <a href="https://github.com/AlexiosBluffMara">Red Team Kitchen / Alexios Bluff Mara LLC</a>. Brand accent colors reference Illinois State University's published values; ISU logos and wordmarks are not used. Not a medical device. Not a diagnostic tool.</p>
+</footer>
+
+</div>
+</body>
+</html>
