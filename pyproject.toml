@@ -135,6 +135,7 @@ asyncio_mode = "auto"
 markers = [
     "unit: fast unit tests with mocked dependencies",
     "integration: integration tests touching local services",
+    "e2e: end-to-end tests against a live server",
     "gpu: requires a CUDA-capable GPU",
     "ollama: requires a running Ollama server with Gemma 4 models",
     "tribe: requires TRIBE v2 weights downloaded locally",
