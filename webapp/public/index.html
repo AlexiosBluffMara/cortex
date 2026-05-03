@@ -336,8 +336,66 @@
         .cost-cloud-val { color: var(--accent); font-weight: 600; }
 
         .narration-body {
-            flex: 1; overflow-y: auto; padding: 20px 20px 16px;
+            flex: 0 1 auto; max-height: 38%; overflow-y: auto; padding: 20px 20px 16px;
             display: flex; flex-direction: column; gap: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* ── Data panel: ROI bars + 3D BOLD ribbon + Yeo-7 polar wheel ── */
+        .data-panel {
+            display: flex; flex-direction: column; flex: 1 1 auto;
+            min-height: 280px; background: var(--surface);
+        }
+        .data-tabs {
+            display: flex; gap: 2px; padding: 6px 14px 0;
+            border-bottom: 1px solid var(--border); flex-shrink: 0;
+            background: rgba(13,14,20,0.4);
+        }
+        .data-tab {
+            font-family: "JetBrains Mono", monospace; font-size: 10.5px;
+            text-transform: uppercase; letter-spacing: 0.04em;
+            background: none; border: none; color: var(--muted);
+            padding: 8px 12px; cursor: pointer; border-bottom: 2px solid transparent;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .data-tab:hover { color: var(--text); }
+        .data-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .data-body {
+            flex: 1 1 auto; min-height: 0; position: relative; overflow: hidden;
+        }
+        .data-pane {
+            position: absolute; inset: 0; display: none;
+            padding: 14px 14px 8px; flex-direction: column;
+            animation: dataFade 0.18s ease;
+        }
+        .data-pane.active { display: flex; }
+        @keyframes dataFade { from{opacity:0; transform:translateY(4px)} to{opacity:1; transform:none} }
+        .chart-mount    { flex: 1 1 auto; min-height: 0; width: 100%; }
+        .chart-mount-3d { flex: 1 1 auto; min-height: 0; width: 100%; cursor: grab; background: #0a0b0e; border-radius: 6px; }
+        .chart-mount-3d:active { cursor: grabbing; }
+        .chart-caption {
+            font-size: 10.5px; color: var(--muted); padding-top: 8px;
+            font-family: "Open Sans", sans-serif; line-height: 1.5;
+        }
+        .chart-caption .muted { color: var(--text-mid, #6a6a88); font-style: italic; }
+
+        /* D3 styling */
+        .roi-bar { transition: opacity 0.15s; }
+        .roi-bar:hover { opacity: 0.75; cursor: pointer; }
+        .roi-label { font-family: "JetBrains Mono", monospace; font-size: 10px; fill: var(--text); }
+        .roi-value { font-family: "JetBrains Mono", monospace; font-size: 10px; fill: var(--muted); }
+        .axis text { fill: var(--muted); font-family: "JetBrains Mono", monospace; font-size: 10px; }
+        .axis line, .axis path { stroke: var(--border-strong); stroke-width: 1; }
+        .polar-spoke { fill: rgba(204,0,0,0.55); stroke: var(--accent); stroke-width: 1.2; transition: fill 0.15s; }
+        .polar-spoke:hover { fill: rgba(204,0,0,0.85); cursor: pointer; }
+        .polar-label { font-family: "JetBrains Mono", monospace; font-size: 10px; fill: var(--text); }
+        .polar-grid  { fill: none; stroke: var(--border); stroke-width: 0.5; stroke-dasharray: 2,3; }
+        .empty-state { font-family: "Open Sans", sans-serif; font-size: 12px; color: var(--muted); text-align: center; margin: auto; padding: 24px; }
+
+        /* Mobile: collapse the data panel below the narrations */
+        @media (max-width: 900px) {
+            .narration-body { max-height: none; flex: 0 0 auto; }
+            .data-panel { display: none; }
         }
 
         .narration-text {
@@ -1184,6 +1242,28 @@
                 <div id="narration-ml_scientist" class="narration-tier"><p class="narration-placeholder">Generating the ML scientist reading…</p></div>
             </div>
 
+            <!-- ── DATA PANEL: ROI bars + 3D BOLD ribbon + Yeo-7 polar wheel ── -->
+            <div id="data-panel" class="data-panel">
+                <div class="data-tabs">
+                    <button class="data-tab active" data-tab="rois">Top regions</button>
+                    <button class="data-tab" data-tab="ribbon">3D BOLD ribbon</button>
+                    <button class="data-tab" data-tab="polar">Network wheel</button>
+                </div>
+                <div class="data-body">
+                    <div class="data-pane active" id="pane-rois">
+                        <div id="chart-rois" class="chart-mount"></div>
+                    </div>
+                    <div class="data-pane" id="pane-ribbon">
+                        <div id="chart-ribbon" class="chart-mount-3d"></div>
+                        <div class="chart-caption">Time runs into the screen. Each ribbon = one Yeo-7 network. Height = mean |z|. <span class="muted">Drag to orbit.</span></div>
+                    </div>
+                    <div class="data-pane" id="pane-polar">
+                        <div id="chart-polar" class="chart-mount"></div>
+                        <div class="chart-caption">Each spoke = one of the 7 functional networks. Length = peak amplitude across the scan.</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Mobile-only 2D network canvas (hidden on desktop via CSS default, shown via media query) -->
             <canvas id="mobile-brain-canvas"></canvas>
         </aside>
@@ -1273,6 +1353,9 @@
         </div>
     </div>
 
-    <script type="module" src="/assets/main.js?v=20260430-mobile1"></script>
+    <!-- D3 v7 (UMD) for the data panel charts -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script type="module" src="/assets/main.js?v=20260503-charts3d"></script>
+    <script type="module" src="/assets/charts.js?v=20260503-charts3d"></script>
 </body>
 </html>

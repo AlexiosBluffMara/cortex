@@ -655,6 +655,9 @@ function _setNarrationText(divId, text, isPlaceholder) {
 
 function renderNarration(result) {
     st.scanResult = result;
+    // Publish to window for the data-panel charts (charts.js reads these)
+    window.lastScanResult = result;
+    window.dispatchEvent(new CustomEvent("cortex:scan-complete", { detail: { result } }));
     // Show active persona model or tier-based model
     const activeTab = document.querySelector(".narr-tab.active")?.dataset.narr;
     narrationModel.textContent = PERSONA_MODELS[activeTab]
@@ -844,6 +847,20 @@ async function loadBoldForScan(scanId) {
         drawColormapLegend();
         if (isMobile) drawMobileFrame(f0);
         appendEvent(`BOLD: ${trace.n_t} TRs × ${trace.n_regions} regions (simulated), opened at t=${f0}`, "complete");
+        // Publish for the data-panel charts (3D BOLD ribbon)
+        if (trace.regions && trace.values) {
+            // Flatten trace.values (T x R) into a Float32Array
+            const flat = new Float32Array(trace.n_t * trace.n_regions);
+            for (let t = 0; t < trace.n_t; t++) {
+                for (let r = 0; r < trace.n_regions; r++) flat[t * trace.n_regions + r] = trace.values[t][r];
+            }
+            const networks = trace.regions.map(roi => {
+                const m = String(roi).match(/_(Vis|SomMot|DorsAttn|SalVentAttn|Limbic|Cont|Default)_/);
+                return m ? m[1] : "Default";
+            });
+            window.tribeBoldData = { n_t: trace.n_t, n_regions: trace.n_regions, trace: flat, networks };
+            window.dispatchEvent(new CustomEvent("cortex:scan-complete", { detail: { fromBold: true } }));
+        }
     } catch (err) {
         appendEvent(`BOLD load failed: ${err.message}`, "failed");
     }
