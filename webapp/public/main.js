@@ -637,10 +637,10 @@ const TIER_MODELS = [
     "Gemma 4 26B","Gemma 4 31B","Gemma 4 31B",
 ];
 const PERSONA_MODELS = {
-    sam:     "Gemma 4 E4B",
-    priya:   "Gemma 4 27B · Nous Hermes-3",
-    dr_park: "Gemma 4 27B",
-    chris:   "Gemma 4 E4B",
+    student:      "Gemma 4 E4B (OpenRouter free)",
+    ml_scientist:"Gemma 4 26B MoE (Seratonin RTX 5090)",
+    clinician:   "Gemma 4 31B (Big Apple M4 Max)",
+    patient:     "Gemma 4 E4B (OpenRouter free)",
 };
 
 function _setNarrationText(divId, text, isPlaceholder) {
@@ -689,11 +689,11 @@ function renderNarration(result) {
     }
 
     // Populate 4-persona narration divs
-    const PERSONA_KEYS = ["sam", "priya", "dr_park", "chris"];
+    const PERSONA_KEYS = ["student", "ml_scientist", "clinician", "patient"];
     if (result.narrations && typeof result.narrations === "object") {
         // New persona dict format: {sam, priya, dr_park, chris}
         // Legacy compat: map old keys → new persona keys
-        const legacyMap = { american: "sam", student: "sam", neurosurgeon: "dr_park", ml_engineer: "priya" };
+        const legacyMap = { american: "student", student: "student", neurosurgeon: "clinician", ml_engineer: "ml_scientist" };
         const legacyNarrs = {};
         for (const [oldKey, newKey] of Object.entries(legacyMap)) {
             if (result.narrations[oldKey] && !legacyNarrs[newKey]) legacyNarrs[newKey] = result.narrations[oldKey];
@@ -713,10 +713,10 @@ function renderNarration(result) {
             result.status === "narrating" ? "Narrating personas…"     : "TRIBE v2 running…"
         );
         const isPlaceholder = !result.narration;
-        _setNarrationText("narration-sam",     fallbackText, isPlaceholder);
-        _setNarrationText("narration-priya",   "Generating…", true);
-        _setNarrationText("narration-dr_park", "Generating…", true);
-        _setNarrationText("narration-chris",   "Generating…", true);
+        _setNarrationText("narration-student",     fallbackText, isPlaceholder);
+        _setNarrationText("narration-ml_scientist",   "Generating…", true);
+        _setNarrationText("narration-clinician", "Generating…", true);
+        _setNarrationText("narration-patient",   "Generating…", true);
     }
 
     if (result.top_rois?.length) {
@@ -744,7 +744,7 @@ function renderNarration(result) {
 // ---------------------------------------------------------------------------
 // Narration tabs — 4 persona voices
 // ---------------------------------------------------------------------------
-const PERSONA_TAB_KEYS = ["sam", "priya", "dr_park", "chris"];
+const PERSONA_TAB_KEYS = ["student", "ml_scientist", "clinician", "patient"];
 document.querySelectorAll(".narr-tab").forEach(btn => {
     btn.addEventListener("click", () => {
         document.querySelectorAll(".narr-tab").forEach(b => b.classList.remove("active"));
@@ -774,7 +774,7 @@ document.querySelectorAll(".tier-pill").forEach(btn => {
         const tier = +btn.dataset.tier;
         setTierPill(tier);
         if (st.scanId && st.scanResult?.status === "complete") {
-            _setNarrationText("narration-sam", `Requesting tier-${tier} narration…`, true);
+            _setNarrationText("narration-student", `Requesting tier-${tier} narration…`, true);
             try {
                 const r = await fetch(`/api/scan/${st.scanId}/narrate?tier=${tier}`, { method: "POST" });
                 if (!r.ok) throw new Error();
@@ -967,7 +967,7 @@ function onWs(msg) {
         case "scan_failed":
             appendEvent(`scan failed: ${msg.error?.message ?? "?"}`, "failed");
             overlay.classList.add("hidden");
-            _setNarrationText("narration-sam", "Scan failed.", true);
+            _setNarrationText("narration-student", "Scan failed.", true);
             pushStream("error", `scan ${shortId(msg.scan_id)} failed: ${(msg.error?.message ?? "?").slice(0,80)}`);
             break;
     }
@@ -1208,10 +1208,10 @@ async function submitMediaFile(file, { btnEl, resetLabel } = {}) {
     }
 
     // Reset narration divs to "pending" state
-    _setNarrationText("narration-sam",    "Scan accepted — awaiting results…", true);
-    _setNarrationText("narration-priya",  "Generating…", true);
-    _setNarrationText("narration-dr_park","Generating…", true);
-    _setNarrationText("narration-chris",  "Generating…", true);
+    _setNarrationText("narration-student",    "Scan accepted — awaiting results…", true);
+    _setNarrationText("narration-ml_scientist",  "Generating…", true);
+    _setNarrationText("narration-clinician","Generating…", true);
+    _setNarrationText("narration-patient",  "Generating…", true);
 
     const fd = new FormData();
     fd.append("file",            file);

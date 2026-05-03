@@ -64,10 +64,10 @@
   .narr{display:flex;flex-direction:column;gap:0.15rem}
   .narr .who{display:flex;align-items:center;gap:0.4rem;font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;font-weight:600}
   .narr .who .dot{width:8px;height:8px;border-radius:50%}
-  .narr .who.sam .dot{background:var(--accent)}
-  .narr .who.priya .dot{background:#4285F4}
-  .narr .who.dr_park .dot{background:#4E2A84}
-  .narr .who.chris .dot{background:#1A73E8}
+  .narr .who.student      .dot{background:#CC0000}
+  .narr .who.patient      .dot{background:#1A73E8}
+  .narr .who.clinician    .dot{background:#4E2A84}
+  .narr .who.ml_scientist .dot{background:#4285F4}
   .narr .text{font-size:0.85rem;color:#d8dae0;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
   .scan-card.expanded .narr .text{-webkit-line-clamp:unset;overflow:visible}
   .scan-card .expand{margin-top:auto;padding:0.6rem;text-align:center;color:var(--muted);font-size:0.78rem;cursor:pointer;border-top:1px solid var(--border);user-select:none}
@@ -115,12 +115,25 @@
 </footer>
 
 <script>
+// New generic-role IDs, plus backward compatibility keys for old gallery entries
+// where narrations were stored under sam/chris/dr_park/priya.
 const PERSONAS = [
-  ["sam",     "Sam · ISU Freshman"],
-  ["chris",   "Chris · WBEZ Reporter"],
-  ["priya",   "Priya · Google ML"],
-  ["dr_park", "Dr. Park · Northwestern"],
+  ["student",      "Student · ISU"],
+  ["patient",      "Patient · Carle / BroMenn"],
+  ["clinician",    "Clinician · NW Memorial / RUSH"],
+  ["ml_scientist", "ML Scientist · Chicago"],
 ];
+const PERSONA_BACKCOMPAT = {
+  sam: "student", chris: "patient", dr_park: "clinician", priya: "ml_scientist",
+};
+function normaliseNarrations(narrs) {
+  // Coalesce old keys into new keys so historical scans display.
+  const out = { ...narrs };
+  for (const [oldK, newK] of Object.entries(PERSONA_BACKCOMPAT)) {
+    if (out[oldK] && !out[newK]) out[newK] = out[oldK];
+  }
+  return out;
+}
 
 function classifyRoi(roi) {
   if (!roi) return "";
@@ -147,8 +160,9 @@ function escapeHtml(s) {
 function renderCard(s) {
   const rois = (s.top_rois || []).slice(0, 3);
   const pills = rois.map(r => `<span class="pill ${classifyRoi(r)}">${escapeHtml(shortRoi(r))}</span>`).join("");
+  const allNarrs = normaliseNarrations(s.narrations || {});
   const narrs = PERSONAS.map(([id, label]) => {
-    const text = s.narrations?.[id];
+    const text = allNarrs[id];
     if (!text) return "";
     return `<div class="narr"><div class="who ${id}"><span class="dot"></span>${label}</div><div class="text">${escapeHtml(text)}</div></div>`;
   }).join("");

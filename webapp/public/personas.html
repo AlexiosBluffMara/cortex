@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="dark" />
-<title>Cortex · Personas</title>
-<meta name="description" content="The four narration voices that explain every brain scan: an ISU freshman, a Google ML scientist, a Northwestern neuroscientist, and a WBEZ science reporter." />
+<title>Cortex · Four readers, four institutions</title>
+<meta name="description" content="The four narration voices that explain every brain scan: an ISU student, a Carle/BroMenn patient, a Northwestern/RUSH clinician, and a Chicago ML scientist." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -15,7 +15,7 @@
     --bg:#0a0b0e; --surface:#14151c; --surface2:#1c1e28; --border:#262834; --border-strong:#383a47;
     --accent:#CC0000; --isu-yellow:#F6A917; --isu-blue:#56758f;
     --text:#f0f2f6; --muted:#8b8d96;
-    --radius:12px;
+    --radius:14px;
   }
   html,body{background:var(--bg);color:var(--text);font-family:"Open Sans",ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.6}
   a{color:#ee2d3f;text-decoration:none}
@@ -32,7 +32,7 @@
   .topbar .right{margin-left:auto;font-family:"JetBrains Mono",monospace;font-size:0.85rem;color:var(--muted)}
 
   .hero{padding:3rem 1.5rem 1.5rem;max-width:920px;margin:0 auto}
-  .hero h1{font-size:2.2rem;margin-bottom:0.6rem;letter-spacing:-0.02em}
+  .hero h1{font-size:2.4rem;margin-bottom:0.6rem;letter-spacing:-0.02em}
   .hero h1 .accent{color:var(--accent)}
   .hero p{color:var(--muted);font-size:1.05rem}
 
@@ -40,34 +40,34 @@
   .why h2{font-size:1.05rem;margin-bottom:0.6rem;color:var(--text)}
   .why p{color:#d8dae0;font-size:0.95rem}
 
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.4rem;max-width:1200px;margin:0 auto;padding:1rem 1.5rem 4rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:1.4rem;max-width:1240px;margin:0 auto;padding:1rem 1.5rem 4rem}
 
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.6rem 1.4rem;display:flex;flex-direction:column;gap:1rem;border-top:4px solid transparent;transition:transform 0.15s}
-  .card:hover{transform:translateY(-2px)}
-  .card[data-id="sam"]{border-top-color:var(--accent)}
-  .card[data-id="priya"]{border-top-color:#4285F4}
-  .card[data-id="dr_park"]{border-top-color:#4E2A84}
-  .card[data-id="chris"]{border-top-color:#1A73E8}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.6rem 1.4rem;display:flex;flex-direction:column;gap:1rem;border-top:4px solid transparent;transition:transform 0.15s, box-shadow 0.15s}
+  .card:hover{transform:translateY(-3px);box-shadow:0 8px 20px rgba(0,0,0,0.4)}
+  .card[data-id="student"]      {border-top-color:#CC0000}  /* ISU red */
+  .card[data-id="patient"]      {border-top-color:#1A73E8}  /* clinical blue */
+  .card[data-id="clinician"]    {border-top-color:#4E2A84}  /* Northwestern purple */
+  .card[data-id="ml_scientist"] {border-top-color:#4285F4}  /* Google blue */
 
-  .card .header-row{display:flex;align-items:flex-start;gap:1rem}
-  .avatar{width:64px;height:64px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:1.7rem;font-weight:700;flex-shrink:0;border:2px solid var(--border-strong)}
-  .card[data-id="sam"] .avatar{background:rgba(204,0,0,0.15);border-color:var(--accent);color:#ff7070}
-  .card[data-id="priya"] .avatar{background:rgba(66,133,244,0.15);border-color:#4285F4;color:#7ab3f5}
-  .card[data-id="dr_park"] .avatar{background:rgba(78,42,132,0.18);border-color:#4E2A84;color:#b89bd9}
-  .card[data-id="chris"] .avatar{background:rgba(26,115,232,0.15);border-color:#1A73E8;color:#7aa3ff}
+  .role-row{display:flex;align-items:flex-start;gap:1rem;margin-bottom:0.4rem}
+  .glyph{width:62px;height:62px;border-radius:14px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:1.7rem;font-weight:700;flex-shrink:0;border:1.5px solid var(--border-strong);font-family:'JetBrains Mono', monospace}
+  .card[data-id="student"]      .glyph{background:rgba(204,0,0,0.13);   border-color:#CC0000;color:#ff7070}
+  .card[data-id="patient"]      .glyph{background:rgba(26,115,232,0.13);border-color:#1A73E8;color:#7aa3ff}
+  .card[data-id="clinician"]    .glyph{background:rgba(78,42,132,0.18); border-color:#4E2A84;color:#b89bd9}
+  .card[data-id="ml_scientist"] .glyph{background:rgba(66,133,244,0.13);border-color:#4285F4;color:#7ab3f5}
 
-  .name{font-size:1.2rem;font-weight:700;line-height:1.2}
-  .role{font-size:0.85rem;color:var(--muted);margin-top:0.15rem}
+  .role{font-size:1.3rem;font-weight:700;line-height:1.15}
+  .institution{font-size:0.85rem;color:var(--muted);margin-top:0.3rem;font-family:'JetBrains Mono',monospace}
 
-  .who{font-size:0.9rem;color:#d8dae0}
-  .style-meta{display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.4rem}
-  .chip{font-family:"JetBrains Mono",monospace;font-size:0.7rem;padding:0.18rem 0.5rem;border-radius:99px;background:var(--surface2);border:1px solid var(--border-strong);color:var(--muted)}
+  .who{font-size:0.92rem;color:#d8dae0}
+  .style-meta{display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.2rem}
+  .chip{font-family:"JetBrains Mono",monospace;font-size:0.7rem;padding:0.2rem 0.55rem;border-radius:99px;background:var(--surface2);border:1px solid var(--border-strong);color:var(--muted)}
 
-  .sample{background:#0d0e13;padding:0.9rem 1rem;border-radius:8px;border-left:2px solid currentColor;font-size:0.88rem;line-height:1.5;color:#d8dae0;font-style:italic}
-  .card[data-id="sam"] .sample{border-left-color:var(--accent)}
-  .card[data-id="priya"] .sample{border-left-color:#4285F4}
-  .card[data-id="dr_park"] .sample{border-left-color:#4E2A84}
-  .card[data-id="chris"] .sample{border-left-color:#1A73E8}
+  .sample{background:#0d0e13;padding:0.95rem 1.05rem;border-radius:10px;border-left:2.5px solid currentColor;font-size:0.88rem;line-height:1.55;color:#d8dae0;font-style:italic}
+  .card[data-id="student"]      .sample{border-left-color:#CC0000}
+  .card[data-id="patient"]      .sample{border-left-color:#1A73E8}
+  .card[data-id="clinician"]    .sample{border-left-color:#4E2A84}
+  .card[data-id="ml_scientist"] .sample{border-left-color:#4285F4}
 
   .footer{text-align:center;padding:2rem 1rem;color:var(--muted);font-size:0.85rem;border-top:1px solid var(--border)}
 </style>
@@ -83,42 +83,40 @@
     <a href="/specs.html">Specs</a>
     <a href="https://github.com/AlexiosBluffMara/cortex">GitHub</a>
   </nav>
-  <span class="right">RTX 5090 · TRIBE v2 · Gemma 4</span>
+  <span class="right">RTX 5090 · M4 Max · TRIBE v2 · Gemma 4</span>
 </header>
 
 <section class="hero">
-  <h1>Four <span class="accent">perspectives</span> on the same brain</h1>
-  <p>Every Cortex scan generates four parallel narrations from one TRIBE prediction.
-     The four voices below are real personas the system writes for: each one has a
-     different reading level, vocabulary, and value system. They're not avatars or
-     fake users — they're prompt contracts hand-tuned to make Gemma 4 produce
-     genuinely different explanations of the same data.</p>
+  <h1>Four <span class="accent">readers.</span> Four real institutions.</h1>
+  <p>Every Cortex scan generates four narrations from one TRIBE prediction.
+     The four readers below are <strong>generic roles tied to specific Illinois institutions</strong>
+     where this kind of brain-response demo would matter — a student at ISU, a patient
+     in a Carle/BroMenn waiting room, a clinician at Northwestern Memorial or RUSH, and
+     an ML scientist in the Chicago tech corridor. Same data, four explanations.</p>
 </section>
 
 <section class="why">
-  <h2>Why four voices instead of one?</h2>
-  <p>Most "AI explainers" collapse to the same dad-joke middle register no matter
-     who's reading. Cortex refuses that. A 5,000-word Northwestern-grade BOLD
-     interpretation is useless to an ISU freshman, and a "lol your brain went brrr"
-     summary is insulting to a clinician. So every scan gets <strong>four narrations
-     in parallel</strong>, generated from the same underlying TRIBE v2 activation map
-     through four distinct system prompts. You see all four side-by-side and pick the
-     one that sounds like your brain.</p>
+  <h2>Why generic roles instead of fictional people?</h2>
+  <p>Earlier versions of this site had four fictional characters with first names. We
+     replaced them with role-only identities for two reasons: (1) names imply a fictional
+     individual, which is misleading when the prompts are really about <em>register</em>;
+     (2) tying each role to a real institution makes the audience concrete — every brain
+     scan can now be read four ways without confusing the reader about who's reading it.</p>
 </section>
 
 <main class="grid">
 
-  <article class="card" data-id="sam">
-    <div class="header-row">
-      <div class="avatar">S</div>
+  <article class="card" data-id="student">
+    <div class="role-row">
+      <div class="glyph">S</div>
       <div>
-        <div class="name">Sam</div>
-        <div class="role">ISU freshman · Normal, IL</div>
+        <div class="role">The Student</div>
+        <div class="institution">Illinois State University · Normal, IL</div>
       </div>
     </div>
-    <p class="who">First-semester Illinois State University student. Took Intro Bio,
-       discovered TikTok brain-science last week. Lives in Watterson Towers, grinds
-       at Milner Library at 2am. Texts in lowercase with no punctuation.</p>
+    <p class="who">First-year ISU undergraduate. Took Intro Bio last semester. Discovered
+       brain-science TikToks last week. Lives in Watterson Towers, grinds at Milner Library
+       at 2 a.m., would rather be at Upchurch.</p>
     <div class="style-meta">
       <span class="chip">tier 2 · public</span>
       <span class="chip">3-4 sentences</span>
@@ -130,39 +128,43 @@
        wait that's actually wild."</div>
   </article>
 
-  <article class="card" data-id="chris">
-    <div class="header-row">
-      <div class="avatar">C</div>
+  <article class="card" data-id="patient">
+    <div class="role-row">
+      <div class="glyph">P</div>
       <div>
-        <div class="name">Chris</div>
-        <div class="role">Science reporter · WBEZ Chicago</div>
+        <div class="role">The Patient</div>
+        <div class="institution">Carle BroMenn / Carle Foundation · Bloomington–Normal, IL</div>
       </div>
     </div>
-    <p class="who">Science and tech reporter for WBEZ Chicago and a 40K-subscriber
-       newsletter. Translates hard science for an educated, curious, non-specialist
-       audience. Always hunting for the one quotable sentence and the analogy that lands.</p>
+    <p class="who">Patient or family member sitting in a Carle BroMenn Medical Center
+       (Normal) or Carle Foundation Hospital (Urbana) waiting room after a neuro
+       consult. Smart, anxious, not a scientist. Wants the human translation of what's
+       on the printout — and clear language about what this <em>isn't</em>.</p>
     <div class="style-meta">
-      <span class="chip">tier 3 · journalist</span>
+      <span class="chip">tier 3 · layperson</span>
       <span class="chip">4-5 sentences</span>
-      <span class="chip">vivid analogies</span>
-      <span class="chip">one stat per piece</span>
+      <span class="chip">plain English</span>
+      <span class="chip">honest caveats</span>
     </div>
-    <div class="sample">"The striking thing here is how the brain immediately prioritizes
-       physical sensation, with the somatomotor network — the brain's body-map — lighting up
-       within half a second. Think of it like a dispatcher routing the most urgent call first."</div>
+    <div class="sample">"What this shows is the part of your brain that handles seeing
+       things lighting up — the visual area at the back. Think of it like a dispatcher
+       routing an incoming call. Worth saying out loud: this is a research model trained
+       on other people's brains, not a scan of yours from a real MRI machine."</div>
   </article>
 
-  <article class="card" data-id="dr_park">
-    <div class="header-row">
-      <div class="avatar">P</div>
+  <article class="card" data-id="clinician">
+    <div class="role-row">
+      <div class="glyph">C</div>
       <div>
-        <div class="name">Dr. Jiyeon Park</div>
-        <div class="role">Neurologist · Northwestern Feinberg</div>
+        <div class="role">The Clinician</div>
+        <div class="institution">Northwestern Memorial / RUSH University Medical Center · Chicago, IL</div>
       </div>
     </div>
-    <p class="who">Associate Professor of Neurology at Northwestern Feinberg School of
-       Medicine / Northwestern Memorial Hospital. Runs a cognitive-neuroscience lab and
-       consults on fMRI-guided presurgical mapping. Speaks in Yeo-7 networks and Brodmann areas.</p>
+    <p class="who">Attending neurologist at Northwestern Memorial Hospital (Streeterville)
+       or RUSH University Medical Center (West Side). Reads fMRI presurgical maps weekly,
+       teaches residents, knows Yeo-7 networks and Brodmann areas cold. Wants the
+       radiology-report tone, peak amplitudes in z-score, and an explicit caveat that
+       this is population-averaged research output, not patient imaging.</p>
     <div class="style-meta">
       <span class="chip">tier 5 · clinician</span>
       <span class="chip">5-7 sentences</span>
@@ -175,17 +177,18 @@
        at 2 Hz; not patient-specific."</div>
   </article>
 
-  <article class="card" data-id="priya">
-    <div class="header-row">
-      <div class="avatar">P</div>
+  <article class="card" data-id="ml_scientist">
+    <div class="role-row">
+      <div class="glyph">M</div>
       <div>
-        <div class="name">Priya</div>
-        <div class="role">Senior ML Scientist · Google DeepMind, Chicago</div>
+        <div class="role">The ML Scientist</div>
+        <div class="institution">Google Chicago / industry research · Fulton Market, Chicago, IL</div>
       </div>
     </div>
-    <p class="who">Senior ML Research Scientist at Google DeepMind, Chicago office at
-       1K Fulton Market. Runs large-scale multimodal pretraining. Thinks in tensor shapes,
-       loss curves, and deployment cost. Direct, zero fluff.</p>
+    <p class="who">Senior ML research scientist working in Chicago — Google's Fulton Market
+       office, Microsoft Chicago, or one of the research-heavy startups in the Loop.
+       Runs multimodal pretraining or applied vision-language work. Reads everything in
+       tensor shapes, loss curves, and inference cost.</p>
     <div class="style-meta">
       <span class="chip">tier 6 · researcher</span>
       <span class="chip">5-6 sentences</span>
@@ -195,7 +198,7 @@
     <div class="sample">"Key signal: low-amplitude (z=0.10) somatomotor activation, peak at
        0.5s. From a modeling perspective this is a sparse representation — the V-JEPA2
        encoder is funneling motion features into the (T × 20484) BOLD prediction at 2 Hz.
-       Cost story: ~$0.006/scan local on the 5090, ~$0.30/scan on a GCP L4."</div>
+       Cost story: ~$0.011/scan local on the 5090, ~$0.32/scan on a GCP L4."</div>
   </article>
 
 </main>
