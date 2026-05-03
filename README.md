@@ -5,7 +5,18 @@
 
 ---
 
-> Upload a short video. In about six minutes, 20,484 seats in your personal Brain Cinema light up in real-time 3D — and an AI film critic explains what just happened, to anyone from a curious 8-year-old to a working neurologist.
+> Upload a short video. In about three minutes, 20,484 seats in your personal Brain Cinema light up in real-time 3D — and **four AI film critics** explain what just happened, in their own voices: a curious ISU freshman, a Northwestern neurologist, a WBEZ science reporter, and a Google ML scientist. Pick the voice that sounds like your brain.
+
+## 🟢 Live demo, right now
+
+- **Try it:** [seratonin.scylla-betta.ts.net](https://seratonin.scylla-betta.ts.net) — running live on the 5090, exposed via Tailscale Funnel
+- **Gallery of past runs:** [seratonin.scylla-betta.ts.net/gallery.html](https://seratonin.scylla-betta.ts.net/gallery.html)
+- **Meet the four personas:** [seratonin.scylla-betta.ts.net/personas.html](https://seratonin.scylla-betta.ts.net/personas.html)
+- **Marketing site:** [redteamkitchen.com/cortex](https://redteamkitchen.com/cortex)
+
+The demo URL is a real RTX 5090 in Bloomington–Normal, Illinois. Upload anything (video, audio, image, text) and watch a real fMRI-style activation map appear in your browser. No login. No queue.
+
+---
 
 Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma-4-good-hackathon) (Health & Sciences track) and the [Nous Research × Kimi Creative Hackathon](https://nousresearch.com) (Creative track) by **Alexios Bluff Mara LLC (dba Red Team Kitchen)**.
 
@@ -102,15 +113,17 @@ The direction is unmistakable: brain-response analysis at the cost of electricit
 
 ---
 
-## The three narration tiers
+## The four personas
 
-Think of them as three different film critics writing about the same screening:
+Every Cortex scan generates **four parallel narrations** from one TRIBE prediction. Same data, four different readers. See [seratonin.scylla-betta.ts.net/personas.html](https://seratonin.scylla-betta.ts.net/personas.html) for the full backgrounds and live samples.
 
-**General** — The film critic who writes for a general newspaper. "The audience in the back-left section lit up — those are the people responsible for recognizing faces. A close-up of a person just appeared on screen, and about 3.5 seconds later, that section of the audience leaned forward in their seats."
+**Sam** — ISU freshman from Normal, IL. *"ok so basically your eyes are doing all the work here. it's like when you're scrolling through your fyp and everything just hits."*
 
-**College** — The critic writing for a film studies journal. "Primary visual and fusiform face regions showed strong bilateral activation within the visual network (peak z = 4.2 at t = 7), consistent with face-selective response in the ventral visual stream."
+**Chris** — Science reporter for WBEZ Chicago. *"The striking thing here is how the brain's visual processing highway takes center stage, reaching its peak activity at the 5.5-second mark. Think of it like a spotlight swinging across a dark stage."*
 
-**Clinical** — The critic writing the formal screening report. "Yeo-7 Visual network activation (bilateral occipital, fusiform): peak BOLD at t = 7 (3.5 s post-stimulus onset, 5 s HRF lag pre-applied). Left-lateralized superior temporal gyrus response suggests auditory-linguistic processing. Default mode network suppression consistent with externally-directed attention."
+**Dr. Park** — Associate Professor of Neurology, Northwestern Feinberg. *"The present data demonstrate a BOLD response with rising phase 0.5s, peak amplitude z=0.10, in the right somatomotor network — consistent with M1/S1 recruitment."*
+
+**Priya** — Senior ML Research Scientist, Google DeepMind, Chicago. *"Stimulus processed via TRIBE v2 (V-JEPA2/wav2vec-BERT 2.0/Llama-3.2-3B) on local RTX 5090, ~6 GB VRAM; ~$0.006/scan local vs ~$0.30/scan on a GCP L4."*
 
 ---
 
@@ -133,20 +146,30 @@ Think of them as three different film critics writing about the same screening:
 
 ---
 
-## Architecture
+## Architecture (live, today)
 
 ```
-Upload
-  └─ media_gate          Gemma 4 multimodal — describes what it sees
-       └─ TRIBE v2        Predicts (T × 20,484) BOLD z-scores at 2 Hz
-            └─ BrainAnalysis   Schaefer-400 parcellation, Yeo-7 networks, top ROIs
-                 └─ Gemma narrate × 3 tiers   General · College · Clinical
-                      └─ WebSocket → Three.js viewer   Per-vertex 3D animation
+   Browser / phone
+     ↓ https://seratonin.scylla-betta.ts.net  (Tailscale Funnel)
+   Vite dev server  (port 5173)
+     ↓ /api/* proxy
+   FastAPI backend  (port 8773)
+     ├─ TRIBE v2     PyTorch on RTX 5090, ~6 GB VRAM
+     │                → 20,484-vertex BOLD prediction at 2 Hz
+     │
+     └─ 4× narrate   sam · chris · dr_park · priya  (in parallel queue)
+         ↓
+   Inference router  (port 8766)
+     ├─→ Seratonin Ollama  localhost:11434         Gemma 4 E4B/E2B/26B/31B
+     ├─→ Big Apple Ollama  100.93.240.52:11434     M4 Max overflow
+     └─→ OpenRouter free   gemma-4-26b-a4b-it:free Cloud failover, $0/token
 ```
 
-GPU scheduler state machine: `IDLE → GEMMA_ACTIVE → TRIBE_ACTIVE` — eviction-driven swap with OOM recovery and GCP A100 fallback.
+Two GPUs cooperate via the inference router: the **RTX 5090 (Seratonin)** does TRIBE inference and the bulk of narration; the **M4 Max MacBook (Big Apple)** is round-robin overflow when the 5090 is busy. If both fall over, the router fails over to **OpenRouter's free Gemma-4-26B endpoint** (200 req/day, $0/token) so the demo URL never returns a 502.
 
-Mercury (the Hermes fork) orchestrates the pipeline end-to-end across six client surfaces: terminal, Discord, web, WhatsApp, email, and mobile.
+GPU scheduler state machine: `IDLE → GEMMA_ACTIVE → TRIBE_ACTIVE` — eviction-driven swap with OOM recovery. TRIBE checkpoint is 676 MB on disk, ~5–6 GB VRAM during inference.
+
+Mercury (the Hermes fork) is reachable from three working surfaces today: **terminal** (`mercury` CLI), **Discord** (`@abmsnowy` bot), and **web** (dashboard at `seratonin.scylla-betta.ts.net:8443` over Tailscale tailnet). iMessage, email, and SMS surfaces are roadmap, not shipped.
 
 ---
 
