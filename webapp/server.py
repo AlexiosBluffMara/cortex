@@ -82,6 +82,20 @@ UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
 PUBLIC_DIR = Path(__file__).resolve().parent / "public"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
+# ---------------------------------------------------------------------------
+# TRIBE proxy (split-stack: Big Apple as public face, Seratonin runs TRIBE)
+# ---------------------------------------------------------------------------
+# When CORTEX_TRIBE_PROXY is set, video/audio/text scans (the ones that need
+# TRIBE inference, which currently requires CUDA) are forwarded to that backend
+# transparently. Image scans stay local because they bypass TRIBE entirely.
+#
+# Result: Big Apple keeps the public Funnel + image-scan capability + serves
+# the gallery; Seratonin handles the heavy CUDA work; the user sees one URL.
+import os as _os
+TRIBE_PROXY_URL = (_os.environ.get("CORTEX_TRIBE_PROXY", "") or "").rstrip("/")
+TRIBE_NEEDED_EXTS = ALLOWED_VIDEO | ALLOWED_AUDIO | ALLOWED_TEXT | ALLOWED_DOCUMENT
+# (image scans use Gemma vision directly — no TRIBE needed)
+
 
 # ---------------------------------------------------------------------------
 # Application state
@@ -391,6 +405,69 @@ def create_app(
             )
             return JSONResponse(err.to_dict(), status_code=413)
 
+        # ────────────────────────────────────────────────────────────────────
+        # TRIBE proxy: if this file needs TRIBE (video/audio/text/document) and
+        # we're configured to forward such scans elsewhere (because the local
+        # device can't run TRIBE — Apple Silicon), POST the file to that
+        # backend and store a reference. Image scans stay local because they
+        # use Gemma vision and bypass TRIBE entirely.
+        # ────────────────────────────────────────────────────────────────────
+        if TRIBE_PROXY_URL and ext in TRIBE_NEEDED_EXTS:
+            log.info("[webapp] proxying TRIBE scan %s (%s) → %s", scan_id, ext, TRIBE_PROXY_URL)
+            try:
+                import httpx as _httpx
+                async with _httpx.AsyncClient(timeout=30.0) as client:
+                    with target.open("rb") as fh:
+                        files_payload = {"file": (file.filename, fh.read(), file.content_type or "application/octet-stream")}
+                    data_payload = {
+                        "tier": str(tier),
+                        "source": f"proxy-from-bigapple:{source}",
+                        "narration_model": narration_model,
+                    }
+                    r = await client.post(
+                        f"{TRIBE_PROXY_URL}/api/scan",
+                        files=files_payload,
+                        data=data_payload,
+                    )
+                if r.status_code >= 400:
+                    raise RuntimeError(f"upstream {r.status_code}: {r.text[:200]}")
+                upstream = r.json()
+                upstream_id = upstream.get("scan_id")
+                if not upstream_id:
+                    raise RuntimeError(f"upstream returned no scan_id: {upstream}")
+
+                # Record the proxy reference under OUR scan_id so /api/scan/<id>
+                # and /api/scans both find it. The scan-detail handler will
+                # transparently fetch upstream state on each read.
+                await app.state.registry.put(
+                    scan_id,
+                    {
+                        "id": scan_id,
+                        "upstream_id": upstream_id,
+                        "upstream_base": TRIBE_PROXY_URL,
+                        "status": "queued",
+                        "filename": file.filename,
+                        "tier": tier,
+                        "source": source,
+                        "narration_model": narration_model,
+                        "size_mb": round(size / (1024 * 1024), 2),
+                        "proxied": True,
+                    },
+                )
+                target.unlink(missing_ok=True)  # local copy not needed; upstream owns the file
+
+                await app.state.hub.broadcast(
+                    {"type": "scan_queued", "scan_id": scan_id, "filename": file.filename, "proxied": True}
+                )
+                return JSONResponse(
+                    {"ok": True, "scan_id": scan_id, "status": "queued", "proxied": True},
+                    status_code=202,
+                )
+            except Exception as exc:
+                log.error("[webapp] TRIBE proxy failed (%s) — falling back to local: %s", scan_id, exc)
+                # If proxy is unreachable, fall through to local processing
+                # (which will fail on MPS-only hosts but at least surface a real error).
+
         await app.state.registry.put(
             scan_id,
             {
@@ -432,12 +509,42 @@ def create_app(
     # Scan lookup
     # -----------------------------------------------------------------------
 
+    async def _hydrate_proxied(rec: dict[str, Any]) -> dict[str, Any]:
+        """If this scan is proxied to another backend, fetch its current state
+        upstream and merge it into the local record. Local fields (id,
+        filename, source) win; upstream fills status / top_rois / narrations /
+        peak_t / etc. Failure to reach upstream returns whatever we have locally.
+        """
+        if not rec.get("proxied"):
+            return rec
+        upstream_id = rec.get("upstream_id")
+        upstream_base = (rec.get("upstream_base") or TRIBE_PROXY_URL or "").rstrip("/")
+        if not upstream_id or not upstream_base:
+            return rec
+        try:
+            import httpx as _httpx
+            async with _httpx.AsyncClient(timeout=4.0) as client:
+                r = await client.get(f"{upstream_base}/api/scan/{upstream_id}")
+            if r.status_code == 200:
+                u = r.json()
+                # Merge: keep local id + filename + source, take upstream
+                # status + results + narrations.
+                merged = dict(rec)
+                for k in ("status", "top_rois", "peak_t", "tr_seconds", "n_t",
+                          "seconds_elapsed", "narrations", "narration", "error"):
+                    if k in u and u[k] is not None:
+                        merged[k] = u[k]
+                return merged
+        except Exception as exc:
+            log.debug("[webapp] proxy hydrate failed for %s: %s", rec.get("id"), exc)
+        return rec
+
     @app.get("/api/scan/{scan_id}")
     async def get_scan(scan_id: str) -> dict[str, Any]:
         record = await app.state.registry.get(scan_id)
         if record is None:
             raise HTTPException(status_code=404, detail=f"Scan not found: {scan_id}")
-        return record
+        return await _hydrate_proxied(record)
 
     @app.get("/api/scans")
     async def list_scans(limit: int = 50, status: str = "complete") -> dict[str, Any]:
@@ -445,6 +552,10 @@ def create_app(
 
         Returns a compact summary per scan: id, filename, status, top_rois,
         peak_t, narrations (all 4 personas), seconds_elapsed.
+
+        Proxied scans (where TRIBE was forwarded to another backend) are
+        hydrated in-line so the gallery shows them with their up-to-date
+        upstream status + narrations.
         """
         ids = app.state.registry.all_ids()
         out = []
@@ -452,6 +563,7 @@ def create_app(
             rec = await app.state.registry.get(sid)
             if rec is None:
                 continue
+            rec = await _hydrate_proxied(rec)
             if status != "all" and rec.get("status") != status:
                 continue
             out.append({
@@ -467,6 +579,7 @@ def create_app(
                 "seconds_elapsed": rec.get("seconds_elapsed"),
                 "narrations": rec.get("narrations", {}),
                 "created_at": rec.get("created_at"),
+                "proxied": rec.get("proxied", False),
             })
         # Most recent first
         out.sort(key=lambda r: r.get("created_at") or 0, reverse=True)
