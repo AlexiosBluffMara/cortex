@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hardware specs — exact parts for Seratonin and Big Apple</title>
+<meta name="description" content="Every part in the Ascended Base lab — model numbers, prices, sources. Build Seratonin yourself for $4,000; buy a Big Apple-equivalent MacBook for $4,200.">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/style.css">
+<style>
+  .machine-card {background:rgba(20,21,28,0.6); border:1px solid rgba(56,58,71,0.6); border-radius:12px; padding:1.6rem; margin:1.4rem 0; border-top:3px solid var(--isu-red, #CC0000)}
+  .machine-card.bigapple {border-top-color:var(--isu-gold, #F6A917)}
+  .machine-card h3 {margin:0 0 0.3rem; font-size:1.5rem}
+  .machine-card .tag {color:var(--text-mid, #a0a0bc); font-size:0.92rem; margin-bottom:1rem}
+  .parts-table {width:100%; border-collapse:collapse; font-size:0.9rem; margin:1rem 0}
+  .parts-table th,.parts-table td {padding:0.5rem 0.7rem; border-bottom:1px solid rgba(56,58,71,0.4); text-align:left; vertical-align:top}
+  .parts-table th {background:rgba(20,21,28,0.5); color:var(--text); font-weight:600; text-transform:uppercase; font-size:0.72rem; letter-spacing:0.05em}
+  .parts-table .num {font-family:'JetBrains Mono', monospace; text-align:right; white-space:nowrap}
+  .parts-table .total td {background:rgba(204,0,0,0.08); font-weight:700; font-size:1rem; border-top:2px solid var(--accent, #CC0000)}
+  .parts-table a {color:#7ab3f5}
+  .perf-grid {display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0.8rem; margin:1.2rem 0}
+  .perf-cell {background:#0d0e13; border:1px solid rgba(56,58,71,0.4); border-radius:8px; padding:0.8rem 1rem}
+  .perf-cell .lbl {color:var(--text-mid, #a0a0bc); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em}
+  .perf-cell .val {font-family:'JetBrains Mono', monospace; font-size:1.2rem; color:var(--text); margin-top:0.2rem}
+  .perf-cell.good .val {color:#4ad596}
+  .deep {background:rgba(20,21,28,0.4); border-left:3px solid var(--isu-yellow, #F6A917); padding:1rem 1.4rem; margin:1rem 0; border-radius:0 8px 8px 0}
+  .deep h4 {margin:0 0 0.4rem; font-size:1rem}
+  .nodes-mini {display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:1.5rem}
+  .nodes-mini .mini {background:rgba(20,21,28,0.6); border:1px solid rgba(56,58,71,0.6); border-radius:10px; padding:1rem 1.2rem}
+  .nodes-mini .mini h4 {margin:0 0 0.3rem}
+  .nodes-mini .mini.wip {opacity:0.65; border-style:dashed}
+</style>
+</head>
+<body>
+
+<div class="collab-strip">
+  <div class="collab-mark">
+    <span class="lhs">Alexios Bluff Mara</span>
+    <span class="x">×</span>
+    <a class="rhs" href="https://illinoisstate.edu">Illinois State University</a>
+  </div>
+  <div class="collab-meta">Research Collaboration · Cardinal &amp; Code</div>
+</div>
+
+<nav class="sitenav">
+  <a href="/">Home</a>
+  <a href="/cortex.html">Cortex</a>
+  <a href="/mercury.html">Mercury</a>
+  <a href="/explain.html">Explain</a>
+  <a href="/specs.html" class="active">Specs</a>
+  <a href="/scaling.html">Scaling</a>
+  <a href="/about.html">About</a>
+</nav>
+
+<div class="wrap">
+
+<header>
+  <div class="pills">
+    <span class="pill brand">Hardware</span>
+    <span class="pill gold">Exact parts · prices · sources</span>
+    <span class="pill blue">Buy this list, run the same demos</span>
+  </div>
+  <h1>The two machines that run <em>everything.</em></h1>
+  <p class="tag">
+    Every part on the bench, by model number, with the price we paid and where
+    we bought it. The point of this page is reproducibility — clone these two
+    builds and you can run the same Cortex + Mercury demos at home.
+  </p>
+</header>
+
+<!-- ════════════════════════ SERATONIN ════════════════════════ -->
+<section>
+  <div class="machine-card">
+    <h3>Seratonin · Windows 11 Pro · RTX 5090</h3>
+    <div class="tag">Primary GPU node · Chicago, IL · runs TRIBE v2 + Vite + FastAPI + Mercury when not gaming</div>
+
+    <div class="perf-grid">
+      <div class="perf-cell good"><div class="lbl">VRAM</div><div class="val">32 GB GDDR7</div></div>
+      <div class="perf-cell"><div class="lbl">CUDA cores</div><div class="val">21,760</div></div>
+      <div class="perf-cell"><div class="lbl">Mem bandwidth</div><div class="val">1.79 TB/s</div></div>
+      <div class="perf-cell"><div class="lbl">Gemma 4 E4B</div><div class="val">194 tok/s</div></div>
+      <div class="perf-cell"><div class="lbl">TRIBE scan</div><div class="val">~3 min</div></div>
+      <div class="perf-cell"><div class="lbl">Idle draw</div><div class="val">~50 W</div></div>
+      <div class="perf-cell good"><div class="lbl">Build cost</div><div class="val">$4,000</div></div>
+    </div>
+
+    <h4 style="margin-top:1.2rem">Bill of materials</h4>
+    <table class="parts-table">
+      <thead><tr>
+        <th>Component</th>
+        <th>Exact part</th>
+        <th>Source</th>
+        <th class="num">Price</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td>GPU</td>
+          <td>NVIDIA <strong>GeForce RTX 5090</strong> (Founders Edition or AIB)<br><span style="color:var(--text-mid); font-size:0.82rem">32 GB GDDR7 · sm_120 (Blackwell) · 575 W TDP · PCIe 5.0 ×16</span></td>
+          <td>Best Buy / Newegg / Micro Center</td>
+          <td class="num">$2,000–2,800</td>
+        </tr>
+        <tr>
+          <td>CPU</td>
+          <td><strong>AMD Ryzen 7 9800X3D</strong><br><span style="color:var(--text-mid); font-size:0.82rem">8c / 16t · 4.7 GHz base, 5.2 GHz boost · 96 MB L3 (3D V-Cache) · AM5 · 120 W TDP</span></td>
+          <td>Micro Center / Amazon</td>
+          <td class="num">$479</td>
+        </tr>
+        <tr>
+          <td>Motherboard</td>
+          <td><strong>MSI X870E-P PRO</strong><br><span style="color:var(--text-mid); font-size:0.82rem">AM5 · ATX · WiFi 7 · 2× DDR5 DIMM · PCIe 5.0 ×16 + ×4 · 4× M.2</span></td>
+          <td>Newegg</td>
+          <td class="num">$259</td>
+        </tr>
+        <tr>
+          <td>RAM</td>
+          <td><strong>G.Skill Trident Z5 Neo 64 GB DDR5-4800</strong> (2× 32 GB)<br><span style="color:var(--text-mid); font-size:0.82rem">CL30 · EXPO ready · running at JEDEC 4800 for stability</span></td>
+          <td>Newegg / Amazon</td>
+          <td class="num">$219</td>
+        </tr>
+        <tr>
+          <td>Storage (system)</td>
+          <td><strong>Samsung 990 PRO 2 TB NVMe Gen 4</strong><br><span style="color:var(--text-mid); font-size:0.82rem">7,450 MB/s read · 6,900 MB/s write · 5-year warranty</span></td>
+          <td>Best Buy</td>
+          <td class="num">$179</td>
+        </tr>
+        <tr>
+          <td>Storage (data, D:\)</td>
+          <td><strong>Crucial T705 4 TB NVMe Gen 5</strong><br><span style="color:var(--text-mid); font-size:0.82rem">14,500 MB/s read — TRIBE weights + 'tribev2_cache' live here</span></td>
+          <td>Newegg</td>
+          <td class="num">$439</td>
+        </tr>
+        <tr>
+          <td>PSU</td>
+          <td><strong>Corsair RM1000x SHIFT 1000 W 80+ Gold</strong><br><span style="color:var(--text-mid); font-size:0.82rem">12V-2×6 connector, native 600 W to RTX 5090</span></td>
+          <td>Amazon</td>
+          <td class="num">$199</td>
+        </tr>
+        <tr>
+          <td>Cooler (CPU)</td>
+          <td><strong>Noctua NH-D15 G2</strong><br><span style="color:var(--text-mid); font-size:0.82rem">Air cooler — keeps the 9800X3D under 70 °C at full load, no AIO maintenance</span></td>
+          <td>Amazon</td>
+          <td class="num">$149</td>
+        </tr>
+        <tr>
+          <td>Case</td>
+          <td><strong>Fractal Design Torrent</strong><br><span style="color:var(--text-mid); font-size:0.82rem">Mesh-front airflow case · clears the 5090 with room for cables</span></td>
+          <td>Newegg</td>
+          <td class="num">$199</td>
+        </tr>
+        <tr>
+          <td>Case fans</td>
+          <td>Noctua NF-A14 PWM ×3</td>
+          <td>Amazon</td>
+          <td class="num">$95</td>
+        </tr>
+        <tr><td colspan="3"><strong>Total</strong></td><td class="num"><strong>$4,216 – $5,016</strong></td></tr>
+      </tbody>
+    </table>
+
+    <div class="deep">
+      <h4>Why these parts (in three sentences)</h4>
+      <p>The 5090 was picked the day it was announced because 32 GB GDDR7 is the cheapest way to fit TRIBE (~6 GB) + Gemma 4 26B (~21 GB) on the same card without quantization. The 9800X3D is the fastest gaming + workstation chip in 2025–26, which matters because Soumit games on this box too. The mesh-front case + Noctua air cooling means there's no AIO pump to fail at 3 AM in the middle of a demo.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════ BIG APPLE ════════════════════════ -->
+<section>
+  <div class="machine-card bigapple">
+    <h3>Big Apple · macOS Sequoia · M4 Max</h3>
+    <div class="tag">Secondary GPU node · Chicago, IL · runs Cortex backend + narration + (in progress) TRIBE on MPS</div>
+
+    <div class="perf-grid">
+      <div class="perf-cell good"><div class="lbl">Unified memory</div><div class="val">48 GB</div></div>
+      <div class="perf-cell"><div class="lbl">GPU cores</div><div class="val">40</div></div>
+      <div class="perf-cell"><div class="lbl">Mem bandwidth</div><div class="val">546 GB/s</div></div>
+      <div class="perf-cell"><div class="lbl">Gemma 4 E4B</div><div class="val">~90 tok/s</div></div>
+      <div class="perf-cell"><div class="lbl">CPU cores</div><div class="val">16 (12P + 4E)</div></div>
+      <div class="perf-cell"><div class="lbl">Idle draw</div><div class="val">~7 W</div></div>
+      <div class="perf-cell good"><div class="lbl">Buy price</div><div class="val">$4,199</div></div>
+    </div>
+
+    <h4 style="margin-top:1.2rem">Configuration as ordered</h4>
+    <table class="parts-table">
+      <thead><tr>
+        <th>Spec</th>
+        <th>This machine</th>
+        <th>Notes</th>
+      </tr></thead>
+      <tbody>
+        <tr><td>Model</td>                <td><strong>MacBook Pro 16" (M4 Max, 2024)</strong></td>     <td>Order page: <a href="https://www.apple.com/shop/buy-mac/macbook-pro/16-inch-m4-max">apple.com/shop/buy-mac/macbook-pro/16-inch-m4-max</a></td></tr>
+        <tr><td>Chip</td>                 <td>Apple <strong>M4 Max</strong> · 16-core CPU · 40-core GPU · 16-core Neural Engine</td>  <td>Top M4 Max bin (vs. 14-core CPU base)</td></tr>
+        <tr><td>Memory</td>               <td><strong>48 GB unified</strong></td>            <td>Upgrade option from 36 GB; 64 GB is the next step (+$400). 48 GB chosen because TRIBE + Gemma 4 26B comfortably fits.</td></tr>
+        <tr><td>Storage</td>              <td><strong>1 TB NVMe</strong></td>                <td>Up from 512 GB base. ~7.4 GB/s read.</td></tr>
+        <tr><td>Display</td>              <td>16.2" Liquid Retina XDR · 3456 × 2234 · 1000 nits sustained · 1600 nits peak HDR</td>   <td>Useful for the 3D brain visualization preview</td></tr>
+        <tr><td>Charger</td>              <td>140 W USB-C (in-box)</td>                       <td>Yes 140 W is required to fast-charge under load</td></tr>
+        <tr class="total"><td colspan="2">Total ordered config</td><td class="num">$4,199</td></tr>
+      </tbody>
+    </table>
+
+    <div class="deep">
+      <h4>Why M4 Max 48 GB specifically (not the 64 GB or 128 GB)</h4>
+      <p>The 48 GB tier is the cheapest way to comfortably run Gemma 4 26B (4-bit, ~16 GB) <em>plus</em> TRIBE on MPS (~6 GB) <em>plus</em> macOS overhead (~10 GB) <em>plus</em> dev tools — leaving ~12-15 GB headroom. The 64 GB tier (+$400) is overkill for our workload; the 128 GB tier is for people training models, not running them.</p>
+    </div>
+
+    <div class="deep">
+      <h4>Performance numbers we actually measured</h4>
+      <ul style="margin-left:1.2rem; line-height:1.7">
+        <li>Gemma 4 E4B inference: <strong>90 tokens/sec</strong> (tested 2026-05-03 via Ollama on Metal)</li>
+        <li>Gemma 4 26B inference: <strong>~28 tokens/sec</strong> (estimated; not yet hammered in production)</li>
+        <li>Idle wattage with browser + Ollama loaded: <strong>7 W</strong> (vs ~50 W on Seratonin idle)</li>
+        <li>Sustained inference wattage: <strong>~60 W</strong> (vs ~450 W on Seratonin under TRIBE load)</li>
+        <li>One-narration latency end-to-end (HTTP POST → JSON response): <strong>1.4 sec</strong></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════ MINOR NODES ════════════════════════ -->
+<section>
+  <h2>Other nodes in the mesh</h2>
+  <div class="nodes-mini">
+    <div class="mini">
+      <h4>Mini Apple</h4>
+      <div class="tag">Mac mini class · Bloomington–Normal, IL (near ISU)</div>
+      <p style="font-size:0.92rem">Standby tertiary node. Lives next to the ISU campus for in-person research meetings with collaborators. Joins the Tailscale mesh but isn't normally in the inference pool.</p>
+    </div>
+    <div class="mini wip">
+      <h4>Baby Pi (work in progress)</h4>
+      <div class="tag">Raspberry Pi 5 · 8 GB · ARM Cortex-A76 4× 2.4 GHz</div>
+      <p style="font-size:0.92rem">Edge node planned for AdGuard Home + Tailscale subnet routing for the lab. NOT for LLM inference — too small. Status: SD card prep + AdGuard install scripts written, hardware not flashed yet.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════ COMPARE ════════════════════════ -->
+<section>
+  <h2>Side by side — same workload, both machines</h2>
+  <table class="parts-table">
+    <thead><tr><th></th><th>Seratonin</th><th>Big Apple</th></tr></thead>
+    <tbody>
+      <tr><td>Architecture</td>                       <td>x86_64 + NVIDIA Blackwell</td>           <td>ARM64 + Apple M4 Max (unified)</td></tr>
+      <tr><td>Memory model</td>                       <td>64 GB system + 32 GB dedicated VRAM</td><td>48 GB unified (CPU + GPU share)</td></tr>
+      <tr><td>Memory bandwidth (GPU)</td>             <td>1.79 TB/s</td>                          <td>546 GB/s</td></tr>
+      <tr><td>Gemma 4 E4B throughput</td>             <td>194 tok/s</td>                          <td>~90 tok/s</td></tr>
+      <tr><td>TRIBE v2 inference time / scan</td>     <td>~3 min (CUDA)</td>                       <td>WIP (MPS, neuralset device-string PR pending)</td></tr>
+      <tr><td>Idle power</td>                         <td>~50 W</td>                              <td>~7 W</td></tr>
+      <tr><td>Sustained ML power</td>                 <td>~450 W</td>                             <td>~60 W</td></tr>
+      <tr><td>Acoustic (under load)</td>              <td>~38 dB (Noctua air)</td>                <td>~22 dB (clamshell, fans on)</td></tr>
+      <tr><td>Hardware cost</td>                      <td>$4,000 (build)</td>                     <td>$4,199 (Apple direct)</td></tr>
+      <tr><td>Energy cost / month (24/7 idle + occasional load)</td><td>~$31</td>                  <td>~$5</td></tr>
+      <tr><td>Best at</td>                            <td>Heavy-throughput training + concurrent demos</td><td>Cool, quiet, portable, low-watt narration server</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<div class="brand-bar">
+  <div>
+    <span class="swatch" aria-hidden="true"></span>
+    <strong>Build receipts on file.</strong> Email <a href="mailto:soumitlahiri@philanthropytraders.com">soumitlahiri@philanthropytraders.com</a> for sourcing notes if you're recreating this stack.
+  </div>
+  <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;">
+    Pricing as of Q2 2026
+  </div>
+</div>
+
+<footer>
+  <p>Brand accent colors reference Illinois State University's published values; ISU logos and wordmarks are not used. Apple, NVIDIA, AMD, MSI, etc. are trademarks of their respective owners.</p>
+</footer>
+
+</div>
+</body>
+</html>

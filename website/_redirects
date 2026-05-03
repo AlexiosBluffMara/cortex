@@ -7,4 +7,4 @@
 # 308-loop conflicts with CF Pages' built-in Clean URLs behavior.
 
 # Point /demo to the live Tailscale-fronted Cortex instance on Seratonin.
-/demo     https://seratonin.scylla-betta.ts.net     302
+/demo     https://big-apple.scylla-betta.ts.net     302

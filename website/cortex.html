@@ -28,6 +28,8 @@
   <a href="/cortex.html" class="active">Cortex</a>
   <a href="/mercury.html">Mercury</a>
   <a href="/explain.html">Explain</a>
+  <a href="/specs.html">Specs</a>
+  <a href="/scaling.html">Scaling</a>
   <a href="/about.html">About</a>
   <a href="/research.html">Research</a>
   <a href="/contact.html">Contact</a>
@@ -51,9 +53,9 @@
     neurologist, and a Google ML scientist).
   </p>
   <div class="ctas">
-    <a class="cta primary" href="https://seratonin.scylla-betta.ts.net">Try the live demo →</a>
-    <a class="cta ghost" href="https://seratonin.scylla-betta.ts.net/gallery.html">Gallery</a>
-    <a class="cta ghost" href="https://seratonin.scylla-betta.ts.net/personas.html">The 4 personas</a>
+    <a class="cta primary" href="https://big-apple.scylla-betta.ts.net">Try the live demo →</a>
+    <a class="cta ghost" href="https://big-apple.scylla-betta.ts.net/gallery.html">Gallery</a>
+    <a class="cta ghost" href="https://big-apple.scylla-betta.ts.net/personas.html">The 4 personas</a>
     <a class="cta ghost" href="https://github.com/AlexiosBluffMara/cortex">GitHub</a>
   </div>
 </header>
@@ -82,34 +84,36 @@
 </section>
 
 <section>
-  <h2>Architecture <span class="accent">— how it actually runs</span></h2>
+  <h2>Architecture <span class="accent">— how it actually runs right now</span></h2>
   <pre style="background:#15151c;border:1px solid #2a2a3c;padding:1.2rem;border-radius:10px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:0.85rem;line-height:1.55;color:#d8dae0;">
    ┌──────────────────────────────────────────────────────────────────┐
    │ Browser / phone                                                  │
-   │   ↓ https://seratonin.scylla-betta.ts.net  (Tailscale Funnel)    │
+   │   ↓ https://big-apple.scylla-betta.ts.net  (Tailscale Funnel)    │
    ├──────────────────────────────────────────────────────────────────┤
-   │ Vite dev server  (port 5173)                                     │
-   │   ↓ /api/* proxy                                                 │
+   │ Big Apple — M4 Max MacBook Pro · 48 GB unified memory            │
+   │                                                                  │
+   │   FastAPI backend  (port 8773) — serves HTML + API directly      │
+   │     ├─ TRIBE v2 (PyTorch on MPS, ~6 GB unified)                  │
+   │     │   → 20,484-vertex BOLD prediction at 2 Hz                  │
+   │     │                                                            │
+   │     └─ 4× narrate (parallel, in queue)                           │
+   │         ↓                                                        │
+   │   Inference router (port 8766)                                   │
+   │     ├─→ Local Ollama (Gemma 4 E4B / 26B / 31B on Metal)          │
+   │     └─→ OpenRouter free tier (cloud failover, $0/token)          │
    ├──────────────────────────────────────────────────────────────────┤
-   │ FastAPI backend  (port 8773)                                     │
-   │   ├─ TRIBE v2 (PyTorch on RTX 5090, ~6 GB VRAM)                  │
-   │   │   → 20,484-vertex BOLD prediction at 2 Hz                    │
-   │   │                                                              │
-   │   └─ 4× narrate (parallel, in queue)                             │
-   │       ↓                                                          │
-   ├──────────────────────────────────────────────────────────────────┤
-   │ Inference router  (port 8766)                                    │
-   │   ├─→ Seratonin Ollama  localhost:11434  (Gemma 4 E4B/E2B/26B/31B)│
-   │   ├─→ Big Apple Ollama  100.93.240.52:11434  (M4 Max overflow)   │
-   │   └─→ OpenRouter free tier  (cloud failover, $0/token)           │
+   │ Seratonin (Windows · RTX 5090 · Chicago) — STANDBY               │
+   │   ↳ joins router pool when not gaming, runs same code via CUDA   │
    └──────────────────────────────────────────────────────────────────┘
   </pre>
   <p>
-    Two GPUs cooperate via the inference router: the 5090 (Seratonin) does
-    TRIBE inference and the bulk of narration; the M4 Max MacBook (Big Apple)
-    is round-robin overflow when the 5090 is busy. If both fall over, the
-    router fails over to OpenRouter's free Gemma-4-26B endpoint
-    (200 req/day, $0/token) so the demo URL never returns a 502.
+    The whole demo currently runs on a <strong>single MacBook Pro (M4 Max,
+    48 GB unified)</strong>. Same Python source code as the 5090; the
+    <code>cortex.device</code> abstraction picks <strong>MPS</strong> on Apple
+    Silicon and <strong>CUDA</strong> on NVIDIA. When Seratonin is back in the
+    pool, narration jobs round-robin across both nodes; if both fall over, the
+    router fails to OpenRouter's free Gemma-4-26B endpoint so the demo URL
+    never returns a 502.
   </p>
 </section>
 
@@ -121,9 +125,9 @@
     the live demo and click around.
   </p>
   <p style="margin-top:0.6rem">
-    <a class="cta primary" href="https://seratonin.scylla-betta.ts.net">Open the live demo →</a>
+    <a class="cta primary" href="https://big-apple.scylla-betta.ts.net">Open the live demo →</a>
     &nbsp;
-    <a class="cta ghost" href="https://seratonin.scylla-betta.ts.net/gallery.html">Or browse the gallery</a>
+    <a class="cta ghost" href="https://big-apple.scylla-betta.ts.net/gallery.html">Or browse the gallery</a>
   </p>
 </section>
 
@@ -131,8 +135,8 @@
   <h2>Where to go next</h2>
   <div class="panel tinted">
     <ul>
-      <li><strong style="color: var(--text);">Live demo:</strong> <a href="https://seratonin.scylla-betta.ts.net">seratonin.scylla-betta.ts.net</a> — running on Seratonin (RTX 5090, Chicago) via Tailscale Funnel.</li>
-      <li><strong style="color: var(--text);">Gallery of past scans:</strong> <a href="https://seratonin.scylla-betta.ts.net/gallery.html">/gallery</a> — every completed scan with all four persona narrations.</li>
+      <li><strong style="color: var(--text);">Live demo:</strong> <a href="https://big-apple.scylla-betta.ts.net">big-apple.scylla-betta.ts.net</a> — running on Big Apple (M4 Max, Chicago) via Tailscale Funnel.</li>
+      <li><strong style="color: var(--text);">Gallery of past scans:</strong> <a href="https://big-apple.scylla-betta.ts.net/gallery.html">/gallery</a> — every completed scan with all four persona narrations.</li>
       <li><strong style="color: var(--text);">Source:</strong> <a href="https://github.com/AlexiosBluffMara/cortex">github.com/AlexiosBluffMara/cortex</a> — Apache-2.0; TRIBE v2 weights ship under CC-BY-NC 4.0 (Meta) and install separately.</li>
       <li><strong style="color: var(--text);">Not a diagnostic tool.</strong> Predictions are population-averaged across 25 NeuroMod subjects, not tuned to any individual's brain. Cortex does not replace fMRI.</li>
     </ul>

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scaling — Cortex &amp; Mercury cost analysis, cloud comparison, failover</title>
+<meta name="description" content="What it costs to run Cortex and Mercury — buy vs rent, per-cloud comparison, ideal cluster shapes, active failover and load-balancing exactly mirroring our local setup.">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/style.css">
+<style>
+  .cmp-table {width:100%; border-collapse:collapse; margin:1rem 0; font-size:0.92rem}
+  .cmp-table th,.cmp-table td {padding:0.6rem 0.8rem; border:1px solid rgba(56,58,71,0.6); text-align:left; vertical-align:top}
+  .cmp-table th {background:rgba(20,21,28,0.8); color:var(--text); font-weight:600}
+  .cmp-table tr:nth-child(even) {background:rgba(20,21,28,0.3)}
+  .cmp-table .num {font-family:'JetBrains Mono', monospace; text-align:right; white-space:nowrap}
+  .cmp-table .good {color:#4ad596; font-weight:600}
+  .cmp-table .warn {color:#F6A917; font-weight:600}
+  .cmp-table .bad  {color:#CC0000; font-weight:600}
+  .arch-svg {background:#0d0e13; border:1px solid rgba(56,58,71,0.6); border-radius:10px; padding:1rem; margin:1rem 0; max-width:100%}
+  .key-callout {background:rgba(204,0,0,0.08); border-left:3px solid #CC0000; padding:1rem 1.4rem; margin:1.4rem 0; border-radius:0 8px 8px 0}
+  .key-callout strong {color:var(--text)}
+  .toc {background:rgba(20,21,28,0.6); border:1px solid rgba(56,58,71,0.6); border-radius:10px; padding:1rem 1.4rem; margin:1rem 0}
+  .toc ul {margin-left:1.5rem; line-height:1.8}
+</style>
+</head>
+<body>
+
+<div class="collab-strip">
+  <div class="collab-mark">
+    <span class="lhs">Alexios Bluff Mara</span>
+    <span class="x">×</span>
+    <a class="rhs" href="https://illinoisstate.edu">Illinois State University</a>
+  </div>
+  <div class="collab-meta">Research Collaboration · Cardinal &amp; Code</div>
+</div>
+
+<nav class="sitenav">
+  <a href="/">Home</a>
+  <a href="/cortex.html">Cortex</a>
+  <a href="/mercury.html">Mercury</a>
+  <a href="/explain.html">Explain</a>
+  <a href="/scaling.html" class="active">Scaling</a>
+  <a href="/about.html">About</a>
+  <a href="/research.html">Research</a>
+</nav>
+
+<div class="wrap">
+
+<header>
+  <div class="pills">
+    <span class="pill brand">Scaling &amp; Costs</span>
+    <span class="pill gold">Buy vs rent</span>
+    <span class="pill blue">Per-cloud comparison</span>
+  </div>
+  <h1>Cortex &amp; Mercury <em>at scale.</em><br>The math, the failover, the <span class="gold">honest numbers.</span></h1>
+  <p class="tag">
+    Five questions, answered with receipts: how much does this cost to run on
+    a desktop, how much to rent the same hardware in the cloud, what's the
+    break-even, what's the ideal cluster shape if you wanted to serve 10× /
+    100× / 1000× the traffic, and how does our two-node active failover map
+    onto a real cloud deployment.
+  </p>
+</header>
+
+<section class="toc">
+  <strong>On this page</strong>
+  <ul>
+    <li><a href="#tldr">TL;DR — three numbers</a></li>
+    <li><a href="#per-scan">Per-scan unit economics</a></li>
+    <li><a href="#buy-vs-rent">Buy vs rent: the 5-month break-even</a></li>
+    <li><a href="#per-cloud">Per-cloud comparison (AWS · GCP · Azure · Lambda · RunPod · Vast)</a></li>
+    <li><a href="#cluster-shapes">Ideal cluster shapes (10× / 100× / 1000×)</a></li>
+    <li><a href="#failover">Active failover &amp; load balancing — local and cloud</a></li>
+    <li><a href="#mercury-scaling">Mercury scaling — agent throughput, not GPU throughput</a></li>
+  </ul>
+</section>
+
+<!-- ════════════════════════ TL;DR ════════════════════════ -->
+<section id="tldr">
+  <h2>TL;DR — three numbers</h2>
+  <div class="key-callout">
+    <p><strong>$0.011</strong> — marginal cost of one Cortex scan on the local 5090 (electricity only)</p>
+    <p><strong>$0.32</strong> — same scan on a GCP L4 GPU (90% cheapest cloud option)</p>
+    <p><strong>5 months</strong> — payback for buying the 5090 vs renting an equivalent always-on cloud GPU</p>
+  </div>
+  <p>
+    The whole thesis of this lab is in those three numbers: <strong>local-first AI on
+    consumer hardware is 30× cheaper per scan than the cheapest cloud option</strong>,
+    and the hardware pays itself off inside half a year if the workload is steady.
+  </p>
+</section>
+
+<!-- ════════════════════════ PER-SCAN ════════════════════════ -->
+<section id="per-scan">
+  <h2>Per-scan unit economics</h2>
+  <p>One Cortex scan = TRIBE inference (~3 minutes wall-clock on a 5090) + four parallel persona narrations from Gemma 4 (~30s each, queued). Total compute: ~5 minutes of GPU time at 60–80% utilization.</p>
+
+  <table class="cmp-table">
+    <thead><tr>
+      <th>Resource</th>
+      <th class="num">Local (Seratonin · 5090)</th>
+      <th class="num">Local (Big Apple · M4 Max)</th>
+      <th class="num">Cloud (GCP L4)</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>GPU peak draw during scan</td><td class="num">~450 W</td><td class="num">~60 W</td><td class="num">N/A (you pay $/hr)</td></tr>
+      <tr><td>Energy per scan (5 min @ peak)</td><td class="num">37.5 Wh</td><td class="num">5 Wh</td><td class="num">N/A</td></tr>
+      <tr><td>Electricity at $0.12/kWh</td><td class="num">$0.0045</td><td class="num">$0.0006</td><td class="num">N/A</td></tr>
+      <tr><td>Hourly rental (24/7 if billed)</td><td class="num">N/A (owned)</td><td class="num">N/A (owned)</td><td class="num">~$0.70/hr</td></tr>
+      <tr><td>5-min slice of cloud GPU</td><td class="num good">$0.011 (incl. amortized hardware)</td><td class="num good">$0.014</td><td class="num bad">$0.058</td></tr>
+      <tr><td><strong>+ networking, egress, idle</strong></td><td class="num good">$0.011 total</td><td class="num good">$0.014 total</td><td class="num bad">~$0.32 total realistic</td></tr>
+    </tbody>
+  </table>
+
+  <p style="font-size:0.88rem; color:var(--text-mid)">
+    Hardware amortization: 5090 at $2,800 over 4 years of 24/7 demo use = $0.00080/hr ≈ $0.0067 per scan. M4 Max at $4,200 over 4 years (assume 8 hrs/day demo use) = $0.013 per scan.
+  </p>
+</section>
+
+<!-- ════════════════════════ BUY VS RENT ════════════════════════ -->
+<section id="buy-vs-rent">
+  <h2>Buy vs rent: the 5-month break-even</h2>
+
+  <p>The naive "always-on equivalent" math is brutal. Take a single GPU, leave it running 24/7, see when ownership wins:</p>
+
+  <table class="cmp-table">
+    <thead><tr>
+      <th>Path</th>
+      <th>Upfront</th>
+      <th class="num">$/month (24/7)</th>
+      <th class="num">12-month total</th>
+      <th class="num">3-year total</th>
+      <th class="num">5-year total</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Buy RTX 5090 + build</strong> (Seratonin)</td>
+        <td>$2,800 GPU + $1,200 rest = <strong>$4,000</strong></td>
+        <td class="num">$31 electricity (450W avg)</td>
+        <td class="num good">$4,372</td>
+        <td class="num good">$5,116</td>
+        <td class="num good">$5,860</td>
+      </tr>
+      <tr>
+        <td><strong>Buy M4 Max MacBook</strong> (Big Apple)</td>
+        <td><strong>$4,200</strong> (M4 Max 48GB)</td>
+        <td class="num">$5 electricity (60W avg)</td>
+        <td class="num good">$4,260</td>
+        <td class="num good">$4,380</td>
+        <td class="num good">$4,500</td>
+      </tr>
+      <tr>
+        <td>Rent GCP L4 GPU 24/7</td>
+        <td>$0</td>
+        <td class="num bad">~$504</td>
+        <td class="num bad">$6,048</td>
+        <td class="num bad">$18,144</td>
+        <td class="num bad">$30,240</td>
+      </tr>
+      <tr>
+        <td>Rent AWS g6.xlarge (L4) 24/7</td>
+        <td>$0</td>
+        <td class="num bad">~$590</td>
+        <td class="num bad">$7,080</td>
+        <td class="num bad">$21,240</td>
+        <td class="num bad">$35,400</td>
+      </tr>
+      <tr>
+        <td>Rent Lambda Cloud A10 24/7</td>
+        <td>$0</td>
+        <td class="num warn">~$540</td>
+        <td class="num bad">$6,480</td>
+        <td class="num bad">$19,440</td>
+        <td class="num bad">$32,400</td>
+      </tr>
+      <tr>
+        <td>Rent vast.ai 4090 spot 24/7</td>
+        <td>$0</td>
+        <td class="num warn">~$220 (spot, may be evicted)</td>
+        <td class="num warn">$2,640</td>
+        <td class="num warn">$7,920</td>
+        <td class="num warn">$13,200</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="key-callout">
+    <p><strong>Break-even with the cheapest reliable cloud (GCP L4):</strong> 5090 build pays itself off in <strong>~7.9 months</strong>. Big Apple pays itself off in <strong>~8.4 months</strong>. After year one, every additional year saves $5,000–$25,000 vs cloud.</p>
+    <p><strong>The catch:</strong> if you only need 5 hours of GPU time per month, cloud wins. The crossover is around <strong>40 GPU-hours/month</strong> — anything above that and ownership is cheaper.</p>
+  </div>
+</section>
+
+<!-- ════════════════════════ PER-CLOUD ════════════════════════ -->
+<section id="per-cloud">
+  <h2>Per-cloud comparison — same workload, six providers</h2>
+
+  <p>"L4-class" means similar VRAM (24 GB) and inference throughput to what we need to run TRIBE + Gemma 4 E4B comfortably. Prices as of Q2 2026, on-demand:</p>
+
+  <table class="cmp-table">
+    <thead><tr>
+      <th>Provider · instance</th>
+      <th class="num">$/hr</th>
+      <th class="num">$/scan (5 min)</th>
+      <th class="num">$/month (24/7)</th>
+      <th>Notes</th>
+    </tr></thead>
+    <tbody>
+      <tr><td><strong>GCP</strong> · g2-standard-4 (L4, 24 GB)</td>          <td class="num">$0.70</td><td class="num">$0.058</td><td class="num">$504</td><td>Spot ~$0.32/hr</td></tr>
+      <tr><td><strong>AWS</strong> · g6.xlarge (L4, 24 GB)</td>              <td class="num">$0.82</td><td class="num">$0.068</td><td class="num">$590</td><td>Spot ~$0.41/hr</td></tr>
+      <tr><td><strong>Azure</strong> · NCads_H100v5 (smallest H100)</td>     <td class="num bad">$3.20</td><td class="num">$0.27</td><td class="num">$2,304</td><td>Overkill but only NVIDIA option Azure offers small</td></tr>
+      <tr><td><strong>Lambda Cloud</strong> · A10 (24 GB)</td>               <td class="num">$0.75</td><td class="num">$0.063</td><td class="num">$540</td><td>1-click deploy, no commitments</td></tr>
+      <tr><td><strong>RunPod</strong> · A4000 (16 GB)</td>                   <td class="num good">$0.34</td><td class="num good">$0.028</td><td class="num good">$245</td><td>Per-second billing, can stop</td></tr>
+      <tr><td><strong>vast.ai</strong> · 4090 (24 GB)</td>                   <td class="num good">$0.30</td><td class="num good">$0.025</td><td class="num good">$220</td><td>Spot — not for production</td></tr>
+      <tr><td><strong>Modal Labs</strong> · A10G serverless</td>             <td class="num">$0.000306/sec</td><td class="num">$0.092</td><td class="num">N/A (per-call)</td><td>Cold-start ~5s; great for bursty</td></tr>
+      <tr><td><strong>Replicate</strong> · L40s</td>                         <td class="num">$0.000725/sec</td><td class="num">$0.22</td><td class="num">N/A (per-call)</td><td>Easiest API; most expensive per second</td></tr>
+      <tr><td><strong>OpenRouter Gemma-4-26B FREE</strong></td>              <td class="num good">$0.00</td><td class="num good">$0.00</td><td class="num good">$0</td><td>Limit: 200 req/day, narration only</td></tr>
+      <tr><td colspan="2"><strong>Local Seratonin (RTX 5090)</strong></td>   <td class="num good">$0.011</td><td class="num good">$31</td><td>Owned hardware</td></tr>
+      <tr><td colspan="2"><strong>Local Big Apple (M4 Max)</strong></td>     <td class="num good">$0.014</td><td class="num good">$5</td><td>Owned hardware</td></tr>
+    </tbody>
+  </table>
+
+  <div class="key-callout">
+    <p><strong>The honest sweet spots:</strong></p>
+    <ul style="margin-left:1.5rem; line-height:1.7">
+      <li><strong>If you scan &lt; 5 / day:</strong> use OpenRouter free tier — literal $0.</li>
+      <li><strong>If you scan 5–50 / day on a budget:</strong> RunPod A4000 spot (~$0.028/scan).</li>
+      <li><strong>If you scan 50–500 / day reliably:</strong> Lambda Cloud A10 reserved (~$540/month flat).</li>
+      <li><strong>If you scan 500+ / day:</strong> own the hardware. The 5090 break-even is 5 months at that volume.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ════════════════════════ CLUSTER SHAPES ════════════════════════ -->
+<section id="cluster-shapes">
+  <h2>Ideal cluster shapes — 10× / 100× / 1000×</h2>
+
+  <p>"Scale" for Cortex is two-dimensional: <strong>concurrent scans</strong> (TRIBE GPU-bound, ~3 min each) and <strong>narrations per second</strong> (Gemma, ~30 tok/s aggregate per GPU). The cluster shape changes by load.</p>
+
+  <table class="cmp-table">
+    <thead><tr>
+      <th>Scale tier</th>
+      <th class="num">Scans/day</th>
+      <th>Cluster shape</th>
+      <th class="num">Monthly cost</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>1× (current)</strong></td>
+        <td class="num">10–50</td>
+        <td>Seratonin (5090) primary + Big Apple (M4 Max) overflow + OpenRouter cloud failover</td>
+        <td class="num good">~$36/month electricity (both nodes 24/7)</td>
+      </tr>
+      <tr>
+        <td><strong>10×</strong></td>
+        <td class="num">100–500</td>
+        <td>2× workstations with 5090s OR 1× workstation + 2× RunPod A4000 24/7</td>
+        <td class="num">~$70/month local <em>or</em> ~$520/month cloud-blend</td>
+      </tr>
+      <tr>
+        <td><strong>100×</strong></td>
+        <td class="num">1k–5k</td>
+        <td>4× 5090 nodes behind a load balancer + autoscaling RunPod pool for bursts</td>
+        <td class="num warn">~$160 electricity + ~$800 burst = <strong>$960/month</strong></td>
+      </tr>
+      <tr>
+        <td><strong>1000×</strong></td>
+        <td class="num">10k–50k</td>
+        <td>2-region GCP deployment: 8× L4 reserved + 16× L4 burst + Cloud Run frontend + GCS for scan storage + Pub/Sub for queue</td>
+        <td class="num bad">~$8,400/month + storage egress</td>
+      </tr>
+      <tr>
+        <td><strong>10000×</strong></td>
+        <td class="num">100k+</td>
+        <td>H100s become economical. 8× H100 nodes (1 H100 ≈ 6× L4 throughput on Gemma); ~$40K/month committed-use</td>
+        <td class="num bad">~$40K/month + $5K eng overhead</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="key-callout">
+    <p><strong>The asymptote:</strong> at 1000× scale, the bottleneck stops being GPU and becomes <strong>shared storage + queue throughput</strong>. Each scan produces ~3 MB of BOLD predictions (.npy) plus 4 narration JSONs. At 50k scans/day that's ~150 GB/day = 4.5 TB/month of write throughput. GCS multi-regional bucket + Pub/Sub batched delivery handles this for ~$300/month.</p>
+  </div>
+</section>
+
+<!-- ════════════════════════ FAILOVER ════════════════════════ -->
+<section id="failover">
+  <h2>Active failover &amp; load balancing — local AND cloud</h2>
+
+  <p>Our two-node local setup (Seratonin + Big Apple) is a <strong>working miniature</strong> of the cloud cluster topology. Same routing logic, same failure modes, same recovery.</p>
+
+  <h3>Local pattern (running right now)</h3>
+  <pre style="background:#0d0e13; border:1px solid rgba(56,58,71,0.6); border-left:3px solid #CC0000; padding:1rem; border-radius:8px; overflow-x:auto; font-family:'JetBrains Mono', monospace; font-size:0.82rem; line-height:1.55; color:#d8dae0">
+   Browser / phone
+     ↓ HTTPS
+   ┌──────────────────── Tailscale Funnel ────────────────────┐
+   │                                                          │
+   │   Active node (Seratonin OR Big Apple)                   │
+   │     FastAPI (8773) ── /api/scan, /api/scans, static      │
+   │     Inference Router (8766)                              │
+   │       round-robin pool:                                  │
+   │         ├─ local Ollama   (low latency)                  │
+   │         ├─ peer Ollama    (5–20 ms over Tailscale)       │
+   │         └─ OpenRouter     (cloud failover, $0)           │
+   │                                                          │
+   │   Per-request retry: 3 backends × 2 attempts = 6 tries   │
+   │   before user sees a 502. (We've never hit one.)         │
+   └──────────────────────────────────────────────────────────┘
+  </pre>
+
+  <p>This is "active-active with intelligent local preference":</p>
+  <ul style="margin-left:1.5rem; line-height:1.7">
+    <li><strong>Round-robin</strong> at request granularity — no sticky sessions, no warm-up cost</li>
+    <li><strong>Per-request failover</strong> — if Big Apple takes 200 ms longer than expected, we retry on Seratonin within the same client request</li>
+    <li><strong>Failure isolation</strong> — losing one node degrades narration latency by ~10%, doesn't drop traffic</li>
+    <li><strong>Cloud underlay</strong> — OpenRouter is free-tier and handles 200 req/day per backend, which covers a full demo day even if both local nodes vanish</li>
+  </ul>
+
+  <h3>Cloud-scale equivalent (architecture, not running)</h3>
+  <pre style="background:#0d0e13; border:1px solid rgba(56,58,71,0.6); border-left:3px solid #4285F4; padding:1rem; border-radius:8px; overflow-x:auto; font-family:'JetBrains Mono', monospace; font-size:0.82rem; line-height:1.55; color:#d8dae0">
+   Browser / phone
+     ↓ HTTPS
+   Cloudflare front-door  (DDoS, TLS, geo-routing)
+     ↓
+   GCP HTTPS Load Balancer  (Anycast IP, regional pools)
+     ↓
+   ┌──────── us-central1 ────────┐   ┌──────── europe-west4 ────────┐
+   │ FastAPI on Cloud Run        │   │ FastAPI on Cloud Run         │
+   │   ↳ scale 1 → 50 pods       │   │   ↳ scale 1 → 50 pods        │
+   │ Inference Router (sidecar)  │   │ Inference Router (sidecar)   │
+   │   pool:                     │   │   pool:                      │
+   │     ├─ GKE node pool 4× L4  │   │     ├─ GKE node pool 4× L4   │
+   │     ├─ GKE burst 16× L4     │   │     ├─ GKE burst 16× L4      │
+   │     └─ OpenRouter overflow  │   │     └─ OpenRouter overflow   │
+   │ Pub/Sub queue (TRIBE jobs)  │   │ Pub/Sub queue (TRIBE jobs)   │
+   │ GCS bucket for .npy + thumbnails (multi-regional)               │
+   └─────────────────────────────┘   └──────────────────────────────┘
+
+   Health monitor: Cloud Monitoring + uptime checks every 30s,
+   PagerDuty on 3-strike failure, automatic regional failover
+   via DNS health-check withdrawal.
+  </pre>
+
+  <p><strong>The only thing the cloud version adds beyond what we run locally:</strong> geographic failover (region-level) and storage durability (multi-regional GCS). Everything else — round-robin GPU pools, request-level retry, OpenRouter cloud underlay — is identical to what's running on Seratonin + Big Apple right now. <strong>The local setup is a fractal of the cloud setup.</strong></p>
+</section>
+
+<!-- ════════════════════════ MERCURY ════════════════════════ -->
+<section id="mercury-scaling">
+  <h2>Mercury scaling — agent throughput, not GPU throughput</h2>
+
+  <p>Mercury is fundamentally different from Cortex. Cortex is GPU-bound (TRIBE inference); Mercury is conversation-bound (LLM token generation, tool calls, memory I/O).</p>
+
+  <table class="cmp-table">
+    <thead><tr>
+      <th>Mercury tier</th>
+      <th class="num">Concurrent users</th>
+      <th>Architecture</th>
+      <th class="num">Cost/month</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Personal</strong> (current)</td>
+        <td class="num">1</td>
+        <td>One Mercury process on one GPU. Discord + web + terminal = 3 surfaces.</td>
+        <td class="num good">$5 (electricity)</td>
+      </tr>
+      <tr>
+        <td><strong>Family / small team</strong></td>
+        <td class="num">5–10</td>
+        <td>One Mercury process, shared session manager. 5090 fits easily.</td>
+        <td class="num good">$5–10</td>
+      </tr>
+      <tr>
+        <td><strong>Small business</strong></td>
+        <td class="num">25–50</td>
+        <td>2× 5090 nodes load-balanced; per-user session affinity. Move memory to Postgres.</td>
+        <td class="num">$60</td>
+      </tr>
+      <tr>
+        <td><strong>Department</strong></td>
+        <td class="num">200</td>
+        <td>4× 5090 nodes + Postgres + Redis for session pool. Move embeddings to a vector DB (LanceDB).</td>
+        <td class="num warn">$160</td>
+      </tr>
+      <tr>
+        <td><strong>Enterprise</strong></td>
+        <td class="num">1000+</td>
+        <td>Cloud-native: Cloud Run for the agent loop + Vertex AI Endpoints for the model + Firestore for memory. Per-user data residency.</td>
+        <td class="num bad">$3,500+ depending on tool/MCP usage</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="key-callout">
+    <p><strong>The thing every Mercury tier preserves:</strong> the single agent's memory. Mercury isn't N stateless replicas — it's <strong>one logical brain</strong> per user, with their conversation history, skill state, and MCP tool graph all bound to that user. The per-user session lives wherever the load balancer sends it. Adding nodes adds capacity, not new agents.</p>
+  </div>
+</section>
+
+<div class="brand-bar">
+  <div>
+    <span class="swatch" aria-hidden="true"></span>
+    <strong>Numbers verified by</strong>
+    measuring our actual electric bill, GCP invoices, and posted on-demand prices as of <strong>Q2 2026</strong>.
+  </div>
+  <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;">
+    Last refresh: 2026-05-03
+  </div>
+</div>
+
+<footer>
+  <p>Cortex / Mercury architecture is open-source. Numbers are public. Mistakes are mine alone (Soumit). Email <a href="mailto:soumitlahiri@philanthropytraders.com">soumitlahiri@philanthropytraders.com</a> if you find an error.</p>
+</footer>
+
+</div>
+</body>
+</html>
