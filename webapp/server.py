@@ -835,14 +835,42 @@ def create_app(
     # -----------------------------------------------------------------------
 
     if PUBLIC_DIR.exists():
-        app.mount("/assets", StaticFiles(directory=PUBLIC_DIR), name="assets")
-
+        # Explicit routes for the multi-page demo so we don't need Vite in production.
+        # Order matters: FastAPI routes registered above (all /api/*) take precedence.
         @app.get("/")
         async def index() -> FileResponse:
-            index_html = PUBLIC_DIR / "index.html"
-            if not index_html.exists():
-                raise HTTPException(status_code=404, detail="Viewer not built")
-            return FileResponse(str(index_html))
+            return FileResponse(str(PUBLIC_DIR / "index.html"))
+
+        @app.get("/gallery.html")
+        async def gallery_page() -> FileResponse:
+            return FileResponse(str(PUBLIC_DIR / "gallery.html"))
+
+        @app.get("/personas.html")
+        async def personas_page() -> FileResponse:
+            return FileResponse(str(PUBLIC_DIR / "personas.html"))
+
+        @app.get("/specs.html")
+        async def specs_page() -> FileResponse:
+            return FileResponse(str(PUBLIC_DIR / "specs.html"))
+
+        # Mount the entire public dir at /static/* for asset references like
+        # /static/main.js, /static/style.css, /static/atlas.json, etc.
+        # Also mount at /assets/* (legacy) for the Vite-style asset path.
+        app.mount("/static", StaticFiles(directory=PUBLIC_DIR), name="static")
+        app.mount("/assets", StaticFiles(directory=PUBLIC_DIR), name="assets")
+
+        # Direct top-level fallthrough for files that the public HTML references
+        # by bare name (main.js, style.css, atlas.json, brain_fsaverage5.glb, etc.).
+        # We expose these explicitly rather than mounting public/ at "/" because
+        # mounting at "/" shadows every API route.
+        for _name in ("main.js", "style.css", "atlas.json", "brain_fsaverage5.glb",
+                      "vertex_labels.json", "favicon.svg"):
+            _path = PUBLIC_DIR / _name
+            if _path.exists():
+                # Capture loop var via default arg to avoid late-binding bug
+                async def _serve(_p=_path):
+                    return FileResponse(str(_p))
+                app.add_api_route(f"/{_name}", _serve, methods=["GET"])
 
     # AdSense / SEO files served regardless of PUBLIC_DIR
     from fastapi.responses import PlainTextResponse
