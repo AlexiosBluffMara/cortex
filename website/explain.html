@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Explain — Cortex &amp; Mercury in plain English, business, and entrepreneur terms</title>
+<meta name="description" content="What Cortex and Mercury actually are, explained in three registers: casual conversation, business framing, and entrepreneurial / small-business framing.">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/style.css">
+<style>
+  .reg-tabs {display:flex;gap:0.5rem;flex-wrap:wrap;margin:1.5rem 0 1rem}
+  .reg-tab {padding:0.6rem 1.2rem;background:rgba(20,21,28,0.6);border:1px solid rgba(56,58,71,0.6);border-radius:99px;cursor:pointer;font-size:0.9rem;font-weight:500;color:#a0a0bc;transition:all 0.15s}
+  .reg-tab:hover {color:#eaeaf2;border-color:rgba(204,0,0,0.5)}
+  .reg-tab.active {background:#CC0000;color:#fff;border-color:#CC0000}
+  .reg-section {display:none;animation:fadeIn 0.3s}
+  .reg-section.active {display:block}
+  @keyframes fadeIn {from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  .two-up {display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:1.4rem;margin:1.2rem 0}
+  .product-block {background:rgba(20,21,28,0.6);border:1px solid rgba(56,58,71,0.6);border-radius:10px;padding:1.4rem;border-top:3px solid var(--isu-red, #CC0000)}
+  .product-block.merc {border-top-color:var(--isu-gold, #F6A917)}
+  .product-block h3 {margin:0 0 0.3rem;font-size:1.2rem}
+  .product-block .brief {color:#a0a0bc;font-size:0.85rem;font-family:'JetBrains Mono', monospace;margin-bottom:1rem}
+  .product-block p {color:#d8dae0;line-height:1.6;font-size:0.95rem;margin-bottom:0.7rem}
+  .product-block ul {margin:0.4rem 0 0.4rem 1rem;color:#d8dae0;line-height:1.6;font-size:0.92rem}
+  .pull-q {background:rgba(204,0,0,0.08);border-left:3px solid #CC0000;padding:1rem 1.2rem;margin:1rem 0;border-radius:0 8px 8px 0;font-style:italic;color:#eaeaf2}
+</style>
+</head>
+<body>
+
+<div class="collab-strip">
+  <div class="collab-mark">
+    <span class="lhs">Alexios Bluff Mara</span>
+    <span class="x">×</span>
+    <a class="rhs" href="https://illinoisstate.edu">Illinois State University</a>
+  </div>
+  <div class="collab-meta">Research Collaboration · Cardinal &amp; Code</div>
+</div>
+
+<nav class="sitenav">
+  <a href="/">Home</a>
+  <a href="/cortex.html">Cortex</a>
+  <a href="/mercury.html">Mercury</a>
+  <a href="/explain.html" class="active">Explain</a>
+  <a href="/about.html">About</a>
+  <a href="/research.html">Research</a>
+  <a href="/contact.html">Contact</a>
+</nav>
+
+<div class="wrap">
+
+<header>
+  <div class="pills">
+    <span class="pill brand">What we ship</span>
+    <span class="pill gold">Three registers</span>
+  </div>
+  <h1>Cortex &amp; Mercury,<br>explained <em>three ways.</em></h1>
+  <p class="tag">
+    Same two products, three audiences. Pick the framing that fits how you
+    actually think about software: a casual conversation, a business
+    document, or an entrepreneur's pitch deck. The underlying tech is
+    identical — only the words change.
+  </p>
+</header>
+
+<div class="reg-tabs">
+  <button class="reg-tab active" data-reg="casual">Casual</button>
+  <button class="reg-tab" data-reg="business">Business</button>
+  <button class="reg-tab" data-reg="entre">Entrepreneurship / small business</button>
+</div>
+
+<!-- ─────────────────────── CASUAL ─────────────────────── -->
+<section class="reg-section active" id="reg-casual">
+
+<div class="two-up">
+
+  <div class="product-block">
+    <h3>Cortex (the casual version)</h3>
+    <div class="brief">"What does my brain look like when I watch this?"</div>
+    <p>
+      You upload a short video clip — anything, a TikTok, a sunset, a
+      basketball highlight. Cortex shows you a 3D brain that lights up
+      in the regions that <em>your</em> brain (well, an average human brain) would
+      use to process it. Then four different "AI critics" describe what just
+      happened in their own voices: a chatty ISU freshman, a Northwestern
+      neurologist, a WBEZ reporter, and a Google ML engineer.
+    </p>
+    <p>
+      Picture a movie theater with 20,484 seats, where each seat is a tiny patch
+      of your cortex. The movie is whatever you uploaded. Some seats lean
+      forward when faces appear, others when music plays, others when something
+      moves quickly. Cortex shows you which seats lean forward, and four
+      different people in the back row whisper their take on the show.
+    </p>
+    <div class="pull-q">"It's basically Shazam for which part of your brain just lit up."</div>
+  </div>
+
+  <div class="product-block merc">
+    <h3>Mercury (the casual version)</h3>
+    <div class="brief">"My computer answers me, on every device I own."</div>
+    <p>
+      Mercury is an AI assistant that lives on Soumit's <em>own</em> RTX 5090 in
+      Normal, Illinois — not in some data center in Virginia. You can talk to
+      it three ways today: through a terminal, through a Discord bot called
+      <code>@abmsnowy</code>, or through a phone-friendly web page (over a
+      private VPN). Same agent, same memory, every door.
+    </p>
+    <p>
+      The point is: nothing leaves the building. Your messages don't get sent
+      to OpenAI or Google or Anthropic. The model that answers you is Gemma 4,
+      running locally on the same desktop that runs Cortex. If the local
+      machine is busy, the request quietly hops to a MacBook on the same VPN.
+      If both die, it falls back to OpenRouter's free tier — still no per-token
+      bill.
+    </p>
+    <div class="pull-q">"It's like having a private assistant who only works for you, on a computer you can unplug."</div>
+  </div>
+
+</div>
+
+</section>
+
+<!-- ─────────────────────── BUSINESS ─────────────────────── -->
+<section class="reg-section" id="reg-business">
+
+<div class="two-up">
+
+  <div class="product-block">
+    <h3>Cortex (the business framing)</h3>
+    <div class="brief">Multimodal brain-response analysis platform</div>
+    <p>
+      Cortex is a research-software platform that converts arbitrary media
+      stimuli (video, audio, image, text) into per-vertex BOLD-signal predictions
+      across the 20,484-vertex fsaverage5 cortical surface, paired with
+      population-targeted natural-language interpretations at four reading
+      levels.
+    </p>
+    <ul>
+      <li><strong>Inference engine:</strong> Meta's TRIBE v2 brain foundation model (25-subject NeuroMod training pool, 2 Hz output rate, ~6 GB VRAM)</li>
+      <li><strong>Narration layer:</strong> Google Gemma 4 (E4B/26B/31B) via local Ollama, four parallel persona prompts</li>
+      <li><strong>Latency:</strong> ~3 minutes from upload to four complete narrations on a single RTX 5090</li>
+      <li><strong>Throughput model:</strong> queue-backed serial processing; multi-GPU overflow via inference router</li>
+      <li><strong>Deployment posture:</strong> local-first; Tailscale Funnel for public access; no per-token cloud cost</li>
+    </ul>
+    <p>
+      Use cases under exploration: research-grade fMRI explainer for
+      undergraduate teaching, clinical-communication training (translating
+      neurology jargon for patients), and content-perception analytics for
+      educational media.
+    </p>
+  </div>
+
+  <div class="product-block merc">
+    <h3>Mercury (the business framing)</h3>
+    <div class="brief">Local-first agentic AI runtime</div>
+    <p>
+      Mercury is a fork of NousResearch's Hermes Agent framework, configured
+      for single-tenant deployment on consumer GPU hardware. It exposes one
+      agent instance through three transport surfaces with shared session
+      state and memory backed to a local SQLite database.
+    </p>
+    <ul>
+      <li><strong>Active surfaces:</strong> CLI (<code>mercury</code> command), Discord bot (<code>@abmsnowy</code>), web dashboard at <code>:9119</code> over Tailscale</li>
+      <li><strong>Roadmap surfaces (not shipped):</strong> iMessage, email, SMS</li>
+      <li><strong>Inference backend:</strong> Ollama (local Gemma 4), with OpenRouter free tier as failover</li>
+      <li><strong>Tool layer:</strong> 65+ built-in tools plus MCP servers (Playwright, Notion, Cloudflare, filesystem, Workspace)</li>
+      <li><strong>Compliance posture:</strong> data residency = single physical machine; no third-party model API in the hot path</li>
+    </ul>
+    <p>
+      Target buyer: small teams with regulated data (legal, medical, financial)
+      who need agentic AI but can't send conversations to a hyperscaler model API.
+    </p>
+  </div>
+
+</div>
+
+</section>
+
+<!-- ─────────────────────── ENTREPRENEURSHIP ─────────────────────── -->
+<section class="reg-section" id="reg-entre">
+
+<div class="two-up">
+
+  <div class="product-block">
+    <h3>Cortex (the founder pitch)</h3>
+    <div class="brief">"$3/month brain-scan demo that runs on a gaming PC"</div>
+    <p>
+      Cortex is the proof of a thesis: <strong>research-grade neuroscience
+      demos can run on consumer hardware for the cost of a coffee.</strong>
+      Every public scan on the live demo costs about $0.011 in electricity
+      on the 5090. At ten scans a day, the entire brain-analysis platform
+      runs on $3/month of Bloomington-Normal electricity. No AWS bill, no
+      OpenAI invoice, no per-token math.
+    </p>
+    <p><strong>Why this matters as a small business:</strong></p>
+    <ul>
+      <li><strong>Zero-marginal-cost demos.</strong> Send a live URL to anyone, anywhere, today. They don't need an account, a credit card, or a Tailscale invite. The 5090 absorbs the load.</li>
+      <li><strong>Hackathon credibility.</strong> Built for the <em>Gemma 4 Good Hackathon</em> (Health &amp; Sciences track) and the <em>Nous Research × Kimi Creative Hackathon</em>. Both submissions live on the same GitHub.</li>
+      <li><strong>Education-sector path.</strong> ISU undergrads in cognitive science / psych / neuro can use a free public demo to understand fMRI without paying for scanner time. Same for high-school AP Psych teachers.</li>
+      <li><strong>Adjacent revenue:</strong> on-prem deploys for hospital-affiliated training programs that can't send patient stimuli to a cloud LLM.</li>
+    </ul>
+    <div class="pull-q">"The cheapest credible neuroscience demo on the public internet, and the URL is in my Twitter bio."</div>
+  </div>
+
+  <div class="product-block merc">
+    <h3>Mercury (the founder pitch)</h3>
+    <div class="brief">"My private AI agent, on my hardware, that I can sell as a kit"</div>
+    <p>
+      Mercury is the local-first answer to the hyperscaler-API agent problem.
+      Most agent products today route through OpenAI / Anthropic / Google Cloud
+      and pass through every per-token fee to the customer. Mercury inverts
+      that: a one-time hardware cost (~$2,500–3,000 for the RTX 5090) replaces
+      five years of API bills for a single user.
+    </p>
+    <p><strong>Why this matters as a small business:</strong></p>
+    <ul>
+      <li><strong>The break-even math is brutal.</strong> A 5090 costs ~$2,800 street. An equivalent 24/7 cloud GPU is ~$0.70/hr = $504/month. Five-month payback before per-token fees. After month five, the marginal cost is electricity.</li>
+      <li><strong>Privacy as architecture, not a promise.</strong> Regulated industries (legal, medical, family offices) cannot put client data into a third-party LLM endpoint. Mercury's pitch is: the model lives on a box you own, in a building you own.</li>
+      <li><strong>Single-operator economics.</strong> Soumit (one person, one LLC) ships a live demo, runs Discord support, handles billing — total operating overhead is a domain registration and a Cloudflare account.</li>
+      <li><strong>Productizable as an appliance.</strong> "Mercury Box" — a pre-installed mini-PC + Tailscale config + Discord setup wizard, sold to small firms that want a private AI without paying a SaaS forever.</li>
+    </ul>
+    <div class="pull-q">"You buy the hardware once. You own the agent forever. The only recurring cost is electricity."</div>
+  </div>
+
+</div>
+
+<section style="margin-top:2rem">
+  <h3>How the two products work together</h3>
+  <p>
+    Mercury is the <strong>orchestrator</strong>; Cortex is the
+    <strong>specialty tool</strong>. From inside Mercury (in any of its three
+    surfaces) you can hand a media file to Cortex and get the brain analysis +
+    four narrations back as a structured response. Same RTX 5090, same Tailscale
+    network, same Ollama inference pool. From a small-business standpoint that
+    means one piece of hardware monetizes two distinct demos and powers any
+    future agent skill that wants to call into a brain-scan endpoint.
+  </p>
+</section>
+
+</section>
+
+<div class="brand-bar">
+  <div>
+    <span class="swatch" aria-hidden="true"></span>
+    <strong>Research conducted in association with</strong>
+    <a href="https://illinoisstate.edu" style="color: var(--text); border-bottom-color: rgba(204,0,0,0.30);">Illinois State University</a>,
+    Bloomington–Normal, IL.
+  </div>
+  <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;">
+    Cortex v0.1.0 · Mercury v0.2.0
+  </div>
+</div>
+
+<footer>
+  <p>Alexios Bluff Mara LLC (dba Red Team Kitchen). Operator: Soumit Lahiri. Bloomington–Normal, IL. Gemma is a trademark of Google LLC.</p>
+</footer>
+
+<script>
+  document.querySelectorAll('.reg-tab').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.reg-tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.reg-section').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      document.getElementById('reg-' + b.dataset.reg).classList.add('active');
+    });
+  });
+</script>
+
+</div>
+</body>
+</html>
