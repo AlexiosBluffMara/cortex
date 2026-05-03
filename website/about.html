@@ -47,15 +47,18 @@
 <header>
   <div class="pills">
     <span class="pill brand">Who we are</span>
-    <span class="pill gold">Bloomington–Normal, IL</span>
+    <span class="pill gold">Chicago, IL — Ascended Base Lab</span>
+    <span class="pill blue">BloNo research node</span>
   </div>
-  <h1>Built by <em>one person,</em><br>in <span class="gold">one cardinal town.</span></h1>
+  <h1>Built by <em>one person,</em><br>across <span class="gold">two Illinois cities.</span></h1>
   <p class="tag">
-    Red Team Kitchen is a one-person research-and-software lab in
-    Bloomington–Normal, Illinois. Everything you see on this site —
-    the brain scans, the four narration voices, the local-first agent,
-    the public demo URL — is built and shipped by one operator out of
-    a desktop with an RTX 5090.
+    Red Team Kitchen is a one-person research-and-software lab. The hardware lives
+    in <strong>Chicago</strong> (call sign Ascended Base) — a single RTX 5090
+    desktop and an M4 Max MacBook sitting next to it. A research node lives in
+    <strong>Bloomington–Normal</strong> next to ISU. Everything you see on this
+    site — the brain scans, the four narration voices, the local-first agent,
+    the public demo URL — is built and shipped by one operator out of those
+    two locations.
   </p>
 </header>
 
@@ -98,36 +101,40 @@
 
     <div class="bio">
       <h3>Illinois State University (ISU)</h3>
-      <div class="tagline">Research collaboration partner</div>
+      <div class="tagline">Research collaboration partner — research only, not coursework</div>
       <p>
         Illinois State University is a public research university in Normal, Illinois,
         founded in 1857 — the <strong>oldest public university in Illinois</strong>.
         Cardinal red <code>#CC0000</code> is the brand color; Reggie Redbird is the
-        mascot; the visual language of every page on this site is a respectful
-        nod to ISU's published brand guidelines (without using ISU's protected
-        wordmarks or seals). Cortex's research is conducted in association with
-        ISU; that's what the "Cardinal &amp; Code" tagline points to.
+        mascot; the visual language of every page on this site respectfully echoes
+        ISU's published brand guidelines (without using ISU's protected wordmarks
+        or seals). Our active research collaboration sits in the
+        <strong>College of Applied Science &amp; Technology</strong>; see the
+        named collaborators below.
       </p>
       <p style="font-size:0.85rem;color:var(--text-mid, #a0a0bc)">
         <a href="https://illinoisstate.edu">illinoisstate.edu</a>
-        · Normal, IL · Mennonite College of Nursing · Mary &amp; Jean Borg Center
+        · Normal, IL · College of Applied Science &amp; Technology
       </p>
     </div>
 
     <div class="bio blue">
-      <h3>Town of Normal, Illinois</h3>
-      <div class="tagline">Where Seratonin (the GPU) lives</div>
+      <h3>Chicago, IL · Ascended Base Lab</h3>
+      <div class="tagline">Where Seratonin and Big Apple actually live</div>
       <p>
-        Normal is the smaller half of the "twin cities" Bloomington–Normal in
-        central Illinois — population ~52,000, home to ISU, a Rivian assembly
-        plant, and the desktop computer (call sign: <code>Seratonin</code>) that
-        runs every demo on this site. When you click the live Cortex link, the
-        request travels from your browser to a Tailscale Funnel endpoint to a
-        single RTX 5090 sitting in a house in Normal. That's the entire
-        production stack. No AWS region. No cloud GPU pool. Just a town and a card.
+        The lab — call sign <strong>Ascended Base</strong> — is in
+        <strong>Chicago, Illinois</strong>. Both production GPUs live here:
+        <code>Seratonin</code> (the Windows desktop with the RTX 5090) and
+        <code>Big Apple</code> (the M4 Max MacBook Pro). When you hit the live
+        Cortex demo URL your request travels through a Tailscale Funnel into
+        Chicago, lands on Seratonin, and the Mac is sitting next to it as
+        overflow. The lab also operates a node in Bloomington–Normal —
+        <code>Mini Apple</code> — that lives near ISU for in-person research
+        meetings. <code>Baby Pi</code> (a Raspberry Pi 5 edge node) is in
+        progress, not deployed yet.
       </p>
       <p style="font-size:0.85rem;color:var(--text-mid, #a0a0bc)">
-        ZIP 61761 · McLean County · Illinois 4th Congressional District
+        Chicago, IL (HQ) · Bloomington–Normal, IL (research node) · Cook + McLean Counties
       </p>
     </div>
 
@@ -135,8 +142,67 @@
 </section>
 
 <section>
+  <h2>The ISU collaborators</h2>
+  <p>The faculty we work directly with at the
+     <a href="https://cast.illinoisstate.edu/">College of Applied Science &amp; Technology</a>.
+     This is a research collaboration only — we don't do coursework with ISU.</p>
+
+  <div class="bio-grid">
+    <div class="bio">
+      <h3>Mangolika Bhattacharya</h3>
+      <div class="tagline">Faculty · ISU College of Applied Science &amp; Technology</div>
+      <p>
+        ISU faculty in Information Technology / Cybersecurity. Research interests
+        sit squarely on the seam this lab cares about: applied AI/ML systems,
+        secure local-first deployments, and reproducible research workflows on
+        consumer hardware. The exact person to think with about whether
+        an RTX-5090-in-Chicago can actually substitute for a hospital-affiliated
+        research compute cluster — and what the security model looks like when
+        it can't.
+      </p>
+      <p style="font-size:0.85rem;color:var(--text-mid, #a0a0bc)">
+        <a href="https://about.illinoisstate.edu/mbhatta/">about.illinoisstate.edu/mbhatta</a>
+      </p>
+    </div>
+
+    <div class="bio gold">
+      <h3>Sally Xie</h3>
+      <div class="tagline">Faculty · ISU College of Applied Science &amp; Technology</div>
+      <p>
+        ISU faculty whose research bridges human-computer interaction, applied
+        machine learning, and the kind of multimodal-perception work that maps
+        directly onto the Cortex pipeline. The person to bring in when the
+        question is "what happens when a real undergraduate cohort touches a
+        brain-response demo for the first time, and what does that teach us
+        about the model's failure modes?"
+      </p>
+      <p style="font-size:0.85rem;color:var(--text-mid, #a0a0bc)">
+        <a href="https://about.illinoisstate.edu/sxie/">about.illinoisstate.edu/sxie</a>
+      </p>
+    </div>
+
+    <div class="bio blue">
+      <h3>Rosangela Follmann</h3>
+      <div class="tagline">Faculty · ISU · early-stage conversation (1 meeting)</div>
+      <p>
+        ISU faculty in computational and mathematical biology — neuronal-network
+        modeling, dynamical systems, and quantitative biology. We've had
+        <strong>one introductory meeting</strong> so far; this is an early-stage
+        relationship, not a formed collaboration. Listed honestly here because
+        her research adjacency to TRIBE-style brain-foundation-model work is
+        exactly the kind of conversation the lab wants to keep open.
+      </p>
+      <p style="font-size:0.85rem;color:var(--text-mid, #a0a0bc)">
+        <a href="https://about.illinoisstate.edu/rfollma/">about.illinoisstate.edu/rfollma</a>
+        · <a href="mailto:rfollma@ilstu.edu">rfollma@ilstu.edu</a>
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
   <h2>How it all fits together</h2>
-  <div class="map-block">  Soumit Lahiri  (the human)
+  <div class="map-block">  Soumit Lahiri  (the human, in Chicago)
     │
     ├─ owns ─────────►  Alexios Bluff Mara LLC  ──── dba ────►  Red Team Kitchen
     │                       │                                         │
@@ -144,11 +210,15 @@
     │                       ├─ owns redteamkitchen.com                ├─ ships Mercury
     │                       └─ owns the LLC's bank/cards              └─ runs the demos
     │
-    └─ does research in association with ─────────►  Illinois State University
-                                                          │
-                                                          └─ in the town of Normal, IL
-                                                                  │
-                                                                  └─ where Seratonin (RTX 5090) lives
+    └─ does research with ──►  ISU College of Applied Science &amp; Technology
+                                    │
+                                    ├─ Mangolika Bhattacharya  (active)
+                                    ├─ Sally Xie               (active)
+                                    └─ Rosangela Follmann      (1 meeting · early stage)
+
+  Ascended Base Lab (Chicago, IL)                       Bloomington–Normal node
+  ├─ Seratonin   Windows · RTX 5090 · 32 GB GDDR7        └─ Mini Apple   Mac · ISU-adjacent
+  └─ Big Apple   Mac · M4 Max · 48 GB unified            (Baby Pi · Raspberry Pi 5 · WIP)
   </div>
 </section>
 
@@ -167,7 +237,7 @@
     <span class="swatch" aria-hidden="true"></span>
     <strong>Research conducted in association with</strong>
     <a href="https://illinoisstate.edu" style="color: var(--text); border-bottom-color: rgba(204,0,0,0.30);">Illinois State University</a>,
-    Bloomington–Normal, IL.
+    research collaboration · Bloomington–Normal, IL · ABM in Chicago, IL.
   </div>
   <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;">
     Alexios Bluff Mara LLC · est. 2025

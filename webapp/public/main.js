@@ -930,38 +930,108 @@ function onWs(msg) {
         case "hello":
             appendEvent(`scheduler: ${msg.scheduler_state}, queue: ${msg.queue.queue_depth}`);
             setGpu(msg.scheduler_state);
+            pushStream("queue", `${msg.queue.queue_depth} queued · ${msg.queue.completed ?? 0} completed`);
             break;
         case "scheduler_state":
             setGpu(msg.state);
             appendEvent(`GPU → ${msg.state}`, msg.state === "tribe_active" ? "progress" : "info");
+            pushStream("gpu", `state: ${msg.state.replace("_"," ")}`);
             break;
         case "scan_queued":
             appendEvent(`queued: ${msg.filename} (${msg.scan_id})`);
             showOverlay("queued");
+            pushStream("queue", `accepted scan ${shortId(msg.scan_id)} · ${sanitizeFilename(msg.filename)}`);
             break;
         case "scan_progress":
             appendEvent(`${msg.scan_id}: ${msg.phase}`, "progress");
             if (msg.scan_id === st.scanId) showOverlay(msg.phase);
+            if (msg.phase === "running") pushStream("tribe", `scan ${shortId(msg.scan_id)} → loading TRIBE v2 weights`);
+            else if (msg.phase === "narrating") pushStream("gemma", `scan ${shortId(msg.scan_id)} → narrating with 4 personas`);
+            else pushStream("queue", `scan ${shortId(msg.scan_id)} → ${msg.phase}`);
             break;
         case "scan_complete":
             appendEvent(`scan ${msg.scan_id} complete`, "complete");
             overlay.classList.add("hidden");
             loadBoldForScan(msg.scan_id);
             loadScanResult(msg.scan_id);
+            pushStream("queue", `scan ${shortId(msg.scan_id)} complete · 4 narrations rendered`);
             break;
         case "scan_narrations_ready":
             if (msg.narrations) {
                 renderNarration({ narrations: msg.narrations });
                 appendEvent(`narrations ready (Sam · Priya · Dr. Park · Chris)`, "complete");
+                const ns = Object.keys(msg.narrations || {});
+                pushStream("gemma", `narrations ready: ${ns.join(" · ")}`);
             }
             break;
         case "scan_failed":
             appendEvent(`scan failed: ${msg.error?.message ?? "?"}`, "failed");
             overlay.classList.add("hidden");
             _setNarrationText("narration-sam", "Scan failed.", true);
+            pushStream("error", `scan ${shortId(msg.scan_id)} failed: ${(msg.error?.message ?? "?").slice(0,80)}`);
             break;
     }
 }
+
+// ── Live activity stream ─────────────────────────────────────────────────────
+// Sanitized real-time event log shown in the left panel. Strips usernames,
+// absolute paths, and anything that looks like a credential.
+const STREAM_MAX = 80;
+let _streamCount = 0;
+function shortId(s) { return (s || "").slice(0,8); }
+function sanitizeFilename(s) {
+    if (!s) return "(unnamed)";
+    return String(s).replace(/^.*[\\/]/, "").slice(0, 40);
+}
+function pushStream(tag, msg) {
+    const el = document.getElementById("live-stream");
+    if (!el) return;
+    if (_streamCount === 0) el.innerHTML = "";
+    _streamCount++;
+    const t = new Date();
+    const hh = String(t.getHours()).padStart(2,"0");
+    const mm = String(t.getMinutes()).padStart(2,"0");
+    const ss = String(t.getSeconds()).padStart(2,"0");
+    const row = document.createElement("div");
+    row.className = "ls-row";
+    row.innerHTML = `<span class="ls-time">${hh}:${mm}:${ss}</span><span class="ls-tag ${esc(tag)}">${esc(tag)}</span><span class="ls-msg">${esc(msg)}</span>`;
+    el.appendChild(row);
+    while (el.children.length > STREAM_MAX) el.removeChild(el.firstChild);
+    el.scrollTop = el.scrollHeight;
+}
+
+// ── Inference node status poller (Seratonin / Big Apple / OpenRouter) ───────
+async function pollNodeStatus() {
+    try {
+        const r = await fetch("/api/health", { cache: "no-store" });
+        const d = await r.json();
+        const state = d.gpu?.state || "idle";
+        const seraUp = state !== "down";
+        const seraBusy = state === "tribe_active" || state === "gemma_active" || state === "swapping";
+        setNode("seratonin", seraUp ? (seraBusy ? "busy" : "up") : "down");
+    } catch (e) {
+        setNode("seratonin", "down");
+    }
+    // Poll the inference router for big-apple + openrouter
+    try {
+        const r = await fetch("/api/router-health", { cache: "no-store" });
+        if (r.ok) {
+            const d = await r.json();
+            const ba = d.ollama_backends?.["http://100.93.240.52:11434"];
+            const or = d.openrouter;
+            setNode("bigapple",   ba ? "up" : "down");
+            setNode("openrouter", or ? "up" : "down");
+        }
+    } catch (e) { /* ignore — router may be down independently */ }
+}
+function setNode(name, state) {
+    const el = document.querySelector(`.node-${name}`);
+    if (!el) return;
+    el.classList.remove("up", "busy", "down");
+    el.classList.add(state);
+}
+setInterval(pollNodeStatus, 5000);
+setTimeout(pollNodeStatus, 500);
 
 function showOverlay(phase) {
     // Don't reappear on top of an auto-loaded scan — direct-link viewers

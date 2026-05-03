@@ -14,6 +14,12 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/style.css">
+<script>
+  // If someone hits cortex.redteamkitchen.com, send them straight to the live demo.
+  if (location.hostname === 'cortex.redteamkitchen.com') {
+    location.replace('https://seratonin.scylla-betta.ts.net' + location.pathname + location.search);
+  }
+</script>
 </head>
 <body>
 
@@ -44,7 +50,7 @@
   <div class="pills">
     <span class="pill brand">Alexios Bluff Mara LLC</span>
     <span class="pill gold">dba Red Team Kitchen</span>
-    <span class="pill blue">Bloomington–Normal, IL</span>
+    <span class="pill blue">Chicago, IL · BloNo research node</span>
   </div>
   <h1>Brain-response analysis.<br>Personal AI.<br>Built where <em>Cardinal</em> meets <span class="gold">Code.</span></h1>
   <p class="tag">
@@ -98,13 +104,22 @@
 <section>
   <h2>What ABM does</h2>
   <p>
-    Alexios Bluff Mara LLC partners with Illinois State University on
-    applied AI and computational neuroscience research. The work is
-    hardware-flexible by design: the same code path runs on a single
-    RTX 5090 sitting under a desk, on a Google Cloud Run L4 instance for
-    burst capacity, and — through ACCESS-CI partnerships at UIUC and
-    similar institutions — on national HPC nodes when the experiment
-    demands them. Open-source where possible. Local-first by default.
+    Alexios Bluff Mara LLC partners with the
+    <a href="https://cast.illinoisstate.edu/">ISU College of Applied Science &amp; Technology</a>
+    on applied AI and computational-neuroscience <strong>research only</strong>
+    (not coursework). The work is hardware-flexible by design: the same code path
+    runs on a single RTX 5090 in our <strong>Chicago lab</strong> (call sign
+    Ascended Base), on the M4 Max MacBook (Big Apple) sitting next to it, and —
+    through ACCESS-CI partnerships at UIUC and similar institutions — on national
+    HPC nodes when the experiment demands them. Open-source where possible.
+    Local-first by default.
+  </p>
+
+  <p style="font-size:0.95rem;color:var(--text-mid)">
+    Active named collaborators at ISU CAST:
+    <strong>Mangolika Bhattacharya</strong>, <strong>Sally Xie</strong>, and
+    <strong>Rosangela Follmann</strong> (early-stage, one meeting). Full bios on
+    <a href="/about.html">/about</a>.
   </p>
 
   <div class="pull">
@@ -291,13 +306,134 @@
   </div>
 </section>
 
+<!-- ═════════════════════ Snowy / Mercury terminal output ═════════════════════ -->
+<section>
+  <h2>What Mercury says when you ask it who it is</h2>
+  <p>
+    The output below is from a real Mercury terminal session running on Seratonin
+    (the local 5090). Same agent answers identically through the Discord bot
+    (<code>@abmsnowy</code>) and the phone-friendly web dashboard.
+  </p>
+  <pre style="background:#0d0e13;border:1px solid #2a2a3c;border-left:3px solid #CC0000;padding:1.2rem 1.4rem;border-radius:10px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:0.84rem;line-height:1.6;color:#d8dae0;white-space:pre-wrap;">
+<span style="color:#F6A917">$</span> mercury chat
+<span style="color:#56758f">[mercury]</span> connected to local Ollama (gemma4:e4b @ 194 tok/s)
+<span style="color:#56758f">[mercury]</span> session resumed · 1,247 prior messages in context
+
+<span style="color:#F6A917">›</span> who are you?
+
+<span style="color:#4ad596">Identity &amp; Architecture</span>
+  Agent:                Snowy The Bot / ABM Hermes
+  Developer:            Alexios Bluff Mara LLC / Red Team Kitchen
+                        in collaboration with Illinois State University 🔴
+  Execution Environment: Local RTX 5090 via Ollama (direct, low-latency,
+                        high-power access to GPU resources)
+  Model:                Gemma 4 E4B (194 tok/s)
+  Cost / Limits:        No cloud API costs, no rate limits
+  Persistence:          Persistent memory across sessions
+
+<span style="color:#4ad596">Software Capabilities (Skills &amp; Tools)</span>
+  Web/Browser:    web_search, web_extract, browser suite (Navigation, Vision, Interaction)
+  Code/Dev:       terminal, read_file, search_files, patch, write_file, github,
+                  systematic-debugging, test-driven-development
+  Data/MLOps:     data-science, mlops (TRL/Unsloth fine-tuning, vLLM inference,
+                  SAM segmentation), research (arXiv, literature review)
+  Memory/Workflow: memory (user/general facts), skills_list, session_search,
+                   delegate_task for orchestrating multi-step workflows
+
+<span style="color:#4ad596">Conclusion</span>
+  Locally hosted, powerful, state-of-the-art AI agent designed for
+  uninterrupted, resource-intensive, multi-domain work. Primary vulnerability
+  surface: inability to run standard system diagnostic commands in the
+  immediate shell environment. All operational parameters (GPU, memory, model
+  throughput) are confirmed internally.
+</pre>
+</section>
+
+<!-- ═════════════════════ AR / XR / VR ═════════════════════ -->
+<section>
+  <h2>What we have, and what we'd build next with funding</h2>
+  <p>
+    The next surface for both Cortex and Mercury is spatial — head-mounted
+    displays where a brain-response visualization actually wraps around the
+    viewer instead of being trapped in a browser tab. Three platforms matter
+    here, and we already own two of them.
+  </p>
+
+  <div class="projects">
+    <div class="project cardinal" style="cursor:default;">
+      <div class="tag">Hardware on hand · today</div>
+      <div class="name">Meta Quest 3</div>
+      <div class="blurb">
+        $499 standalone XR headset, 4K+ resolution per eye (2064×2208), Snapdragon
+        XR2 Gen 2, full-color passthrough. We have one in the lab. Meta's
+        <strong>Quest for Business</strong> developer program issues device-management
+        seats and the <strong>Meta Horizon Developer</strong> + <strong>Meta for
+        Developers</strong> tracks both publish quarterly grant calls and SDK access.
+        Rendering Cortex's 20,484-vertex brain mesh in WebXR on Quest 3 is
+        the cheapest credible spatial demo on the public market.
+      </div>
+    </div>
+
+    <div class="project gold" style="cursor:default;">
+      <div class="tag">Hardware on hand · today</div>
+      <div class="name">Apple Vision Pro</div>
+      <div class="blurb">
+        $3,499 spatial computer with dual 4K micro-OLED, M2 + R1 chips, true 6DoF
+        eye + hand tracking. We have one. Apple's <strong>Apple Developer
+        Program</strong> ($99/yr) ships visionOS SDK + RealityKit. Apple
+        <strong>Entrepreneur Camp</strong> and <strong>Apple Investor in People</strong>
+        application tracks open periodically; pricing pressure pushes us to ship the
+        AVP demo first because the brand-cred per visit is the highest of the three.
+      </div>
+    </div>
+
+    <div class="project blue" style="cursor:default;">
+      <div class="tag">Wishlist · with funding</div>
+      <div class="name">Google Android XR (Samsung Galaxy XR)</div>
+      <div class="blurb">
+        Samsung's <strong>Project Moohan / Galaxy XR</strong> headset, expected ~$1,800
+        retail (Samsung's Snapdragon XR2+ Gen 2). Runs <strong>Android XR</strong>
+        with Gemini and Google's full ecosystem. Highest fidelity at the price-
+        per-pixel point, ideal for an <strong>education-sector</strong> deployment
+        — undergrad neuro / cognitive-science labs at ISU + UIUC could buy ten of
+        these for the cost of one Vision Pro. Google's <strong>Android XR
+        Developer Program</strong> is in beta; <strong>Google for Startups</strong>
+        and <strong>Google Cloud for Startups</strong> both offer up to <strong>$200K</strong>
+        in cloud credits to qualifying companies.
+      </div>
+    </div>
+
+    <div class="project blue" style="cursor:default;">
+      <div class="tag">Wishlist · with funding · long shot</div>
+      <div class="name">Google AR Glasses (XR-lite, when it ships)</div>
+      <div class="blurb">
+        Google's <strong>AR glasses</strong> (announced 2026, partner-distributed via
+        Warby Parker / Gentle Monster / Samsung) are the form factor that actually
+        gets a brain-scan demo into a classroom rather than a lab. Pricing TBD,
+        likely $1,200-$2,000. We're in the queue for developer-program access; in
+        the meantime the same WebXR build that ships to Quest will graceful-degrade
+        to glasses-class hardware.
+      </div>
+    </div>
+  </div>
+
+  <p style="margin-top:1.4rem;font-size:0.95rem;color:var(--text-mid)">
+    <strong>Cost-to-ship math:</strong> Quest 3 + AVP combined puts the lab at
+    ~$4,000 of XR hardware on hand. Adding Galaxy XR + Google Glasses would be
+    another ~$3,000-$3,800. <strong>Total spatial-computing capex to cover all
+    four major platforms: under $8,000.</strong> That's the whole BOM for an
+    education-sector spatial-neuroscience pilot. Compare to the cost of one
+    Hospital MRI hour ($600-$1,200) and the conversation gets short.
+  </p>
+</section>
+
 <!-- ═════════════════════ Brand bar ═════════════════════ -->
 <div class="brand-bar">
   <div>
     <span class="swatch" aria-hidden="true"></span>
     <strong>Research conducted in association with</strong>
     <a href="https://illinoisstate.edu" style="color: var(--text); border-bottom-color: rgba(204,0,0,0.30);">Illinois State University</a>,
-    Bloomington–Normal, IL.
+    research collaboration · Bloomington–Normal, IL · ABM in Chicago, IL.
   </div>
   <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;">
     Alexios Bluff Mara LLC · 2026

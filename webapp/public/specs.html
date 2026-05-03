@@ -1,366 +1,185 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RTK · Powerstation Specs</title>
-<meta name="description" content="Live hardware spec overlay — Alexios Bluff Mara × Illinois State University research powerstation">
-
-<!-- ISU brand fonts -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<title>Cortex · Hardware specs (Seratonin · Big Apple · Mini Apple · Baby Pi)</title>
+<meta name="description" content="The four physical machines that run Cortex and Mercury — Seratonin (RTX 5090), Big Apple (M4 Max), Mini Apple, and the in-progress Baby Pi." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=PT+Serif:wght@700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  /*
-   * Twitch / OBS browser-source overlay. Designed to be loaded as a 1280×720
-   * browser source. Background is transparent so it can sit over a stream;
-   * use ?bg=solid query param for a solid card on a fixed scene.
-   */
-  :root {
-    --cardinal: #CC0000;
-    --cardinal-bright: #ee2d3f;
-    --gold: #F6A917;
-    --blue: #56758f;
-    --bg: rgba(10, 11, 14, 0.92);
-    --bg-solid: #0a0b0e;
-    --surface: rgba(20, 21, 28, 0.85);
-    --border: rgba(204, 0, 0, 0.20);
-    --border-strong: rgba(238, 45, 63, 0.45);
-    --text: #f0f2f6;
-    --muted: #8b8d96;
-    --good: #4ad596;
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0a0b0e; --surface:#14151c; --surface2:#1c1e28; --border:#262834; --border-strong:#383a47;
+    --accent:#CC0000; --isu-yellow:#F6A917; --isu-blue:#56758f; --good:#4ad596;
+    --text:#f0f2f6; --muted:#8b8d96;
+    --radius:12px;
   }
+  html,body{background:var(--bg);color:var(--text);font-family:"Open Sans",ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.55}
+  a{color:#ee2d3f;text-decoration:none}
+  a:hover{color:var(--accent);text-decoration:underline}
+  code{font-family:"JetBrains Mono",monospace;background:var(--surface2);padding:0.1em 0.3em;border-radius:3px;font-size:0.9em}
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body {
-    background: transparent;
-    color: var(--text);
-    font-family: "Open Sans", system-ui, sans-serif;
-    line-height: 1.5;
-    overflow: hidden;
-    -webkit-font-smoothing: antialiased;
-  }
-  body.solid { background: var(--bg-solid); }
+  .topbar{display:flex;align-items:center;gap:1rem;padding:0.7rem 1.4rem;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:10}
+  .brand{display:flex;align-items:center;gap:0.5rem;font-weight:700;font-size:1.05rem;color:var(--text)}
+  .brand-mark{color:var(--accent);font-size:1.4rem}
+  .topnav{display:flex;gap:0.4rem;margin-left:1rem}
+  .topnav a{padding:0.4rem 0.8rem;border-radius:8px;color:var(--muted);font-weight:500}
+  .topnav a:hover{background:var(--surface2);color:var(--text);text-decoration:none}
+  .topnav a.active{background:var(--accent);color:#fff}
+  .topbar .right{margin-left:auto;font-family:"JetBrains Mono",monospace;font-size:0.85rem;color:var(--muted)}
 
-  .card {
-    position: absolute;
-    top: 16px; left: 16px; right: 16px;
-    max-width: 1248px; margin: 0 auto;
-    background: var(--bg);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--border-strong);
-    border-radius: 16px;
-    padding: 18px 24px 16px;
-    box-shadow: 0 12px 36px rgba(0,0,0,0.55);
-  }
+  .hero{padding:3rem 1.5rem 1.5rem;max-width:1200px;margin:0 auto}
+  .hero h1{font-size:2.2rem;margin-bottom:0.6rem;letter-spacing:-0.02em}
+  .hero h1 .accent{color:var(--accent)}
+  .hero p{color:var(--muted);max-width:780px;font-size:1.05rem}
 
-  /* Collab strip */
-  .collab {
-    display: flex; align-items: baseline; gap: 12px;
-    font-family: "PT Serif", serif;
-    font-weight: 700;
-    font-size: 0.95rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin-bottom: 4px;
-  }
-  .collab .lhs { color: var(--text); }
-  .collab .x  { color: var(--cardinal-bright); font-family: "JetBrains Mono", monospace; }
-  .collab .rhs { color: var(--text); }
-  .collab .meta {
-    margin-left: auto;
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.7rem;
-    text-transform: none;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-  }
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:1.4rem;max-width:1280px;margin:0 auto;padding:1rem 1.5rem 4rem}
 
-  /* Title strip */
-  h1 {
-    font-family: "PT Serif", serif;
-    font-size: 1.55rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    color: var(--text);
-    margin-bottom: 14px;
-  }
-  h1 em {
-    font-style: italic;
-    color: var(--gold);
-  }
+  .machine{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column;border-top:3px solid var(--accent)}
+  .machine.bigapple{border-top-color:var(--isu-yellow)}
+  .machine.miniapple{border-top-color:var(--isu-blue)}
+  .machine.babypi{border-top-color:#9c0d1d;opacity:0.7}
 
-  /* 6-column grid */
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 10px;
-  }
-  .cell {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 12px;
-    min-height: 76px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
-  .cell.span-2 { grid-column: span 2; }
-  .cell .label {
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.62rem;
-    text-transform: uppercase;
-    letter-spacing: 0.10em;
-    color: var(--muted);
-    font-weight: 600;
-  }
-  .cell .value {
-    font-family: "PT Serif", serif;
-    font-weight: 700;
-    font-size: 1.05rem;
-    color: var(--text);
-    line-height: 1.15;
-  }
-  .cell .sub {
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.74rem;
-    color: var(--gold);
-    margin-top: 2px;
-  }
-  .cell.cardinal { border-color: rgba(204,0,0,0.55); }
-  .cell.cardinal .value { color: var(--cardinal-bright); }
-  .cell.gold { border-color: rgba(246,169,23,0.45); }
-  .cell.gold .value { color: var(--gold); }
+  .machine .head{padding:1.2rem 1.4rem 0.8rem;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+  .machine .name{font-size:1.4rem;font-weight:700;line-height:1.2}
+  .machine .role{font-size:0.85rem;color:var(--muted);margin-top:0.2rem}
+  .machine .badge{font-family:"JetBrains Mono",monospace;font-size:0.7rem;padding:0.2rem 0.6rem;border-radius:99px;background:var(--surface2);color:var(--muted);border:1px solid var(--border-strong);white-space:nowrap}
+  .machine .badge.live{background:rgba(74,213,150,0.13);color:var(--good);border-color:rgba(74,213,150,0.4)}
+  .machine .badge.wip{background:rgba(204,0,0,0.13);color:var(--accent);border-color:rgba(204,0,0,0.4)}
 
-  /* Live state row */
-  .live {
-    display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    gap: 10px;
-    margin-top: 10px;
-  }
-  .live .cell {
-    min-height: 60px;
-    padding: 8px 11px;
-  }
-  .live .cell .value {
-    font-family: "JetBrains Mono", monospace;
-    font-size: 1.05rem;
-    color: var(--gold);
-  }
-  .live .cell .label {
-    font-size: 0.58rem;
-  }
+  .specs{padding:0.7rem 1.4rem 1.2rem;display:grid;grid-template-columns:120px 1fr;gap:0.5rem 0.9rem;font-size:0.92rem;border-top:1px solid var(--border);margin-top:0.6rem}
+  .specs dt{color:var(--muted);font-family:"JetBrains Mono",monospace;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.04em;align-self:start;padding-top:0.15rem}
+  .specs dd{color:#d8dae0}
 
-  /* Status pill */
-  .status-pill {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: rgba(74, 213, 150, 0.14);
-    border: 1px solid var(--good);
-    color: var(--good);
-    border-radius: 99px;
-    padding: 3px 10px;
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-  }
-  .status-pill.warn { background: rgba(246,169,23,0.14); border-color: var(--gold); color: var(--gold); }
-  .status-pill.err  { background: rgba(204,0,0,0.18); border-color: var(--cardinal); color: var(--cardinal-bright); }
-  .status-pill .dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: currentColor;
-    animation: pulse 1.6s infinite;
-  }
-  @keyframes pulse {
-    0%,100% { opacity: 1; }
-    50%     { opacity: 0.45; }
-  }
+  .role-box{padding:0.9rem 1.4rem;background:#0d0e13;border-top:1px solid var(--border);font-size:0.9rem;color:#d8dae0;line-height:1.55}
+  .role-box strong{color:var(--text)}
 
-  /* Compact mode (?compact=1) — for smaller OBS overlays */
-  body.compact .grid { grid-template-columns: repeat(4, 1fr); }
-  body.compact .live { grid-template-columns: repeat(4, 1fr); }
-  body.compact h1 { font-size: 1.2rem; margin-bottom: 10px; }
-  body.compact .card { padding: 14px 18px 12px; }
-
-  /* No-frame mode (?frame=0) — drops the card chrome, transparent strip only */
-  body.noframe .card {
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    backdrop-filter: none;
-    padding: 14px 18px;
-  }
+  .footer{text-align:center;padding:2rem 1rem;color:var(--muted);font-size:0.85rem;border-top:1px solid var(--border);margin-top:2rem}
 </style>
 </head>
 <body>
-<div class="card">
 
-  <div class="collab">
-    <span class="lhs">Alexios Bluff Mara</span>
-    <span class="x">×</span>
-    <span class="rhs">Illinois State University</span>
-    <span class="meta">RTK · Powerstation · v1</span>
-  </div>
+<header class="topbar">
+  <a href="/" class="brand"><span class="brand-mark">⌬</span><span>Cortex</span></a>
+  <nav class="topnav">
+    <a href="/">Live demo</a>
+    <a href="/gallery.html">Gallery</a>
+    <a href="/personas.html">Personas</a>
+    <a href="/specs.html" class="active">Specs</a>
+    <a href="https://redteamkitchen.com">RTK</a>
+    <a href="https://github.com/AlexiosBluffMara/cortex">GitHub</a>
+  </nav>
+  <span class="right">Ascended Base · Chicago, IL</span>
+</header>
 
-  <h1>The 5090 <em>Powerstation</em> · Live Hardware</h1>
+<section class="hero">
+  <h1>The four <span class="accent">physical machines</span> behind Cortex &amp; Mercury</h1>
+  <p>Two production GPUs in a Chicago apartment, one Mac in Bloomington-Normal next to ISU,
+     and a Raspberry Pi 5 still being prepared. Together they're the entire compute fleet
+     that runs every demo on this site — no AWS region, no rented cloud GPU pool.</p>
+</section>
 
-  <!-- Static specs grid -->
-  <div class="grid">
-    <div class="cell cardinal span-2">
-      <div class="label">GPU</div>
-      <div class="value">NVIDIA RTX 5090</div>
-      <div class="sub">32 GB GDDR7 · sm_120 (Blackwell) · 600 W TDP</div>
-    </div>
-    <div class="cell">
-      <div class="label">CPU</div>
-      <div class="value">Ryzen 7 9800X3D</div>
-      <div class="sub">8c / 16t · 4.7 GHz · 3D V-Cache</div>
-    </div>
-    <div class="cell">
-      <div class="label">RAM</div>
-      <div class="value">64 GB DDR5</div>
-      <div class="sub">2× 32 GB · 4800 MHz · ECC off</div>
-    </div>
-    <div class="cell">
-      <div class="label">Motherboard</div>
-      <div class="value">MSI X870E-P</div>
-      <div class="sub">PRO Series · AM5 · WiFi 7</div>
-    </div>
-    <div class="cell">
-      <div class="label">OS</div>
-      <div class="value">Windows 11 Pro</div>
-      <div class="sub">Build 26200 · WSL2 · CUDA 12.8</div>
-    </div>
-  </div>
+<main class="grid">
 
-  <div class="grid" style="margin-top:10px;">
-    <div class="cell gold span-2">
-      <div class="label">Storage · NVMe</div>
-      <div class="value">2× Samsung 990 EVO+ 4 TB</div>
-      <div class="sub">PCIe 5.0 · ~14 GB/s read · 8 TB total local</div>
+  <article class="machine">
+    <div class="head">
+      <div>
+        <div class="name">Seratonin</div>
+        <div class="role">Primary GPU · runs TRIBE v2 + most narration · <strong>Chicago, IL</strong></div>
+      </div>
+      <span class="badge live">● live · primary</span>
     </div>
-    <div class="cell">
-      <div class="label">Storage · External</div>
-      <div class="value">SanDisk Extreme</div>
-      <div class="sub">7.28 TB · USB 3.2 · model dataset</div>
+    <dl class="specs">
+      <dt>GPU</dt>      <dd>NVIDIA RTX 5090 · 32 GB GDDR7 · sm_120 (Blackwell) · 575 W TDP</dd>
+      <dt>CPU</dt>      <dd>AMD Ryzen 7 9800X3D · 8c / 16t · 4.7 GHz · 3D V-Cache</dd>
+      <dt>RAM</dt>      <dd>64 GB DDR5-4800 · 2× 32 GB</dd>
+      <dt>Mobo</dt>     <dd>MSI X870E-P PRO · AM5 · WiFi 7</dd>
+      <dt>OS</dt>       <dd>Windows 11 Pro · WSL2 Ubuntu 24.04 · CUDA 12.8</dd>
+      <dt>Network</dt>  <dd>Tailscale (<code>seratonin</code>) · Funnel exposed publicly</dd>
+      <dt>Role</dt>     <dd>FastAPI backend (<code>:8773</code>) + inference router (<code>:8766</code>) + Vite frontend (<code>:5173</code>) + Mercury web (<code>:9119</code>)</dd>
+    </dl>
+    <div class="role-box">
+      <strong>What it does for the demo:</strong> hosts the public URL you're looking at right now.
+      Runs TRIBE v2 (~6 GB VRAM) for cortical-surface BOLD prediction, then runs Gemma 4 E4B locally
+      via Ollama for the four parallel persona narrations. Tailscale Funnel makes the Vite dev
+      server reachable from any phone browser without authentication.
     </div>
-    <div class="cell">
-      <div class="label">Network</div>
-      <div class="value">2.5 GbE Realtek</div>
-      <div class="sub">Cloudflare Tunnel · Tailscale mesh</div>
-    </div>
-    <div class="cell">
-      <div class="label">Tunnel</div>
-      <div class="value">cfargotunnel</div>
-      <div class="sub">10c2805b · ord07/12/15 · QUIC</div>
-    </div>
-    <div class="cell">
-      <div class="label">Compute Tier</div>
-      <div class="value">5090 = baseline</div>
-      <div class="sub">→ scale: A100 · H100 · ACCESS HPC</div>
-    </div>
-  </div>
+  </article>
 
-  <!-- Live state -->
-  <div class="live" id="live">
-    <div class="cell">
-      <div class="label">Status</div>
-      <div class="value"><span id="status-pill" class="status-pill"><span class="dot"></span><span id="status-text">connecting</span></span></div>
+  <article class="machine bigapple">
+    <div class="head">
+      <div>
+        <div class="name">Big Apple</div>
+        <div class="role">Overflow narration · Apple Silicon · <strong>Chicago, IL (next to Seratonin)</strong></div>
+      </div>
+      <span class="badge live">● live · overflow</span>
     </div>
-    <div class="cell">
-      <div class="label">VRAM Free</div>
-      <div class="value" id="vram-free">— GB</div>
+    <dl class="specs">
+      <dt>Chip</dt>     <dd>Apple M4 Max · 16 cores (12P + 4E) · 40-core GPU · 16-core Neural Engine</dd>
+      <dt>RAM</dt>      <dd>48 GB unified memory (LPDDR5X) · 546 GB/s bandwidth</dd>
+      <dt>Storage</dt>  <dd>1 TB NVMe · 7.4 GB/s read</dd>
+      <dt>OS</dt>       <dd>macOS Sequoia 15.x · MLX + Ollama (Metal backend)</dd>
+      <dt>Network</dt>  <dd>Tailscale (<code>big-apple</code> · <code>100.93.240.52</code>)</dd>
+      <dt>Models</dt>   <dd>gemma4:e4b (~9 GB), gemma4:26b (~21 GB), gemma4:31b (~21 GB), gemma4:e2b</dd>
+      <dt>Role</dt>     <dd>Round-robin overflow when the 5090 is busy. ~90 tokens/sec on Gemma 4 E4B.</dd>
+    </dl>
+    <div class="role-box">
+      <strong>What it does for the demo:</strong> when Seratonin is mid-TRIBE-inference and a narration
+      job arrives, the inference router transparently sends it here. The user sees no difference —
+      the M4 Max produces ~30-token-per-sentence narrations in 0.3s end-to-end. Acts as a hot standby
+      so the demo URL never blocks on a single GPU.
     </div>
-    <div class="cell">
-      <div class="label">VRAM Used</div>
-      <div class="value" id="vram-used">— GB</div>
+  </article>
+
+  <article class="machine miniapple">
+    <div class="head">
+      <div>
+        <div class="name">Mini Apple</div>
+        <div class="role">ISU research node · Apple Silicon · <strong>Bloomington–Normal, IL</strong></div>
+      </div>
+      <span class="badge">● standby · research node</span>
     </div>
-    <div class="cell">
-      <div class="label">Scheduler</div>
-      <div class="value" id="sched-state">—</div>
+    <dl class="specs">
+      <dt>Chip</dt>     <dd>Apple Silicon (Mac mini class)</dd>
+      <dt>OS</dt>       <dd>macOS Sequoia 15.x · Ollama on Metal</dd>
+      <dt>Network</dt>  <dd>Tailscale (<code>miniapple</code>)</dd>
+      <dt>Location</dt> <dd>Near ISU campus, Normal IL — used for in-person research meetings with collaborators (Mangolika Bhattacharya, Sally Xie, Rosangela Follmann)</dd>
+      <dt>Role</dt>     <dd>Tertiary node. Available as a third Ollama backend if both Chicago machines are saturated.</dd>
+    </dl>
+    <div class="role-box">
+      <strong>Why it exists:</strong> live demo + collaboration sessions at ISU don't have to round-trip
+      to Chicago. The whole inference router design assumes any Tailscale node can be added or removed
+      from the load-balancer pool with zero config change.
     </div>
-    <div class="cell">
-      <div class="label">Temp</div>
-      <div class="value" id="temp">— °C</div>
+  </article>
+
+  <article class="machine babypi">
+    <div class="head">
+      <div>
+        <div class="name">Baby Pi</div>
+        <div class="role">Edge node · Raspberry Pi 5 · <strong>work in progress</strong></div>
+      </div>
+      <span class="badge wip">○ WIP · not deployed</span>
     </div>
-    <div class="cell">
-      <div class="label">Power</div>
-      <div class="value" id="power">— W</div>
+    <dl class="specs">
+      <dt>Hardware</dt> <dd>Raspberry Pi 5 · 8 GB · ARM Cortex-A76 (4 cores @ 2.4 GHz)</dd>
+      <dt>Plan</dt>     <dd>AdGuard Home + Tailscale subnet router for Ascended Base. <em>No</em> LLM inference (the Pi is too small for anything bigger than BitNet, which we deprioritized).</dd>
+      <dt>Status</dt>   <dd>SD card prep + AdGuard + Tailscale install scripts written. Hardware not yet flashed and connected.</dd>
+    </dl>
+    <div class="role-box">
+      <strong>Honest status:</strong> this is on the to-do list, not in production. Listed here so the
+      diagram on /about lines up with what's actually on the workbench.
     </div>
-    <div class="cell">
-      <div class="label">Clock</div>
-      <div class="value" id="clock">— MHz</div>
-    </div>
-    <div class="cell">
-      <div class="label">Queue</div>
-      <div class="value" id="queue">—</div>
-    </div>
-  </div>
+  </article>
 
-</div>
+</main>
 
-<script>
-  // ── URL flags ────────────────────────────────────────────────────────────
-  const params = new URLSearchParams(location.search);
-  if (params.get("bg")      === "solid") document.body.classList.add("solid");
-  if (params.get("compact") === "1")     document.body.classList.add("compact");
-  if (params.get("frame")   === "0")     document.body.classList.add("noframe");
+<footer class="footer">
+  Cortex · Red Team Kitchen · Ascended Base Lab, Chicago IL · ISU research node, Bloomington–Normal IL
+</footer>
 
-  // ── Endpoints ────────────────────────────────────────────────────────────
-  // /api/utilization comes from cortex/webapp — gives scheduler state, queue,
-  // and VRAM. nvidia-smi telemetry (temp/power/clock) needs a side-channel
-  // metrics endpoint; if it's not available we just leave dashes.
-  const STATE_URL    = "/api/utilization";
-  const NVSMI_URL    = "/api/gpu/telemetry";   // optional; may 404
-  const REFRESH_MS   = 3000;
-
-  const $ = id => document.getElementById(id);
-
-  function setStatus(kind, text) {
-    const pill = $("status-pill");
-    pill.classList.remove("warn", "err");
-    if (kind === "warn") pill.classList.add("warn");
-    if (kind === "err")  pill.classList.add("err");
-    $("status-text").textContent = text;
-  }
-
-  async function refresh() {
-    try {
-      const r = await fetch(STATE_URL, { cache: "no-store" });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = await r.json();
-      const vram = d.vram || {};
-      $("vram-free").textContent = (vram.free_gb ?? "—") + " GB";
-      $("vram-used").textContent = (vram.used_gb ?? "—") + " GB";
-      $("sched-state").textContent = d.scheduler_state || "idle";
-      $("queue").textContent       = (d.queue_depth ?? 0) + " / " + (d.max_queue ?? 8);
-      const accepting = d.accepting === true;
-      setStatus(accepting ? "ok" : "warn", accepting ? "5090 LIVE" : "BUSY");
-    } catch (e) {
-      setStatus("err", "OFFLINE");
-      $("vram-free").textContent = "—";
-      $("vram-used").textContent = "—";
-      $("sched-state").textContent = "—";
-      $("queue").textContent = "—";
-    }
-
-    // nvidia-smi telemetry (optional)
-    try {
-      const r = await fetch(NVSMI_URL, { cache: "no-store" });
-      if (r.ok) {
-        const t = await r.json();
-        $("temp").textContent  = (t.temp_c    ?? "—") + " °C";
-        $("power").textContent = (t.power_w   ?? "—") + " W";
-        $("clock").textContent = (t.clock_mhz ?? "—") + " MHz";
-      }
-    } catch (e) { /* silent — telemetry endpoint is optional */ }
-  }
-
-  refresh();
-  setInterval(refresh, REFRESH_MS);
-</script>
 </body>
 </html>

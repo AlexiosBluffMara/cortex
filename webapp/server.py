@@ -218,6 +218,22 @@ def create_app(
             "websocket_clients": app.state.hub.connection_count,
         }
 
+    @app.get("/api/router-health")
+    async def router_health() -> dict[str, Any]:
+        """Proxy to the inference router's /healthz, with sanitized response.
+        Lets the browser show Big Apple + OpenRouter status without exposing
+        internal hostnames/credentials.
+        """
+        import httpx as _httpx
+        try:
+            async with _httpx.AsyncClient(timeout=2.0) as client:
+                r = await client.get("http://localhost:8766/healthz")
+                if r.status_code == 200:
+                    return r.json()
+        except Exception:
+            pass
+        return {"ok": False, "ollama_backends": {}, "openrouter": False}
+
     @app.get("/api/utilization")
     async def utilization() -> dict[str, Any]:
         """Public endpoint used by the Cloud Run relay to decide whether to route
