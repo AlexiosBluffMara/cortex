@@ -48,13 +48,15 @@ os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 
-# Three-tier model split:
-#   FAST   = always warm in VRAM (E4B, ~10 GB) -- gate, classify, quick narration
-#   DEEP   = 26B MoE (~19 GB) -- standard deep analysis (tiers 0-4)
-#   EXPERT = 31B dense (~21 GB) -- maximum quality (tiers 5-6)
+# Four-tier model split — assigned per node by the inference router:
+#   FAST    = E4B (~10 GB)  -- always warm; quick narration; runs anywhere
+#   DEEP    = 26B MoE (~18 GB) -- standard narration (Seratonin RTX 5090)
+#   EXPERT  = 31B dense (~20 GB) -- max-quality narration
+#   VISION  = 31B dense  -- detailed image/video description (preferred on Big Apple M4 Max)
 OLLAMA_MODEL_FAST   = os.environ.get("MODEL_FAST",   "gemma4:e4b")
 OLLAMA_MODEL_DEEP   = os.environ.get("MODEL_DEEP",   "gemma4:26b")
 OLLAMA_MODEL_EXPERT = os.environ.get("MODEL_EXPERT", "gemma4:31b")
+OLLAMA_MODEL_VISION = os.environ.get("MODEL_VISION", "gemma4:31b")
 
 # Back-compat aliases
 OLLAMA_MODEL_QUALITY = OLLAMA_MODEL_DEEP    # used by tiers.py

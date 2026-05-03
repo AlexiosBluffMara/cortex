@@ -42,18 +42,37 @@ CONNECT_TIMEOUT_S = 5.0
 _rr_counter = itertools.count()
 
 
-def _pick_backends(cfg: RouterConfig) -> list[str]:
-    """Return all backends in round-robin order starting from the next slot.
+def _pick_backends(cfg: RouterConfig, model: str | None = None) -> list[str]:
+    """Return all backends in priority order for this model.
 
-    Callers iterate the list and break on first success — this gives load
-    distribution while allowing automatic failover to the next node when a
-    backend doesn't have the requested model.
+    Model affinity (env-overridable):
+      gemma4:31b  → prefer Big Apple (M4 Max — vision describer, room for 31B)
+      gemma4:26b  → prefer Seratonin (RTX 5090 — narration, room for TRIBE+26B)
+      gemma4:e4b  → round-robin (small model, both nodes handle it cheaply)
+      anything else → round-robin
+
+    The non-preferred backend is still appended for failover. So if Big Apple
+    is down, gemma4:31b still runs on Seratonin (slower but works).
     """
     backends = list(cfg.ollama_backends)
     if len(backends) <= 1:
         return backends
+
+    # Identify Seratonin (localhost) vs Big Apple (Tailscale IP)
+    sera = next((b for b in backends if "localhost" in b or "127.0.0.1" in b), None)
+    bigapple = next((b for b in backends if "100.93" in b or "big-apple" in b), None)
+
+    if model and bigapple and sera:
+        m = model.lower()
+        if "31b" in m and bigapple:
+            # Vision / heavy describer → Big Apple primary
+            return [bigapple] + [b for b in backends if b != bigapple]
+        if "26b" in m and sera:
+            # Narration → Seratonin primary
+            return [sera] + [b for b in backends if b != sera]
+
+    # Default: round-robin starting from the next slot
     start = next(_rr_counter) % len(backends)
-    # Rotate so round-robin start is first, wrap-around at end
     return backends[start:] + backends[:start]
 
 # Bounded total timeout for the paid providers — we never want to sit on a
@@ -157,7 +176,7 @@ async def _ollama_backends_health(cfg: RouterConfig) -> dict[str, bool]:
 
 async def _ollama_generate(prompt: str, model: str, cfg: RouterConfig, **kwargs: Any) -> str:
     """Try each backend in round-robin order; failover automatically on error."""
-    backends = _pick_backends(cfg)
+    backends = _pick_backends(cfg, model=model)
     last_exc: Exception | None = None
     for backend in backends:
         url = f"{backend}/api/generate"
@@ -195,7 +214,7 @@ async def _ollama_stream(prompt: str, model: str, cfg: RouterConfig, **kwargs: A
     import json as _json
 
     # Pick the first healthy backend; streaming doesn't support mid-stream failover
-    backends = _pick_backends(cfg)
+    backends = _pick_backends(cfg, model=model)
     backend = backends[0]
     url = f"{backend}/api/generate"
     log.debug("routing ollama stream to %s (model=%s)", backend, model)
@@ -375,57 +394,85 @@ async def generate(
     prompt: str,
     model: str = "gemma4:e4b",
     cfg: RouterConfig | None = None,
+    *,
+    route_preference: str = "auto",
     **kwargs: Any,
 ) -> GenerationResult:
     """Run a prompt through the tiered router; return text + provider used.
 
-    Tier order:
-      1. Local Ollama (seratonin RTX 5090 + big-apple M4 Max) — free, fast
-      2. OpenRouter free tier (gemma-4-26b-a4b-it:free) — free, 200/day limit
-      3. Cloudflare Workers AI — paid, last resort
-      4. HuggingFace Inference API — paid, last resort
+    `route_preference` selects the tier order:
+      "cloud-first" (default for demo) — OpenRouter free → Ollama → paid clouds.
+                    Best end-user latency, lowest local-GPU contention.
+      "local-first" — Ollama (Seratonin → Big Apple) → OpenRouter → paid clouds.
+                    Best for sovereignty / sustained batch workloads.
+      "openrouter-only" — OpenRouter only (skips local Ollama entirely).
+      "ollama-only"     — Ollama only (skips cloud entirely).
+      "auto" — alias for "cloud-first" right now.
     """
     cfg = cfg or load_config()
     failures: list[tuple[str, str]] = []
+    pref = (route_preference or "auto").lower()
+    if pref == "auto":
+        pref = "cloud-first"
 
-    # Tier 1: Ollama (round-robin over all healthy backends with auto-failover)
-    if await _ollama_healthy(cfg):
-        try:
-            async def _do() -> str:
-                return await _ollama_generate(prompt, model, cfg, **kwargs)
-
-            text = await serialize_ollama(_do)
-            return GenerationResult(text=text, provider="ollama")
-        except Exception as exc:  # noqa: BLE001
-            log.warning("ollama provider failed: %s", exc)
-            failures.append(("ollama", str(exc)))
-    else:
-        failures.append(("ollama", "not healthy"))
-
-    # Tier 1.5: OpenRouter free (Gemma 4 — no per-token cost, 200 req/day)
-    if cfg.openrouter_api_key:
+    # Build the tier sequence based on preference
+    async def _try_openrouter():
+        if not cfg.openrouter_api_key:
+            failures.append(("openrouter", "no api key"))
+            return None
         try:
             text = await _openrouter_generate(prompt, model, cfg, **kwargs)
             return GenerationResult(text=text, provider="openrouter")
         except Exception as exc:  # noqa: BLE001
             log.warning("openrouter provider failed: %s", exc)
             failures.append(("openrouter", str(exc)))
+            return None
 
-    # Tier 2: Cloudflare Workers AI
-    try:
-        text = await _cloudflare_generate(prompt, model, cfg, **kwargs)
-        return GenerationResult(text=text, provider="workers-ai")
-    except Exception as exc:  # noqa: BLE001
-        log.warning("workers-ai provider failed: %s", exc)
-        failures.append(("workers-ai", str(exc)))
+    async def _try_ollama():
+        if not await _ollama_healthy(cfg):
+            failures.append(("ollama", "not healthy"))
+            return None
+        try:
+            async def _do() -> str:
+                return await _ollama_generate(prompt, model, cfg, **kwargs)
+            text = await serialize_ollama(_do)
+            return GenerationResult(text=text, provider="ollama")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("ollama provider failed: %s", exc)
+            failures.append(("ollama", str(exc)))
+            return None
 
-    # Tier 3: HuggingFace
-    try:
-        text = await _hf_generate(prompt, model, cfg, **kwargs)
-        return GenerationResult(text=text, provider="hf")
-    except Exception as exc:  # noqa: BLE001
-        log.warning("hf provider failed: %s", exc)
-        failures.append(("hf", str(exc)))
+    async def _try_workers_ai():
+        try:
+            text = await _cloudflare_generate(prompt, model, cfg, **kwargs)
+            return GenerationResult(text=text, provider="workers-ai")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("workers-ai provider failed: %s", exc)
+            failures.append(("workers-ai", str(exc)))
+            return None
+
+    async def _try_hf():
+        try:
+            text = await _hf_generate(prompt, model, cfg, **kwargs)
+            return GenerationResult(text=text, provider="hf")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("hf provider failed: %s", exc)
+            failures.append(("hf", str(exc)))
+            return None
+
+    if pref == "openrouter-only":
+        chain = [_try_openrouter]
+    elif pref == "ollama-only":
+        chain = [_try_ollama]
+    elif pref == "local-first":
+        chain = [_try_ollama, _try_openrouter, _try_workers_ai, _try_hf]
+    else:  # cloud-first / auto
+        chain = [_try_openrouter, _try_ollama, _try_workers_ai, _try_hf]
+
+    for fn in chain:
+        result = await fn()
+        if result is not None:
+            return result
 
     raise AllProvidersFailedError(failures)
 

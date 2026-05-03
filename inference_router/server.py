@@ -83,18 +83,28 @@ def create_app() -> FastAPI:
         Accepts the standard Ollama request body and returns a response that
         matches the Ollama non-streaming schema so cortex/ollama_client.py works
         without modification when OLLAMA_URL points here.
+
+        Routing preference is read from:
+          - request body's options.route_preference, if set, OR
+          - ROUTE_PREFERENCE env var on the router process (default: cloud-first)
         """
+        import os as _os
         full_prompt = f"{req.system}\n\n{req.prompt}".strip() if req.system else req.prompt
         kwargs: dict[str, object] = {}
+        route_pref = _os.environ.get("ROUTE_PREFERENCE", "cloud-first")
         if req.options:
             if "temperature" in req.options:
                 kwargs["temperature"] = req.options["temperature"]
             if "num_predict" in req.options:
                 kwargs["max_tokens"] = req.options["num_predict"]
+            if "route_preference" in req.options:
+                route_pref = str(req.options["route_preference"])
 
         t0 = time.perf_counter()
         try:
-            result = await router_mod.generate(full_prompt, req.model, **kwargs)
+            result = await router_mod.generate(
+                full_prompt, req.model, route_preference=route_pref, **kwargs
+            )
         except router_mod.AllProvidersFailedError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 

@@ -107,7 +107,7 @@ def classify_image(image_path: Path) -> MediaDescription:
     data = ollama_client.generate_json(
         prompt=user,
         system=prompts.MEDIA_GATE_SYSTEM,
-        model=config.OLLAMA_MODEL_FAST,
+        model=config.OLLAMA_MODEL_VISION,  # gemma4:31b on Big Apple by default — heavy vision describer
         images_b64=images_b64,
         num_predict=400,
         temperature=0.2,
@@ -151,7 +151,7 @@ def classify(video_path: Path, n_frames: int = 4) -> MediaDescription:
     data = ollama_client.generate_json(
         prompt=user,
         system=prompts.MEDIA_GATE_SYSTEM,
-        model=config.OLLAMA_MODEL_FAST,
+        model=config.OLLAMA_MODEL_VISION,  # gemma4:31b on Big Apple by default — heavy vision describer
         images_b64=images_b64,
         num_predict=400,
         temperature=0.2,
