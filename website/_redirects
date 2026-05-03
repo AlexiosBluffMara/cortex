@@ -1,11 +1,10 @@
 # Cloudflare Pages redirects.
 # Format: <source> <destination> <status>
 # Docs: https://developers.cloudflare.com/pages/configuration/redirects/
+#
+# NOTE: Cloudflare Pages handles Clean URLs natively — cortex.html is auto-served
+# at /cortex without any redirect rule here. The old .html rewrites were creating
+# 308-loop conflicts with CF Pages' built-in Clean URLs behavior.
 
-# Pretty paths → .html (so /cortex resolves to /cortex.html, etc.)
-/cortex      /cortex.html      200
-/mercury     /mercury.html     200
-/research    /research.html    200
-/contact     /contact.html     200
-</content>
-</invoke>
+# Point /demo to the live Tailscale-fronted Cortex instance on Seratonin.
+/demo     https://seratonin.scylla-betta.ts.net     302
