@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mercury — Red Team Kitchen</title>
-<meta name="description" content="Mercury is a personal AI agent that lives on a single computer you own. One brain, one memory, six surfaces — terminal, Discord, web, iMessage, email, mobile.">
+<meta name="description" content="Mercury is a personal AI agent that lives on a single computer you own. One brain, one memory, three working surfaces today — terminal, Discord bot, and a phone-friendly web dashboard over Tailscale.">
 
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -39,36 +39,37 @@
     <span class="pill brand">Hermes Agent fork</span>
     <span class="pill">v0.2.0 · MIT</span>
   </div>
-  <h1>One brain. <em>Six doors.</em><br><span class="gold">Your hardware.</span></h1>
+  <h1>One brain. <em>Three doors.</em><br><span class="gold">Your hardware.</span></h1>
   <p class="tag">
     Mercury is a personal AI agent that <strong>lives on a computer you own</strong>.
-    You walk up to it through any of six doors — terminal, Discord, a web page,
-    iMessage, email, your phone — and the same agent answers, with the same memory,
-    on the same hardware. Nothing leaves the building.
+    Today it's reachable through three working doors — your terminal, a Discord
+    bot (<code>@abmsnowy</code>), and a phone-friendly web dashboard accessible
+    over Tailscale. Same agent, same memory, every door. Nothing leaves the building.
   </p>
   <div class="ctas">
     <a class="cta primary" href="https://github.com/AlexiosBluffMara/mercury">View source on GitHub</a>
-    <a class="cta ghost" href="https://alexiosbluffmara.github.io/mercury/">Read the long-form writeup</a>
+    <a class="cta ghost" href="https://alexiosbluffmara.github.io/mercury/">Long-form writeup</a>
   </div>
 </header>
 
 <section>
-  <h2>The Six-Door Office <span class="accent">— in one paragraph</span></h2>
+  <h2>The Three-Door Office <span class="accent">— in one paragraph</span></h2>
   <p>
     Picture a small office with one occupant: an assistant who already knows
     you. They've read your notes, they remember last week's conversation,
     they know which tools sit on your desk and which documents live in your
     filing cabinet. Mercury's office is in <strong>your</strong> building —
-    a single computer you own, by default an RTX 5090 desktop. The desk has
-    six doors: <strong>terminal, Discord, web, iMessage, email, and mobile</strong>.
-    Walk through any door, and you're talking to the same person, with the
-    same memory. The brain is <strong style="color: var(--isu-gold);">Gemma 4 E4B</strong>
-    running locally at 194 tokens per second; the body is
+    by default the same RTX 5090 desktop that runs Cortex. The desk has
+    three working doors today: <strong>terminal</strong> (the
+    <code>mercury</code> CLI), <strong>Discord</strong> (the <code>@abmsnowy</code>
+    bot), and <strong>web</strong> (a phone-friendly dashboard exposed over
+    Tailscale at <code>seratonin.scylla-betta.ts.net:8443</code>). Walk through
+    any door, and you're talking to the same person with the same memory. The
+    brain is <strong style="color: var(--isu-gold);">Gemma 4 E4B</strong>
+    running locally on Ollama at ~194 tokens per second; the body is
     <strong style="color: var(--isu-gold);">Hermes Agent</strong>, an
-    open-source framework from Nous Research. Mercury is a multi-domain
-    skill stack and a six-surface gateway designed so a single human can
-    run a single agent across every device they own — without sending a
-    token to a cloud they don't control.
+    open-source framework from Nous Research. iMessage, email, and SMS surfaces
+    are <em>roadmap</em>, not shipped — call them out as they actually are.
   </p>
 
   <div class="pull">

@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<title>Cortex · Gallery of brain scans</title>
+<meta name="description" content="Public gallery of multimodal brain-response analyses from Cortex (TRIBE v2 + Gemma 4) on the Red Team Kitchen 5090." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0a0b0e; --surface:#14151c; --surface2:#1c1e28; --border:#262834; --border-strong:#383a47;
+    --accent:#CC0000; --isu-yellow:#F6A917; --isu-blue:#56758f;
+    --accent2:#ee2d3f; --accent-deep:#9c0d1d;
+    --text:#f0f2f6; --muted:#8b8d96;
+    --positive:#ff3a25; --negative:#1f5cff; --good:#4ad596;
+    --radius:12px;
+  }
+  html,body{background:var(--bg);color:var(--text);font-family:"Open Sans",ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.55}
+  a{color:var(--accent2);text-decoration:none}
+  a:hover{color:var(--accent);text-decoration:underline}
+  code{font-family:"JetBrains Mono",monospace;background:var(--surface2);padding:0.1em 0.3em;border-radius:3px;font-size:0.9em}
+
+  /* Topbar — same chrome as the live demo so the gallery feels like part of the app */
+  .topbar{display:flex;align-items:center;gap:1rem;padding:0.7rem 1.4rem;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:10}
+  .brand{display:flex;align-items:center;gap:0.5rem;font-weight:700;font-size:1.05rem}
+  .brand-mark{color:var(--accent);font-size:1.4rem}
+  .topnav{display:flex;gap:0.4rem;margin-left:1rem}
+  .topnav a{padding:0.4rem 0.8rem;border-radius:8px;color:var(--muted);font-weight:500}
+  .topnav a:hover{background:var(--surface2);color:var(--text);text-decoration:none}
+  .topnav a.active{background:var(--accent);color:#fff}
+  .topbar .right{margin-left:auto;font-family:"JetBrains Mono",monospace;font-size:0.85rem;color:var(--muted)}
+
+  /* Hero */
+  .hero{padding:3rem 1.5rem 2rem;max-width:1280px;margin:0 auto}
+  .hero h1{font-size:2.2rem;margin-bottom:0.6rem;letter-spacing:-0.02em}
+  .hero .accent{color:var(--accent)}
+  .hero p{max-width:720px;color:var(--muted);font-size:1.05rem}
+  .meta-row{display:flex;flex-wrap:wrap;gap:1rem;margin-top:1.4rem}
+  .stat{background:var(--surface);border:1px solid var(--border);padding:0.7rem 1rem;border-radius:var(--radius);min-width:120px}
+  .stat .num{font-size:1.4rem;font-weight:700;color:var(--text);font-family:"JetBrains Mono",monospace}
+  .stat .lbl{font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:0.2rem}
+
+  /* Grid */
+  .grid-wrap{padding:1rem 1.5rem 4rem;max-width:1280px;margin:0 auto}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:1.2rem}
+  .scan-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column;transition:transform 0.15s,border-color 0.15s}
+  .scan-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .scan-card .video{aspect-ratio:16/9;background:#000 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><text x='50' y='55' text-anchor='middle' fill='%23222' font-size='40'>⌬</text></svg>") center/120px no-repeat;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+  .scan-card .video video{width:100%;height:100%;object-fit:cover}
+  .scan-card .body{padding:1rem 1.1rem;flex:1;display:flex;flex-direction:column;gap:0.7rem}
+  .scan-card .filename{font-family:"JetBrains Mono",monospace;font-size:0.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .scan-card .roi-pills{display:flex;flex-wrap:wrap;gap:0.3rem}
+  .pill{font-size:0.7rem;padding:0.2rem 0.55rem;border-radius:99px;background:var(--surface2);color:var(--text);border:1px solid var(--border-strong);font-family:"JetBrains Mono",monospace}
+  .pill.somatomotor{background:rgba(204,0,0,0.15);border-color:var(--accent);color:#ff7070}
+  .pill.visual{background:rgba(31,92,255,0.15);border-color:var(--negative);color:#7aa3ff}
+  .pill.default{background:rgba(86,117,143,0.18);border-color:var(--isu-blue);color:#a8c5dd}
+  .pill.attention{background:rgba(246,169,23,0.15);border-color:var(--isu-yellow);color:#ffcc6a}
+
+  .narrations{display:flex;flex-direction:column;gap:0.5rem;border-top:1px solid var(--border);padding-top:0.7rem;margin-top:0.3rem}
+  .narr{display:flex;flex-direction:column;gap:0.15rem}
+  .narr .who{display:flex;align-items:center;gap:0.4rem;font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;font-weight:600}
+  .narr .who .dot{width:8px;height:8px;border-radius:50%}
+  .narr .who.sam .dot{background:var(--accent)}
+  .narr .who.priya .dot{background:#4285F4}
+  .narr .who.dr_park .dot{background:#4E2A84}
+  .narr .who.chris .dot{background:#1A73E8}
+  .narr .text{font-size:0.85rem;color:#d8dae0;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .scan-card.expanded .narr .text{-webkit-line-clamp:unset;overflow:visible}
+  .scan-card .expand{margin-top:auto;padding:0.6rem;text-align:center;color:var(--muted);font-size:0.78rem;cursor:pointer;border-top:1px solid var(--border);user-select:none}
+  .scan-card .expand:hover{color:var(--accent)}
+
+  .empty{text-align:center;padding:3rem 1rem;color:var(--muted);background:var(--surface);border:1px dashed var(--border-strong);border-radius:var(--radius)}
+  .footer{text-align:center;padding:2rem 1rem;color:var(--muted);font-size:0.85rem;border-top:1px solid var(--border);margin-top:3rem}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="/" class="brand"><span class="brand-mark">⌬</span><span>Cortex</span></a>
+  <nav class="topnav">
+    <a href="/">Live demo</a>
+    <a href="/gallery.html" class="active">Gallery</a>
+    <a href="/personas.html">Personas</a>
+    <a href="/specs.html">Specs</a>
+    <a href="https://github.com/AlexiosBluffMara/cortex">GitHub</a>
+  </nav>
+  <span class="right">RTX 5090 · TRIBE v2 · Gemma 4</span>
+</header>
+
+<section class="hero">
+  <h1>Brain-scan <span class="accent">gallery</span></h1>
+  <p>Every public scan submitted to the live Cortex pipeline, with all four persona narrations.
+     Each card shows the dominant cortical regions detected by TRIBE v2 and how four very
+     different people would describe what's happening in the brain.</p>
+  <div class="meta-row">
+    <div class="stat"><div class="num" id="stat-count">—</div><div class="lbl">scans</div></div>
+    <div class="stat"><div class="num" id="stat-rois">—</div><div class="lbl">ROIs hit</div></div>
+    <div class="stat"><div class="num" id="stat-personas">4</div><div class="lbl">personas</div></div>
+    <div class="stat"><div class="num" id="stat-gpu">5090</div><div class="lbl">GPU (Seratonin)</div></div>
+  </div>
+</section>
+
+<main class="grid-wrap">
+  <div id="grid" class="grid">
+    <div class="empty">Loading scans…</div>
+  </div>
+</main>
+
+<footer class="footer">
+  Cortex · Red Team Kitchen × Illinois State University · Apache-2.0 (code) + CC-BY-NC 4.0 (TRIBE v2 weights)
+</footer>
+
+<script>
+const PERSONAS = [
+  ["sam",     "Sam · ISU Freshman"],
+  ["chris",   "Chris · WBEZ Reporter"],
+  ["priya",   "Priya · Google ML"],
+  ["dr_park", "Dr. Park · Northwestern"],
+];
+
+function classifyRoi(roi) {
+  if (!roi) return "";
+  const l = roi.toLowerCase();
+  if (l.includes("sommot") || l.includes("somatomotor")) return "somatomotor";
+  if (l.includes("vis"))    return "visual";
+  if (l.includes("default"))return "default";
+  if (l.includes("attn") || l.includes("dorsattn") || l.includes("salventattn")) return "attention";
+  return "";
+}
+
+function shortRoi(roi) {
+  // 7Networks_RH_SomMot_1 → SomMot RH·1
+  return roi.replace("7Networks_", "")
+            .replace(/_/g, " ")
+            .replace(/^([LR]H)\s+/, "$1·")
+            .trim();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+}
+
+function renderCard(s) {
+  const rois = (s.top_rois || []).slice(0, 3);
+  const pills = rois.map(r => `<span class="pill ${classifyRoi(r)}">${escapeHtml(shortRoi(r))}</span>`).join("");
+  const narrs = PERSONAS.map(([id, label]) => {
+    const text = s.narrations?.[id];
+    if (!text) return "";
+    return `<div class="narr"><div class="who ${id}"><span class="dot"></span>${label}</div><div class="text">${escapeHtml(text)}</div></div>`;
+  }).join("");
+  const tr = s.tr_seconds || 0.5;
+  const peakLabel = s.peak_t != null ? `peak t=${(s.peak_t * tr).toFixed(1)}s` : "";
+  const elapsed = s.seconds_elapsed ? `${Math.round(s.seconds_elapsed)}s` : "";
+  const meta = [peakLabel, elapsed].filter(Boolean).join(" · ");
+  // Try to embed the ascii video for this scan if it exists
+  const videoUrl = `/api/scan/${s.id}/ascii-video`;
+  return `
+    <article class="scan-card" data-id="${s.id}">
+      <div class="video"><video src="${videoUrl}" autoplay loop muted playsinline></video></div>
+      <div class="body">
+        <div class="filename">${escapeHtml(s.filename || s.id)} · ${meta}</div>
+        <div class="roi-pills">${pills || '<span class="pill">no rois</span>'}</div>
+        <div class="narrations">${narrs || '<div class="narr"><div class="text" style="color:var(--muted)">no narrations</div></div>'}</div>
+      </div>
+      <div class="expand" onclick="this.parentElement.classList.toggle('expanded')">show all ▾</div>
+    </article>`;
+}
+
+async function load() {
+  try {
+    const r = await fetch("/api/scans?limit=50");
+    if (!r.ok) throw new Error("api/scans " + r.status);
+    const data = await r.json();
+    const scans = (data.scans || []).filter(s => s.status === "complete" && Object.keys(s.narrations||{}).length > 0);
+    const grid = document.getElementById("grid");
+    if (!scans.length) {
+      grid.innerHTML = '<div class="empty">No completed public scans yet. <a href="/">Submit one →</a></div>';
+      return;
+    }
+    grid.innerHTML = scans.map(renderCard).join("");
+    document.getElementById("stat-count").textContent = scans.length;
+    const allRois = new Set();
+    scans.forEach(s => (s.top_rois||[]).forEach(r => allRois.add(r)));
+    document.getElementById("stat-rois").textContent = allRois.size;
+  } catch (e) {
+    console.error(e);
+    document.getElementById("grid").innerHTML = `<div class="empty">Could not load gallery: ${escapeHtml(e.message)}<br><br>Try the <a href="/">live demo</a> instead.</div>`;
+  }
+}
+
+load();
+setInterval(load, 30000);  // refresh every 30s
+</script>
+
+</body>
+</html>

@@ -397,6 +397,39 @@ def create_app(
             raise HTTPException(status_code=404, detail=f"Scan not found: {scan_id}")
         return record
 
+    @app.get("/api/scans")
+    async def list_scans(limit: int = 50, status: str = "complete") -> dict[str, Any]:
+        """List recent scans (for the public gallery).
+
+        Returns a compact summary per scan: id, filename, status, top_rois,
+        peak_t, narrations (all 4 personas), seconds_elapsed.
+        """
+        ids = app.state.registry.all_ids()
+        out = []
+        for sid in ids:
+            rec = await app.state.registry.get(sid)
+            if rec is None:
+                continue
+            if status != "all" and rec.get("status") != status:
+                continue
+            out.append({
+                "id": sid,
+                "filename": rec.get("filename"),
+                "status": rec.get("status"),
+                "tier": rec.get("tier"),
+                "top_rois": rec.get("top_rois", [])[:5],
+                "peak_t": rec.get("peak_t"),
+                "tr_seconds": rec.get("tr_seconds"),
+                "n_t": rec.get("n_t"),
+                "size_mb": rec.get("size_mb"),
+                "seconds_elapsed": rec.get("seconds_elapsed"),
+                "narrations": rec.get("narrations", {}),
+                "created_at": rec.get("created_at"),
+            })
+        # Most recent first
+        out.sort(key=lambda r: r.get("created_at") or 0, reverse=True)
+        return {"count": len(out), "scans": out[:limit]}
+
     # -----------------------------------------------------------------------
     # Narrations lookup
     # -----------------------------------------------------------------------

@@ -44,12 +44,15 @@
     A multimodal brain-response analysis system, built on Meta's
     <strong>TRIBE v2</strong> brain foundation model and Google's
     <strong>Gemma 4</strong>. Upload a clip — get a 3D cortical-activation
-    map plus a written narration at three reading levels.
+    map plus <strong>four parallel narrations</strong> from four very
+    different readers (an ISU freshman, a WBEZ science reporter, a Northwestern
+    neurologist, and a Google ML scientist).
   </p>
   <div class="ctas">
-    <a class="cta primary" href="https://seratonin.scylla-betta.ts.net">Try the live demo</a>
-    <a class="cta ghost" href="https://github.com/AlexiosBluffMara/cortex">View source on GitHub</a>
-    <a class="cta ghost" href="https://alexiosbluffmara.github.io/cortex/">Read the long-form writeup</a>
+    <a class="cta primary" href="https://seratonin.scylla-betta.ts.net">Try the live demo →</a>
+    <a class="cta ghost" href="https://seratonin.scylla-betta.ts.net/gallery.html">Gallery</a>
+    <a class="cta ghost" href="https://seratonin.scylla-betta.ts.net/personas.html">The 4 personas</a>
+    <a class="cta ghost" href="https://github.com/AlexiosBluffMara/cortex">GitHub</a>
   </div>
 </header>
 
@@ -64,15 +67,48 @@
     seat — twice per second, it predicts how excited each audience member
     is going to get, three to five seconds before their reaction visibly
     peaks. <strong style="color: var(--isu-gold);">Gemma 4</strong> is the
-    film critic in the back booth: after the screening, it reads the
-    audience-reaction printout and explains what just happened, at three
-    levels of detail (general, college, clinical) — pick the one that fits
-    your reader.
+    panel of <strong>four critics</strong> in the back booth: after the
+    screening, all four read the same audience-reaction printout and write
+    their own takes — a <em>chatty freshman</em>, a <em>WBEZ reporter</em>,
+    a <em>Northwestern neurologist</em>, and a <em>Google ML scientist</em>.
+    You see all four side-by-side and pick the voice that sounds like your brain.
   </p>
 
   <div class="pull">
-    "Twenty thousand seats. One movie. One critic. About six minutes."
+    "Twenty thousand seats. One movie. Four critics. About three minutes."
   </div>
+</section>
+
+<section>
+  <h2>Architecture <span class="accent">— how it actually runs</span></h2>
+  <pre style="background:#15151c;border:1px solid #2a2a3c;padding:1.2rem;border-radius:10px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:0.85rem;line-height:1.55;color:#d8dae0;">
+   ┌──────────────────────────────────────────────────────────────────┐
+   │ Browser / phone                                                  │
+   │   ↓ https://seratonin.scylla-betta.ts.net  (Tailscale Funnel)    │
+   ├──────────────────────────────────────────────────────────────────┤
+   │ Vite dev server  (port 5173)                                     │
+   │   ↓ /api/* proxy                                                 │
+   ├──────────────────────────────────────────────────────────────────┤
+   │ FastAPI backend  (port 8773)                                     │
+   │   ├─ TRIBE v2 (PyTorch on RTX 5090, ~6 GB VRAM)                  │
+   │   │   → 20,484-vertex BOLD prediction at 2 Hz                    │
+   │   │                                                              │
+   │   └─ 4× narrate (parallel, in queue)                             │
+   │       ↓                                                          │
+   ├──────────────────────────────────────────────────────────────────┤
+   │ Inference router  (port 8766)                                    │
+   │   ├─→ Seratonin Ollama  localhost:11434  (Gemma 4 E4B/E2B/26B/31B)│
+   │   ├─→ Big Apple Ollama  100.93.240.52:11434  (M4 Max overflow)   │
+   │   └─→ OpenRouter free tier  (cloud failover, $0/token)           │
+   └──────────────────────────────────────────────────────────────────┘
+  </pre>
+  <p>
+    Two GPUs cooperate via the inference router: the 5090 (Seratonin) does
+    TRIBE inference and the bulk of narration; the M4 Max MacBook (Big Apple)
+    is round-robin overflow when the 5090 is busy. If both fall over, the
+    router fails over to OpenRouter's free Gemma-4-26B endpoint
+    (200 req/day, $0/token) so the demo URL never returns a 502.
+  </p>
 </section>
 
 <section>
