@@ -113,13 +113,14 @@ def transcribe_audio(wav_path: Path, max_chars: int = 600) -> str:
     global _whisper_pipe
     try:
         if _whisper_pipe is None:
-            import torch
             from transformers import pipeline as hf_pipeline
-            device = 0 if torch.cuda.is_available() else -1
+            from cortex import device as _device
+            # HF pipeline accepts torch.device or "cuda"/"mps"/"cpu" string.
+            # Use the abstracted device — works for cuda (RTX 5090), mps (M-series), or cpu.
             _whisper_pipe = hf_pipeline(
                 "automatic-speech-recognition",
                 model="openai/whisper-tiny",
-                device=device,
+                device=_device.DEVICE,
             )
         result = _whisper_pipe(str(wav_path), chunk_length_s=30)
         text = (result.get("text") or "").strip()

@@ -139,39 +139,30 @@ class GPUScheduler:
         log.info("[gpu_scheduler] %s -> %s", old.value, new_state.value)
 
     # -- VRAM monitoring --
+    # Uses cortex.device which abstracts CUDA / MPS / CPU. On Apple Silicon
+    # (unified memory) the "free VRAM" reading is just the system free RAM,
+    # since GPU and CPU share the same pool — the swap mechanic still works
+    # because Ollama and TRIBE both compete for the same unified pool.
 
     def get_free_vram_gb(self) -> float:
-        """Query nvidia-smi for actual free VRAM."""
-        try:
-            result = subprocess.run(
-                ["nvidia-smi", "--query-gpu=memory.free",
-                 "--format=csv,noheader,nounits"],
-                capture_output=True, text=True, timeout=5,
-            )
-            return float(result.stdout.strip().split("\n")[0]) / 1024  # MB → GB
-        except Exception as exc:
-            log.warning("[gpu_scheduler] nvidia-smi failed: %s", exc)
-            return 0.0
+        from cortex import device
+        return device.free_vram_gb()
 
     def get_used_vram_gb(self) -> float:
-        """Query nvidia-smi for used VRAM."""
-        try:
-            result = subprocess.run(
-                ["nvidia-smi", "--query-gpu=memory.used",
-                 "--format=csv,noheader,nounits"],
-                capture_output=True, text=True, timeout=5,
-            )
-            return float(result.stdout.strip().split("\n")[0]) / 1024
-        except Exception:
-            return 0.0
+        from cortex import device
+        return device.used_vram_gb()
 
     def vram_report(self) -> dict:
         """Full VRAM status for dashboards."""
+        from cortex import device
         free = self.get_free_vram_gb()
         used = self.get_used_vram_gb()
+        total = device.total_vram_gb() or self.TOTAL_VRAM_GB
         return {
             "state": self._state.value,
-            "total_gb": self.TOTAL_VRAM_GB,
+            "device_kind": device.DEVICE_KIND,
+            "device_name": device.device_name(),
+            "total_gb": round(total, 2),
             "used_gb": round(used, 2),
             "free_gb": round(free, 2),
             "tribe_fits": free >= (self.TRIBE_VRAM_GB + self.VRAM_SAFETY_MARGIN_GB),
@@ -200,23 +191,21 @@ class GPUScheduler:
         return False
 
     def _flush_torch_cache(self) -> None:
-        """Release PyTorch's CUDA memory pool back to the OS.
+        """Release PyTorch's accelerator memory pool back to the OS/driver.
 
-        After TRIBE inference, torch.cuda.empty_cache() frees allocated tensors
-        but keeps a reserved pool. This call does a more aggressive flush using
-        the caching allocator's reset mechanism available in PyTorch ≥ 2.1.
+        After TRIBE inference, the framework keeps a reserved pool for fast
+        reallocation. Cortex needs that memory free for Gemma narration, so
+        we call the device-appropriate cache-flush + sync sequence.
+
+        Works for CUDA (RTX 5090) and MPS (Apple Silicon M-series). No-op on CPU.
         """
         try:
-            import torch
-            torch.cuda.empty_cache()
-            if hasattr(torch.cuda, "memory_stats"):
-                torch.cuda.reset_peak_memory_stats()
-            # Synchronize then release the allocator's reserved blocks
-            torch.cuda.synchronize()
-            torch.cuda.empty_cache()
-            log.debug("[gpu_scheduler] Torch CUDA cache flushed")
+            from cortex import device
+            device.empty_cache()
+            device.reset_peak_stats()
+            log.debug("[gpu_scheduler] %s cache flushed", device.DEVICE_KIND.upper())
         except Exception as exc:
-            log.debug("[gpu_scheduler] Torch cache flush skipped: %s", exc)
+            log.debug("[gpu_scheduler] cache flush skipped: %s", exc)
 
     def _unload_all_gemma_sync(self) -> None:
         """Unload every Gemma model from Ollama + flush PyTorch's CUDA pool.

@@ -269,53 +269,79 @@ def create_app(
 
     @app.get("/api/gpu/telemetry")
     async def gpu_telemetry() -> dict[str, Any]:
-        """Live nvidia-smi telemetry for the Twitch / OBS overlay at /specs.html.
+        """Live accelerator telemetry for the Twitch / OBS overlay at /specs.html.
 
-        Returns: temp_c, power_w, clock_mhz, mem_clock_mhz, fan_pct, util_gpu_pct.
-        Falls back to {} when nvidia-smi is unavailable (e.g. CPU-only host).
+        On NVIDIA hosts: nvidia-smi gives temp/power/clock/fan/util.
+        On Apple Silicon: powermetrics needs sudo, so we surface the (much smaller)
+                          set we can read without privileges. Caller treats absent
+                          fields as None and the overlay falls back to "—".
         """
         import shutil
         import subprocess
+        from cortex import device as _device
 
-        nvsmi = shutil.which("nvidia-smi")
-        if not nvsmi:
-            return {}
+        if _device.DEVICE_KIND == "cuda":
+            nvsmi = shutil.which("nvidia-smi")
+            if not nvsmi:
+                return {}
+            try:
+                out = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: subprocess.run(
+                        [
+                            nvsmi,
+                            "--query-gpu="
+                            "temperature.gpu,power.draw,clocks.gr,clocks.mem,fan.speed,utilization.gpu",
+                            "--format=csv,noheader,nounits",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=2,
+                    ),
+                )
+                line = (out.stdout or "").strip().splitlines()[0]
+                parts = [p.strip() for p in line.split(",")]
 
-        try:
-            out = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: subprocess.run(
-                    [
-                        nvsmi,
-                        "--query-gpu="
-                        "temperature.gpu,power.draw,clocks.gr,clocks.mem,fan.speed,utilization.gpu",
-                        "--format=csv,noheader,nounits",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=2,
-                ),
-            )
-            line = (out.stdout or "").strip().splitlines()[0]
-            parts = [p.strip() for p in line.split(",")]
+                def _f(s: str) -> float | None:
+                    try:
+                        return float(s)
+                    except (ValueError, TypeError):
+                        return None
 
-            def _f(s: str) -> float | None:
-                try:
-                    return float(s)
-                except (ValueError, TypeError):
-                    return None
+                return {
+                    "device_kind":   "cuda",
+                    "device_name":   _device.device_name(),
+                    "temp_c":        _f(parts[0]),
+                    "power_w":       _f(parts[1]),
+                    "clock_mhz":     _f(parts[2]),
+                    "mem_clock_mhz": _f(parts[3]),
+                    "fan_pct":       _f(parts[4]),
+                    "util_gpu_pct":  _f(parts[5]),
+                }
+            except Exception as exc:
+                log.debug("[webapp] nvidia-smi telemetry failed: %s", exc)
+                return {}
 
-            return {
-                "temp_c":        _f(parts[0]),
-                "power_w":       _f(parts[1]),
-                "clock_mhz":     _f(parts[2]),
-                "mem_clock_mhz": _f(parts[3]),
-                "fan_pct":       _f(parts[4]),
-                "util_gpu_pct":  _f(parts[5]),
-            }
-        except Exception as exc:
-            log.debug("[webapp] nvidia-smi telemetry failed: %s", exc)
-            return {}
+        if _device.DEVICE_KIND == "mps":
+            # Apple Silicon: no priv-free GPU temp/power reading. Return memory + load.
+            try:
+                used = _device.used_vram_gb()
+                free = _device.free_vram_gb()
+                total = _device.total_vram_gb()
+                util_pct = (used / total * 100) if total > 0 else None
+                return {
+                    "device_kind":   "mps",
+                    "device_name":   _device.device_name(),
+                    "used_gb":       round(used, 2),
+                    "free_gb":       round(free, 2),
+                    "total_gb":      round(total, 2),
+                    "util_gpu_pct":  round(util_pct, 1) if util_pct is not None else None,
+                }
+            except Exception as exc:
+                log.debug("[webapp] mps telemetry failed: %s", exc)
+                return {"device_kind": "mps", "device_name": _device.device_name()}
+
+        return {"device_kind": _device.DEVICE_KIND, "device_name": _device.device_name()}
 
     # -----------------------------------------------------------------------
     # Scan submission

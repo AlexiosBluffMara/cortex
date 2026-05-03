@@ -93,18 +93,21 @@ def load_model():
 
     import torch
     from tribev2.demo_utils import TribeModel
+    from cortex import device as _device
 
-    if not torch.cuda.is_available():
-        raise RuntimeError('CUDA GPU required. RTX 5090 expected for Blackwell optimizations.')
+    if not _device.is_available():
+        raise RuntimeError(
+            'No GPU/accelerator available. TRIBE needs CUDA (NVIDIA) or MPS (Apple Silicon). '
+            'Set CORTEX_DEVICE=cpu to force CPU execution (very slow, dev only).'
+        )
 
-    gpu_name = torch.cuda.get_device_name(0)
-    sm_major, sm_minor = torch.cuda.get_device_capability(0)
-    log.info('[pipeline] GPU: %s (sm_%d%d)', gpu_name, sm_major, sm_minor)
-
-    if sm_major < 10:
-        log.warning('[pipeline] GPU sm_%d%d is not Blackwell (sm_120). '
-                    'Blackwell optimizations will still be applied but may be sub-optimal.',
-                    sm_major, sm_minor)
+    log.info('[pipeline] Device: %s (%s)', _device.DEVICE_KIND, _device.device_name())
+    if _device.DEVICE_KIND == "cuda":
+        sm_major, sm_minor = torch.cuda.get_device_capability(0)
+        if sm_major < 10:
+            log.warning('[pipeline] GPU sm_%d%d is not Blackwell (sm_120). '
+                        'Blackwell-specific optimizations will be skipped.',
+                        sm_major, sm_minor)
 
     log.info('[pipeline] Loading TRIBE v2 from %s...', config.WEIGHTS_DIR)
     t0 = time.time()
@@ -112,15 +115,17 @@ def load_model():
     _model = TribeModel.from_pretrained(
         checkpoint_dir=str(config.WEIGHTS_DIR),
         cache_folder=str(config.CACHE_DIR),
-        device="cuda",
+        device=_device.DEVICE_KIND,  # "cuda" / "mps" / "cpu"
     )
 
     load_s = time.time() - t0
     log.info('[pipeline] TRIBE v2 loaded in %.1fs', load_s)
 
-    _apply_blackwell_opts(_model)
+    # Blackwell-specific opts are no-ops on non-CUDA devices
+    if _device.DEVICE_KIND == "cuda":
+        _apply_blackwell_opts(_model)
 
-    log.info('[pipeline] Warming CUDA graph (first inference will be slow)...')
+    log.info('[pipeline] Warming inference graph (first call will be slow)...')
     try:
         _warmup_model(_model)
     except Exception as exc:
@@ -268,46 +273,42 @@ def run_inference_text_only(text: str) -> InferenceResult:
 def unload_model() -> None:
     """Explicitly unload TRIBE v2 from VRAM. Called by GPUScheduler."""
     import gc
+    from cortex import device as _device
 
-    import torch
     global _model, _compiled
     _model = None
     _compiled = False
-    torch.cuda.empty_cache()
+    _device.empty_cache()
     gc.collect()
     log.info("[pipeline] TRIBE v2 unloaded")
 
 
 def get_vram_usage() -> dict:
-    """Return current VRAM state for monitoring."""
-    import torch
-    if not torch.cuda.is_available():
+    """Return current accelerator-memory state for monitoring."""
+    from cortex import device as _device
+    if not _device.is_available():
         return {"available": False}
-    props = torch.cuda.get_device_properties(0)
     return {
         "available": True,
-        "total_gb": round(props.total_mem / (1024**3), 2),
-        "allocated_gb": round(torch.cuda.memory_allocated(0) / (1024**3), 2),
-        "reserved_gb": round(torch.cuda.memory_reserved(0) / (1024**3), 2),
-        "free_gb": round((props.total_mem - torch.cuda.memory_reserved(0)) / (1024**3), 2),
-        "peak_gb": round(torch.cuda.max_memory_allocated(0) / (1024**3), 2),
+        "device_kind": _device.DEVICE_KIND,
+        "device_name": _device.device_name(),
+        "total_gb":     round(_device.total_vram_gb(), 2),
+        "allocated_gb": round(_device.used_vram_gb(), 2),
+        "free_gb":      round(_device.free_vram_gb(), 2),
     }
 
 
 def vram_report() -> dict:
     try:
-        import torch
-        if not torch.cuda.is_available():
+        from cortex import device as _device
+        if not _device.is_available():
             return {}
-        allocated = torch.cuda.memory_allocated(0) / 1e9
-        reserved  = torch.cuda.memory_reserved(0) / 1e9
-        total     = torch.cuda.get_device_properties(0).total_memory / 1e9
         return {
-            'gpu':       torch.cuda.get_device_name(0),
-            'allocated': round(allocated, 2),
-            'reserved':  round(reserved, 2),
-            'total':     round(total, 2),
-            'free':      round(total - reserved, 2),
+            'gpu':       _device.device_name(),
+            'kind':      _device.DEVICE_KIND,
+            'allocated': round(_device.used_vram_gb(), 2),
+            'total':     round(_device.total_vram_gb(), 2),
+            'free':      round(_device.free_vram_gb(), 2),
         }
     except Exception:
         return {}
