@@ -197,20 +197,90 @@
         #region-tooltip .tt-z { font-size: 13px; font-weight: 700; margin-top: 4px; }
         #region-tooltip .tt-func { font-size: 10px; color: rgba(139,141,150,0.7); margin-top: 3px; }
 
-        /* Playback bar */
+        /* Playback bar — Material 3 timeline (replaces the old <input type=range> slider) */
         .playback-bar {
-            padding: 8px 14px; background: var(--surface);
+            padding: 10px 16px; background: var(--surface);
             border-top: 1px solid var(--border);
-            display: flex; align-items: center; gap: 10px;
+            display: flex; align-items: center; gap: 12px;
         }
         #play-toggle {
-            width: 28px; height: 28px; border-radius: 50%; border: none;
-            background: var(--accent); color: #fff; cursor: pointer; font-size: 10px;
+            width: 36px; height: 36px; border-radius: 50%; border: none;
+            background: var(--accent); color: #fff; cursor: pointer; font-size: 13px;
             display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+            transition: transform 0.12s, background 0.12s, box-shadow 0.18s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.4);
         }
-        #time-scrubber { flex: 1; accent-color: var(--accent); cursor: pointer; }
-        #time-scrubber:disabled { opacity: .35; cursor: default; }
-        #time-label { font-size: 12px; color: var(--muted); white-space: nowrap; min-width: 56px; text-align: right; }
+        #play-toggle:hover { background: var(--accent2); transform: scale(1.05); }
+        #play-toggle:active { transform: scale(0.95); }
+        #play-toggle:disabled { opacity: 0.35; cursor: default; transform: none; }
+
+        /* Timeline track — segmented progress + ROI peak markers + hover scrub */
+        .timeline {
+            flex: 1; position: relative; height: 36px; cursor: pointer; user-select: none;
+            display: flex; align-items: center;
+        }
+        .timeline.disabled { cursor: default; opacity: 0.35; }
+        .timeline-track {
+            position: absolute; left: 0; right: 0; top: 50%;
+            height: 4px; background: var(--surface2); border-radius: 2px;
+            transform: translateY(-50%); overflow: hidden;
+        }
+        .timeline-progress {
+            position: absolute; left: 0; top: 0; bottom: 0;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            border-radius: 2px;
+            transition: width 0.08s linear;
+        }
+        .timeline-buffer {
+            position: absolute; left: 0; top: 0; bottom: 0;
+            background: rgba(204,0,0,0.12);
+            border-radius: 2px;
+        }
+        .timeline-thumb {
+            position: absolute; top: 50%;
+            width: 14px; height: 14px; border-radius: 50%;
+            background: var(--accent); border: 2px solid #fff;
+            box-shadow: 0 0 0 4px rgba(204,0,0,0.18);
+            transform: translate(-50%, -50%);
+            transition: left 0.08s linear, transform 0.12s, box-shadow 0.18s;
+            pointer-events: none;
+        }
+        .timeline:hover .timeline-thumb { transform: translate(-50%, -50%) scale(1.2); box-shadow: 0 0 0 6px rgba(204,0,0,0.25); }
+        .timeline-peak {
+            position: absolute; top: 50%; width: 2px; height: 12px;
+            background: var(--isu-yellow); border-radius: 1px;
+            transform: translate(-50%, -50%); pointer-events: none;
+            box-shadow: 0 0 4px rgba(246,169,23,0.6);
+        }
+        .timeline-tick {
+            position: absolute; top: 50%; width: 1px; height: 6px;
+            background: var(--border-strong); transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        .timeline-hover-label {
+            position: absolute; bottom: calc(100% + 4px);
+            background: var(--surface2); color: var(--text);
+            border: 1px solid var(--border-strong);
+            font-family: "JetBrains Mono", monospace; font-size: 10px;
+            padding: 2px 6px; border-radius: 4px;
+            transform: translateX(-50%); pointer-events: none;
+            opacity: 0; transition: opacity 0.12s;
+            white-space: nowrap;
+        }
+        .timeline:hover .timeline-hover-label { opacity: 1; }
+        #time-label {
+            font-size: 12px; color: var(--text); font-family: "JetBrains Mono", monospace;
+            white-space: nowrap; min-width: 60px; text-align: right;
+            font-feature-settings: "tnum";
+        }
+        #tour-btn {
+            background: var(--surface2); border: 1px solid var(--border-strong);
+            color: var(--muted); padding: 4px 10px; border-radius: 99px;
+            font-size: 11px; cursor: pointer; flex-shrink: 0;
+            transition: color 0.12s, border-color 0.12s;
+        }
+        #tour-btn:hover { color: var(--isu-yellow); border-color: var(--isu-yellow); }
+        #tour-btn.active { background: var(--isu-yellow); color: #1a1300; border-color: var(--isu-yellow); }
 
         /* Network toggles */
         .network-bar {
@@ -1062,7 +1132,18 @@
             <!-- Playback bar -->
             <div class="playback-bar">
                 <button id="play-toggle" aria-label="Play / pause">▶</button>
-                <input type="range" id="time-scrubber" min="0" max="99" value="0" step="1" disabled />
+                <div class="timeline disabled" id="timeline" role="slider" aria-label="Time scrubber"
+                     aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" tabindex="0">
+                    <div class="timeline-track">
+                        <div class="timeline-buffer" id="timeline-buffer"></div>
+                        <div class="timeline-progress" id="timeline-progress"></div>
+                    </div>
+                    <div class="timeline-thumb" id="timeline-thumb" style="left: 0%"></div>
+                    <div class="timeline-hover-label" id="timeline-hover" style="left: 0%; display:none">0.0 s</div>
+                </div>
+                <!-- Hidden compat shim — main.js still reads/writes this so we don't need to refactor every callsite. -->
+                <input type="range" id="time-scrubber" min="0" max="99" value="0" step="1" disabled style="display:none" />
+                <button id="tour-btn" type="button" title="Auto-cycle through top regions">▶ Tour</button>
                 <span id="time-label">t = 0.0 s</span>
             </div>
 

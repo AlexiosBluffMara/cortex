@@ -1687,3 +1687,140 @@ window.paintVertexFrame = paintVertexFrame;
         const watchdog = setInterval(() => { forceHide(); if (++n > 50) clearInterval(watchdog); }, 100);
     } catch (e) { /* no-op */ }
 })();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Material 3 timeline — keeps the legacy <input id=time-scrubber> as the source
+// of truth (so existing wiring still works) and renders a polished UI on top.
+// Adds peak-time markers + region tour mode.
+// ─────────────────────────────────────────────────────────────────────────────
+(function wireTimeline() {
+    const wrap   = document.getElementById("timeline");
+    const track  = wrap?.querySelector(".timeline-track");
+    const prog   = document.getElementById("timeline-progress");
+    const thumb  = document.getElementById("timeline-thumb");
+    const hover  = document.getElementById("timeline-hover");
+    const tourBtn = document.getElementById("tour-btn");
+    const scrub  = document.getElementById("scan-tier") ? scrubber : null;
+    if (!wrap || !track || !prog || !thumb || !scrubber) return;
+
+    function renderFrom() {
+        const v = +scrubber.value;
+        const max = +scrubber.max || 1;
+        const pct = (v / max) * 100;
+        prog.style.width = pct + "%";
+        thumb.style.left = pct + "%";
+        wrap.setAttribute("aria-valuenow", v);
+        wrap.setAttribute("aria-valuemax", max);
+        // sync the disabled state
+        if (scrubber.disabled) wrap.classList.add("disabled");
+        else wrap.classList.remove("disabled");
+    }
+    // initial paint + observe later writes to scrubber.value
+    renderFrom();
+    new MutationObserver(renderFrom).observe(scrubber, { attributes: true, attributeFilter: ["value", "max", "disabled"] });
+    // also catch programmatic value writes from the playback ticker
+    const _origDescriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+    Object.defineProperty(scrubber, "value", {
+        get() { return _origDescriptor.get.call(this); },
+        set(v) { _origDescriptor.set.call(this, v); renderFrom(); },
+        configurable: true,
+    });
+
+    function pctFromEvent(e) {
+        const rect = track.getBoundingClientRect();
+        const x = (e.touches?.[0]?.clientX ?? e.clientX) - rect.left;
+        return Math.max(0, Math.min(1, x / rect.width));
+    }
+    function setFromPct(p) {
+        if (scrubber.disabled) return;
+        const max = +scrubber.max || 1;
+        const v = Math.round(p * max);
+        scrubber.value = v;
+        scrubber.dispatchEvent(new Event("input", { bubbles: true }));
+        scrubber.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    let dragging = false;
+    wrap.addEventListener("pointerdown", e => {
+        if (scrubber.disabled) return;
+        dragging = true; setFromPct(pctFromEvent(e));
+        wrap.setPointerCapture?.(e.pointerId);
+    });
+    wrap.addEventListener("pointermove", e => {
+        if (scrubber.disabled) return;
+        const p = pctFromEvent(e);
+        if (dragging) setFromPct(p);
+        if (hover) {
+            hover.style.display = "";
+            hover.style.left = (p * 100) + "%";
+            const tr = (window.tribeTrSeconds ?? 0.5);
+            const max = +scrubber.max || 1;
+            const t = Math.round(p * max);
+            hover.textContent = (t * tr).toFixed(1) + " s · TR " + t;
+        }
+    });
+    wrap.addEventListener("pointerup", e => { dragging = false; wrap.releasePointerCapture?.(e.pointerId); });
+    wrap.addEventListener("pointerleave", () => { if (hover) hover.style.display = "none"; });
+    wrap.addEventListener("keydown", e => {
+        if (scrubber.disabled) return;
+        const max = +scrubber.max || 1;
+        if (e.key === "ArrowRight") { scrubber.value = Math.min(+scrubber.value + 1, max); scrubber.dispatchEvent(new Event("input")); e.preventDefault(); }
+        if (e.key === "ArrowLeft")  { scrubber.value = Math.max(+scrubber.value - 1, 0);   scrubber.dispatchEvent(new Event("input")); e.preventDefault(); }
+        if (e.key === "Home")       { scrubber.value = 0;   scrubber.dispatchEvent(new Event("input")); e.preventDefault(); }
+        if (e.key === "End")        { scrubber.value = max; scrubber.dispatchEvent(new Event("input")); e.preventDefault(); }
+        if (e.key === " " || e.key === "Enter") { document.getElementById("play-toggle")?.click(); e.preventDefault(); }
+    });
+
+    // Decorate the track with peak-time + tick marks. Called after a scan completes.
+    window.timelineMarkPeak = function(peakIdx) {
+        wrap.querySelectorAll(".timeline-peak").forEach(el => el.remove());
+        if (peakIdx == null) return;
+        const max = +scrubber.max || 1;
+        const pct = (peakIdx / max) * 100;
+        const m = document.createElement("div");
+        m.className = "timeline-peak";
+        m.style.left = pct + "%";
+        m.title = "Peak activation";
+        wrap.appendChild(m);
+    };
+    window.timelineMarkTicks = function(n = 5) {
+        wrap.querySelectorAll(".timeline-tick").forEach(el => el.remove());
+        for (let i = 1; i < n; i++) {
+            const t = document.createElement("div");
+            t.className = "timeline-tick";
+            t.style.left = ((i / n) * 100) + "%";
+            wrap.appendChild(t);
+        }
+    };
+
+    // ─── Brain tour mode — auto-cycle top ROIs ───
+    let tourTimer = null;
+    let tourIdx = 0;
+    if (tourBtn) {
+        tourBtn.addEventListener("click", () => {
+            if (tourTimer) {
+                clearInterval(tourTimer); tourTimer = null;
+                tourBtn.classList.remove("active");
+                tourBtn.textContent = "▶ Tour";
+                return;
+            }
+            const rois = (window.lastScanResult?.top_rois || []).slice(0, 10);
+            if (!rois.length) {
+                appendEvent && appendEvent("Tour needs a completed scan with ROIs first", "warning");
+                return;
+            }
+            tourBtn.classList.add("active");
+            tourBtn.textContent = "■ Stop";
+            tourIdx = 0;
+            const advance = () => {
+                const roi = rois[tourIdx % rois.length];
+                tourIdx++;
+                // Use the existing region-click handler if available, else dispatch a custom event
+                if (typeof window.focusRoi === "function") window.focusRoi(roi);
+                else window.dispatchEvent(new CustomEvent("brain-tour-step", { detail: { roi } }));
+                appendEvent && appendEvent("Tour: " + roi.replace("7Networks_",""), "info");
+            };
+            advance();
+            tourTimer = setInterval(advance, 2200);
+        });
+    }
+})();
