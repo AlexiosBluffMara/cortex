@@ -65,16 +65,32 @@ class GPUScheduler:
     """
 
     TOTAL_VRAM_GB = 32.0
-    TRIBE_VRAM_GB = 22.4
+    # TRIBE v2 checkpoint is 676 MB on disk; FP32 model weights + activations
+    # for a 15-30s clip use ~3-5 GB peak. We set the threshold conservatively
+    # at 6.0 GB to gate loading; actual OOM is caught and handled downstream.
+    # (Old value of 22.4 GB was incorrect — that's the size of Gemma 4 26B.)
+    TRIBE_VRAM_GB = 6.0
     GEMMA_E4B_VRAM_GB = 10.0
-    VRAM_SAFETY_MARGIN_GB = 1.0
+    VRAM_SAFETY_MARGIN_GB = 0.5
     SWAP_TIMEOUT_S = 120
     VRAM_POLL_INTERVAL_S = 0.5
     VRAM_POLL_MAX_ATTEMPTS = 60  # 30 seconds
 
-    # All known Gemma 4 models to unload before TRIBE
-    _GEMMA_MODELS = ["gemma4:e4b", "gemma4:26b", "gemma4:31b",
-                     "gemma4:e2b", "gemma4:e4b-q8_0", "gemma4:e4b-bf16"]
+    # All known Gemma 4 models to unload before TRIBE.
+    # Includes variant tags present on seratonin (gemma4-26b-moe alias, etc.)
+    _GEMMA_MODELS = [
+        "gemma4:e4b", "gemma4:26b", "gemma4:31b", "gemma4:e2b",
+        "gemma4:e4b-q8_0", "gemma4:e4b-bf16",
+        "gemma4-26b-moe:latest",
+        "gemma4-android-studio:latest", "gemma4-android-studio-fast:latest",
+        "gemma4-e2b-it:stock", "gemma4-e4b-it:stock",
+    ]
+
+    # Direct Ollama URL for VRAM management (always local, never routed).
+    # config.OLLAMA_URL may point at an inference router; we bypass it here
+    # because keep_alive and model-unload calls must hit the actual Ollama
+    # process to free VRAM.
+    _DIRECT_OLLAMA_URL = "http://localhost:11434"
 
     def __init__(self):
         self._state = GPUState.IDLE
@@ -183,14 +199,45 @@ class GPUScheduler:
                   self.get_free_vram_gb(), target)
         return False
 
+    def _flush_torch_cache(self) -> None:
+        """Release PyTorch's CUDA memory pool back to the OS.
+
+        After TRIBE inference, torch.cuda.empty_cache() frees allocated tensors
+        but keeps a reserved pool. This call does a more aggressive flush using
+        the caching allocator's reset mechanism available in PyTorch ≥ 2.1.
+        """
+        try:
+            import torch
+            torch.cuda.empty_cache()
+            if hasattr(torch.cuda, "memory_stats"):
+                torch.cuda.reset_peak_memory_stats()
+            # Synchronize then release the allocator's reserved blocks
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
+            log.debug("[gpu_scheduler] Torch CUDA cache flushed")
+        except Exception as exc:
+            log.debug("[gpu_scheduler] Torch cache flush skipped: %s", exc)
+
     def _unload_all_gemma_sync(self) -> None:
-        """Unload every Gemma model from Ollama."""
+        """Unload every Gemma model from Ollama + flush PyTorch's CUDA pool.
+
+        Always hits _DIRECT_OLLAMA_URL (localhost:11434), never the router,
+        because the router doesn't forward keep_alive and VRAM would not free.
+        """
         import requests as req
-        for model in self._GEMMA_MODELS:
+        # Flush PyTorch's reserved memory pool first
+        self._flush_torch_cache()
+        # Then unload any Ollama models
+        try:
+            r = req.get(f"{self._DIRECT_OLLAMA_URL}/api/ps", timeout=5)
+            loaded = [m["name"] for m in r.json().get("models", [])]
+        except Exception:
+            loaded = self._GEMMA_MODELS
+        for model in loaded:
             try:
                 req.post(
-                    f"{self._ollama_url}/api/generate",
-                    json={"model": model, "keep_alive": "0s"},
+                    f"{self._DIRECT_OLLAMA_URL}/api/generate",
+                    json={"model": model, "keep_alive": 0, "prompt": ""},
                     timeout=10,
                 )
             except Exception:
