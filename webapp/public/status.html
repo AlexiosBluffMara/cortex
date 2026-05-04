@@ -204,8 +204,9 @@ function overallState(d) {
   const services = d?.services || {};
   const seraOk = nodes.seratonin?.alive;
   const baOk   = nodes.bigapple?.alive;
-  const routerOk = services.router_local;
-  const ollamaOk = services.ollama_local || services.ollama_peer;
+  // Either local router OR peer router being up = inference reachable.
+  const routerOk = services.router_local === true || services.router_peer === true;
+  const ollamaOk = services.ollama_local === true || services.ollama_peer === true;
   if (!seraOk && !baOk)            return ["down",     "all nodes offline"];
   if (!routerOk || !ollamaOk)      return ["degraded", "inference degraded"];
   if (!seraOk || !baOk)            return ["degraded", "one node offline"];

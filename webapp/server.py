@@ -358,10 +358,9 @@ def create_app(
             if peer_base:
                 tasks["peer_view"]    = _get_json(client, f"{peer_base}/api/health")
                 tasks["router_peer"]  = _get_json(client, f"{peer_base}/api/router-health")
-                # peer's ollama port: extract host from peer_base, replace port with 11434
-                from urllib.parse import urlparse as _urlparse
-                p = _urlparse(peer_base)
-                tasks["ollama_peer"] = _check_port(client, f"http://{p.hostname}:11434/api/tags")
+                # peer's ollama: don't probe port 11434 directly because some nodes
+                # (Sera) bind Ollama to 127.0.0.1. Ask the peer's own /api/router-health
+                # for its ollama_backends dict — that's authoritative.
             results = dict(zip(tasks.keys(), await _asyncio.gather(*tasks.values())))
 
         router_local = results.get("router_local") or {}
@@ -384,21 +383,45 @@ def create_app(
             "active": peer_queue.get("active_request"),
         } if peer_base else None
 
+        # Service status — distinguish "not applicable" (no router on this node, no
+        # peer configured) from "DOWN" (configured but unreachable). null = n/a.
+        is_proxy_node = bool(peer_base)        # this node proxies TRIBE → has no router
+        router_peer_payload = results.get("router_peer") or {}
+        # ollama_peer: derived from peer router's own backend self-check, not a
+        # direct port probe (which fails when peer Ollama is bound localhost-only).
+        peer_backends = router_peer_payload.get("ollama_backends", {}) if router_peer_payload else {}
+        # any backend reporting True from the peer's perspective means peer's Ollama is up
+        ollama_peer_status = (
+            any(peer_backends.values()) if peer_backends else None
+        )
+
         return {
             "ok": True,
             "ts": int(time.time()),
             "host": my_role,
             "nodes": {my_role: my_view, **({peer_role: their_view} if their_view else {})},
             "services": {
-                "router_local": bool(router_local),
+                # router_local: n/a on the proxy node (it never runs a router locally)
+                "router_local": (None if is_proxy_node else bool(router_local)),
                 "ollama_local": bool(results.get("ollama_local")),
-                "router_peer":  bool(results.get("router_peer")),
-                "ollama_peer":  bool(results.get("ollama_peer")) if peer_base else None,
-                "openrouter":   bool(router_local.get("openrouter")) if router_local else False,
+                # router_peer: only meaningful when there's a peer
+                "router_peer":  (bool(router_peer_payload) if peer_base else None),
+                # ollama_peer: derived from peer's router self-check
+                "ollama_peer":  ollama_peer_status,
+                "openrouter":   (
+                    bool(router_local.get("openrouter")) if router_local
+                    else bool(router_peer_payload.get("openrouter")) if router_peer_payload
+                    else False
+                ),
             },
             "router": {
-                "ollama_backends": router_local.get("ollama_backends", {}) if router_local else {},
-                "openrouter": router_local.get("openrouter") if router_local else False,
+                "ollama_backends": router_local.get("ollama_backends", {}) if router_local
+                                    else router_peer_payload.get("ollama_backends", {}),
+                "openrouter": (
+                    router_local.get("openrouter") if router_local
+                    else router_peer_payload.get("openrouter") if router_peer_payload
+                    else False
+                ),
             },
             "tribe_proxy_url": peer_base or None,
         }
