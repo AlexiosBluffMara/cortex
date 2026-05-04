@@ -976,169 +976,323 @@
         .live-stream .ls-empty { color: var(--muted); font-style: italic; }
 
         /* ════════════════════════════════════════════════════════════════════════
-           Claude Design overlay (2026-05-04)
-           — Warm dark theme with Claude Sandstone (#D97757) accent
-           — Equal 2-column layout (centre brain stays as hero)
-           — Collapsible <details>-style sections with smooth animations
-           — Auto-stick log slider with "↓ new logs" pill
+           ISU + Apple polish overlay (2026-05-04, take 2)
+           — ISU palette: Cardinal Red, Reggie (deep), Gold, White, Bone
+           — Apple-style polish: gradients, frosted glass, soft shadows, springy
+             transitions, generous radii, draggable Robinhood-Legend-style panels
+             via gridstack.js (loaded in head)
+           — Collapsible <details> cards stay; scoped under .cd-card
+           — Auto-stick log slider with "↓ new logs" pill stays
            ══════════════════════════════════════════════════════════════════════ */
         :root {
-            /* Warm Claude palette — overrides the cardinal-red defaults above */
-            --bg:           #1F1E1D;          /* warm near-black */
-            --surface:      #262524;          /* card */
-            --surface2:     #2E2C2A;          /* hover/elevated */
-            --surface3:     #38352F;          /* highest elevation */
-            --border:       rgba(245, 241, 232, 0.08);
-            --border-strong:rgba(245, 241, 232, 0.16);
-            --text:         #F5F1E8;          /* warm cream */
-            --text-strong:  #FFFFFF;
-            --muted:        #A8A29E;          /* warm stone */
-            --muted2:       #78716C;
-            --accent:       #D97757;          /* Claude Sandstone */
-            --accent-soft:  rgba(217, 119, 87, 0.16);
-            --accent-deep:  #B05B3D;
-            --accent2:      #C99876;          /* secondary warm */
-            --good:         #94B27C;          /* warm sage instead of harsh green */
-            --warn:         #D8A86A;          /* amber */
-            --bad:          #C5705B;          /* warm muted red */
-            --radius:       14px;
-            --radius-lg:    18px;
-        }
+            /* ISU palette */
+            --isu-cardinal: #CC0000;          /* primary brand */
+            --isu-reggie:   #861F41;          /* deep cardinal */
+            --isu-gold:     #F6A917;          /* official gold */
+            --isu-gold-2:   #FFC72C;          /* brighter accent */
+            --isu-white:    #FFFFFF;
+            --isu-bone:     #F5EFE6;          /* warm off-white for cards */
 
-        /* 2-column equal layout: brain stays centred, side panels split the rest */
+            /* Dark surfaces (Apple-style depth scale) */
+            --bg:           #07080C;          /* near-black */
+            --bg-2:         #0B0D14;
+            --surface:      #11141C;          /* card base */
+            --surface2:     #161A24;          /* hover */
+            --surface3:     #1D2230;          /* elevated modal */
+            --glass:        rgba(17, 20, 28, 0.72);  /* frosted */
+            --border:       rgba(255, 255, 255, 0.07);
+            --border-strong:rgba(255, 255, 255, 0.14);
+            --text:         #F2F4F8;
+            --text-strong:  #FFFFFF;
+            --muted:        #97A0AE;
+            --muted2:       #6B7384;
+
+            /* Accents */
+            --accent:       var(--isu-cardinal);
+            --accent-soft:  rgba(204, 0, 0, 0.14);
+            --accent-deep:  var(--isu-reggie);
+            --accent2:      var(--isu-gold);
+            --accent2-soft: rgba(246, 169, 23, 0.16);
+            --good:         #4ADE80;          /* spring green */
+            --warn:         var(--isu-gold);
+            --bad:          var(--isu-cardinal);
+
+            /* Gradients (Apple landing-page style) */
+            --grad-hero:    linear-gradient(135deg, #CC0000 0%, #861F41 50%, #6B0F2A 100%);
+            --grad-gold:    linear-gradient(135deg, #FFC72C 0%, #F6A917 60%, #C0820B 100%);
+            --grad-night:   linear-gradient(180deg, #0B0D14 0%, #07080C 100%);
+            --grad-card:    linear-gradient(165deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
+            --grad-glass:   linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
+
+            /* Shadows (Apple-style soft + tinted) */
+            --shadow-1:     0 1px 2px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.18);
+            --shadow-2:     0 6px 28px rgba(0,0,0,0.36), 0 1px 4px rgba(0,0,0,0.2);
+            --shadow-glow-red:  0 0 0 1px rgba(204,0,0,0.32), 0 6px 24px rgba(204,0,0,0.18);
+            --shadow-glow-gold: 0 0 0 1px rgba(246,169,23,0.36), 0 6px 24px rgba(246,169,23,0.16);
+
+            /* Geometry */
+            --radius:       14px;
+            --radius-lg:    20px;
+            --radius-xl:    28px;
+
+            /* Springs */
+            --spring:       cubic-bezier(0.34, 1.56, 0.64, 1);
+            --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        body { background:
+            radial-gradient(1200px 800px at 80% -10%, rgba(204,0,0,0.10), transparent 60%),
+            radial-gradient(900px 600px at -5% 90%, rgba(246,169,23,0.06), transparent 60%),
+            var(--bg); }
+
+        /* Equal grid (left/right balanced, brain centred) */
         @media (min-width: 1280px) {
             .layout {
-                grid-template-columns: minmax(360px, 1fr) minmax(640px, 1.2fr) minmax(360px, 1fr);
+                grid-template-columns: minmax(380px, 1fr) minmax(680px, 1.3fr) minmax(380px, 1fr);
                 gap: 0;
             }
         }
         .panel-left, .panel-right {
-            background: var(--bg);
+            background: linear-gradient(180deg, rgba(11,13,20,0.6), rgba(7,8,12,0.96));
             border-color: var(--border);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
         }
         .panel-section { border-color: var(--border); }
 
-        /* ── Collapsible cards ── */
-        details.cd-card {
-            margin: 8px 12px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            overflow: hidden;
-            transition: background 120ms ease;
+        /* Topbar — frosted glass */
+        .topbar {
+            background: var(--glass);
+            backdrop-filter: blur(24px) saturate(160%);
+            -webkit-backdrop-filter: blur(24px) saturate(160%);
+            border-bottom: 1px solid var(--border);
         }
-        details.cd-card[open] { background: var(--surface2); }
+        .brand { font-weight: 800; letter-spacing: -0.02em; }
+        .brand-mark {
+            background: var(--grad-hero);
+            -webkit-background-clip: text; background-clip: text;
+            color: transparent;
+            filter: drop-shadow(0 1px 8px rgba(204,0,0,0.5));
+        }
+
+        /* ── Collapsible Apple-style cards ── */
+        details.cd-card {
+            margin: 10px 12px;
+            background: var(--surface);
+            background-image: var(--grad-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            box-shadow: var(--shadow-1);
+            transition: background 200ms var(--ease-out),
+                        box-shadow 200ms var(--ease-out),
+                        border-color 200ms var(--ease-out);
+        }
+        details.cd-card:hover { border-color: var(--border-strong); }
+        details.cd-card[open] {
+            background: var(--surface2);
+            background-image: var(--grad-glass);
+            box-shadow: var(--shadow-2);
+        }
         details.cd-card > summary {
             list-style: none;
             cursor: pointer;
-            padding: 12px 16px;
-            font-size: 12px; font-weight: 600;
-            text-transform: uppercase; letter-spacing: 0.06em;
+            padding: 13px 18px;
+            font-size: 11px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.08em;
             color: var(--muted);
             display: flex; align-items: center; gap: 10px;
             user-select: none;
-            transition: color 120ms ease;
+            transition: color 160ms var(--ease-out);
         }
         details.cd-card > summary::-webkit-details-marker { display: none; }
         details.cd-card > summary::before {
             content: "›";
             display: inline-block;
             font-family: ui-monospace, SFMono-Regular, monospace;
-            font-size: 14px;
-            transition: transform 160ms ease;
+            font-size: 16px; line-height: 1;
+            transition: transform 220ms var(--spring);
             color: var(--accent);
-            width: 14px;
+            width: 14px; text-align: center;
         }
         details.cd-card[open] > summary::before { transform: rotate(90deg); }
         details.cd-card > summary:hover { color: var(--text); }
         details.cd-card > summary .cd-badge {
             margin-left: auto;
-            font-size: 10px; font-weight: 600;
-            padding: 2px 8px; border-radius: 99px;
+            font-size: 10px; font-weight: 700;
+            padding: 3px 9px; border-radius: 99px;
             background: var(--accent-soft);
-            color: var(--accent);
-            text-transform: none;
-            letter-spacing: 0.02em;
+            color: #ff5e5e;
+            text-transform: none; letter-spacing: 0.02em;
+            border: 1px solid rgba(204,0,0,0.32);
         }
         details.cd-card > .cd-body {
-            padding: 4px 16px 16px;
+            padding: 6px 18px 18px;
             border-top: 1px solid var(--border);
-            background: var(--surface);
+            background: transparent;
         }
 
-        /* Make existing panel-titles match the collapsible style if they
-           remain non-collapsed (e.g. Live activity stream which auto-fills) */
+        /* Drag handle (right side of summary) — only shown when gridstack is loaded */
+        .cd-card .cd-drag {
+            margin-left: 6px; cursor: move;
+            color: var(--muted2); font-size: 14px; line-height: 1;
+            user-select: none;
+            transition: color 160ms var(--ease-out);
+        }
+        .cd-card:hover .cd-drag { color: var(--accent2); }
+
         .panel-title {
             color: var(--muted) !important;
-            letter-spacing: 0.06em;
+            letter-spacing: 0.08em;
             font-size: 11px;
-            font-weight: 600;
+            font-weight: 700;
         }
 
-        /* Brand color overrides for now-orange accent */
-        .brand-mark { color: var(--accent); }
-        #scan-submit {
-            background: var(--accent);
-            color: #1F1E1D;
+        /* CTA button — pill with cardinal gradient */
+        #scan-submit, .submit-btn {
+            background: var(--grad-hero);
+            color: #fff;
             font-weight: 700;
-            border-radius: 999px;     /* pill */
-            padding: 11px 20px;
+            border-radius: 999px;
+            padding: 12px 22px;
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: var(--shadow-glow-red);
+            transition: transform 180ms var(--spring),
+                        box-shadow 180ms var(--ease-out),
+                        filter 160ms var(--ease-out);
         }
-        #scan-submit:hover { background: var(--accent-deep); color: #fff; }
+        #scan-submit:hover, .submit-btn:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.06);
+            box-shadow: var(--shadow-glow-red), 0 8px 28px rgba(204,0,0,0.32);
+        }
+        #scan-submit:disabled { opacity: .42; transform: none; box-shadow: none; }
+
         .pipeline-tab.active { background: var(--surface2); color: var(--text); }
         .pipeline-tab[data-pipeline="local"].active { color: var(--good); }
         .pipeline-tab[data-pipeline="cloud"].active { color: var(--accent); }
+
         .narration-tabs .narr-tab.active {
             background: var(--surface2); color: var(--text);
             border-bottom-color: var(--accent);
         }
-        .pipeline-badge.local { color: var(--good); border-color: var(--good); }
-        .pipeline-badge.cloud { color: var(--accent); border-color: var(--accent); }
+        .pipeline-badge {
+            background: var(--glass);
+            backdrop-filter: blur(14px);
+            border-radius: 999px;
+        }
+        .pipeline-badge.local { color: var(--good); border-color: rgba(74,222,128,0.36); }
+        .pipeline-badge.cloud { color: #ff7a7a; border-color: rgba(204,0,0,0.42); }
 
-        /* ── Live log "↓ new logs" pill (auto-stick fix) ── */
+        /* ── Live log "↓ new logs" pill ── */
         .ls-jump-pill {
             position: absolute;
             right: 16px; bottom: 14px;
             z-index: 30;
             font-size: 11px; font-weight: 700;
-            background: var(--accent);
-            color: #1F1E1D;
+            background: var(--grad-gold);
+            color: #2a1a00;
             border: none;
-            padding: 6px 12px;
-            border-radius: 99px;
+            padding: 7px 14px;
+            border-radius: 999px;
             cursor: pointer;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.4);
-            animation: cd-pill-pop 180ms ease;
+            box-shadow: var(--shadow-glow-gold);
+            animation: cd-pill-pop 220ms var(--spring);
         }
-        .ls-jump-pill:hover { background: var(--accent-deep); color: #fff; }
+        .ls-jump-pill:hover { filter: brightness(1.06); transform: translateY(-1px); }
         @keyframes cd-pill-pop {
-            from { transform: translateY(8px); opacity: 0; }
-            to   { transform: translateY(0);   opacity: 1; }
+            from { transform: translateY(10px) scale(.96); opacity: 0; }
+            to   { transform: translateY(0) scale(1);     opacity: 1; }
         }
 
-        /* The live-stream container needs position:relative so the pill anchors */
-        #live-stream { position: relative; max-height: 220px; overflow-y: auto;
-                       scrollbar-width: thin; scrollbar-color: var(--accent) var(--surface); }
+        #live-stream { position: relative; max-height: 240px; overflow-y: auto;
+                       scrollbar-width: thin; scrollbar-color: var(--accent) transparent; }
         #live-stream::-webkit-scrollbar { width: 8px; }
-        #live-stream::-webkit-scrollbar-track { background: var(--surface); }
-        #live-stream::-webkit-scrollbar-thumb { background: var(--accent-soft);
-                                                 border-radius: 4px; }
+        #live-stream::-webkit-scrollbar-track { background: transparent; }
+        #live-stream::-webkit-scrollbar-thumb { background: var(--accent-soft); border-radius: 4px; }
         #live-stream::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
-        /* Soft warm typography for the brand */
         body, button, input, select { letter-spacing: -0.005em; }
 
-        /* Smooth open/close height anim for <details> */
         details.cd-card > .cd-body {
             opacity: 0; transform: translateY(-4px);
             max-height: 0; overflow: hidden;
-            transition: opacity 200ms ease, transform 200ms ease, max-height 250ms ease;
+            transition: opacity 240ms var(--ease-out),
+                        transform 280ms var(--ease-out),
+                        max-height 280ms var(--ease-out);
         }
         details.cd-card[open] > .cd-body {
             opacity: 1; transform: translateY(0);
-            max-height: 1200px;
+            max-height: 1400px;
         }
+
+        /* ── Drag-and-resize panels (gridstack) ── */
+        .grid-stack {
+            background: transparent;
+            min-height: 200px;
+        }
+        .grid-stack-item-content {
+            background: var(--surface);
+            background-image: var(--grad-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            box-shadow: var(--shadow-1);
+            transition: box-shadow 200ms var(--ease-out),
+                        border-color 200ms var(--ease-out);
+        }
+        .grid-stack-item.ui-draggable-dragging .grid-stack-item-content,
+        .grid-stack-item.ui-resizable-resizing .grid-stack-item-content {
+            box-shadow: var(--shadow-2), 0 0 0 2px var(--accent);
+            border-color: var(--accent);
+        }
+        .grid-stack-placeholder > .placeholder-content {
+            background: var(--accent-soft);
+            border: 2px dashed var(--accent);
+            border-radius: var(--radius-lg);
+        }
+        .grid-stack-item > .ui-resizable-se,
+        .grid-stack-item > .ui-resizable-sw,
+        .grid-stack-item > .ui-resizable-ne,
+        .grid-stack-item > .ui-resizable-nw {
+            color: var(--accent2);
+        }
+        .gs-handle {
+            cursor: move; padding: 4px 6px; border-radius: 6px;
+            color: var(--muted2); font-size: 12px;
+            transition: background 160ms ease, color 160ms ease;
+        }
+        .gs-handle:hover { background: var(--surface2); color: var(--accent2); }
+
+        /* Apple-y "shimmer" for active/loading borders */
+        @keyframes cd-shimmer {
+            0%   { background-position: -200% 0; }
+            100% { background-position:  200% 0; }
+        }
+        .shimmer {
+            background-image:
+                linear-gradient(90deg,
+                    rgba(255,255,255,0) 0%,
+                    rgba(246,169,23,0.18) 50%,
+                    rgba(255,255,255,0) 100%);
+            background-size: 200% 100%;
+            animation: cd-shimmer 2.4s linear infinite;
+        }
+
+        /* Brain hero vignette so the centre column reads as a focal point */
+        .panel-centre::after {
+            content: ""; position: absolute; inset: 0; pointer-events: none;
+            background: radial-gradient(ellipse at 50% 40%,
+                transparent 30%, rgba(0,0,0,0.55) 100%);
+            opacity: 0.5; z-index: 1;
+        }
+        #three-root { position: relative; z-index: 2; }
+        .view-toolbar, .hemi-toolbar, .colorbar-wrap, .playback-bar,
+        .pipeline-badge, #network-bar, #region-tooltip { z-index: 5; }
     </style>
+
+    <!-- gridstack.js (drag + resize panels, Robinhood-Legend-style) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack-all.js"></script>
     <!-- GA4 — replace G-MBRS3TCQTL with your Measurement ID -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-MBRS3TCQTL"></script>
     <script>
@@ -1148,10 +1302,11 @@
       gtag('config', 'G-MBRS3TCQTL', { send_page_view: true });
     </script>
 
-    <!-- Claude Design overlay: convert dense panels into collapsible cards -->
+    <!-- ISU + Apple polish overlay: collapsible cards + drag handles
+         (gridstack wiring is inlined at the end of <body> so it runs after
+         the rest of main.js binds.) -->
     <script>
     (function () {
-      // Map of "anchor selector or id" → { title, defaultOpen, badge() }
       const COLLAPSIBLE_TARGETS = [
         { sel: "#event-log",          title: "Pipeline events",   open: true,
           badge: () => {
@@ -1172,30 +1327,36 @@
         const root = document.querySelector(target.sel);
         if (!root || root.closest("details.cd-card")) return;
 
-        // Find the title/heading element to detach (so we don't show a duplicate)
         let titleEl = null;
-        const panelTitleSibling = root.previousElementSibling;
-        if (panelTitleSibling && panelTitleSibling.classList.contains("panel-title")) {
-          titleEl = panelTitleSibling;
-        }
+        const sib = root.previousElementSibling;
+        if (sib && sib.classList.contains("panel-title")) titleEl = sib;
 
-        // Build <details>
         const details = document.createElement("details");
         details.className = "cd-card";
+        details.dataset.cardId = target.sel.replace(/[^a-z0-9]+/gi, "-");
         if (target.open) details.open = true;
+
         const summary = document.createElement("summary");
         const titleText = (titleEl && titleEl.textContent.trim()) || target.title;
         summary.innerHTML = `<span class="cd-title">${titleText}</span>`;
+
         if (target.badge) {
           const b = document.createElement("span");
           b.className = "cd-badge";
           const text = target.badge();
           if (text) { b.textContent = text; summary.appendChild(b); }
         }
+
+        // Drag handle (used by gridstack when the layout is in "free move" mode)
+        const drag = document.createElement("span");
+        drag.className = "cd-drag gs-handle";
+        drag.title = "Drag to reorder";
+        drag.textContent = "⋮⋮";
+        summary.appendChild(drag);
+
         const body = document.createElement("div");
         body.className = "cd-body";
 
-        // Insert details where the (title or root) was, then move root + extras into body
         const insertBefore = titleEl || root;
         insertBefore.parentNode.insertBefore(details, insertBefore);
         details.appendChild(summary);
@@ -1210,10 +1371,7 @@
         }
       }
 
-      function applyAll() {
-        COLLAPSIBLE_TARGETS.forEach(wrap);
-      }
-
+      function applyAll() { COLLAPSIBLE_TARGETS.forEach(wrap); }
       if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", applyAll);
       } else {
@@ -1691,7 +1849,93 @@
 
     <!-- D3 v7 (UMD) for the data panel charts -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script type="module" src="/assets/main.js?v=20260503-charts3d"></script>
-    <script type="module" src="/assets/charts.js?v=20260503-charts3d"></script>
+    <script type="module" src="/assets/main.js?v=20260504-isu-apple"></script>
+    <script type="module" src="/assets/charts.js?v=20260504-isu-apple"></script>
+
+    <!-- ── Robinhood-Legend-style draggable panels (gridstack) ─────────────── -->
+    <script>
+    (function () {
+      // Wait until cd-cards are wrapped + DOM is settled.
+      function init() {
+        if (typeof GridStack === "undefined") return setTimeout(init, 200);
+
+        ["panel-left", "panel-right"].forEach(side => {
+          const root = document.querySelector("." + side);
+          if (!root || root.dataset.gsApplied === "1") return;
+          root.dataset.gsApplied = "1";
+
+          // Each direct .cd-card child becomes a grid item
+          const cards = Array.from(root.querySelectorAll(":scope > details.cd-card"));
+          if (!cards.length) return;
+
+          // Build a fresh container so gridstack owns layout
+          const grid = document.createElement("div");
+          grid.className = "grid-stack";
+          grid.dataset.side = side;
+          root.appendChild(grid);
+
+          cards.forEach((card, i) => {
+            const item = document.createElement("div");
+            item.className = "grid-stack-item";
+            item.setAttribute("gs-w", "12");
+            item.setAttribute("gs-h", "3");
+            item.setAttribute("gs-y", String(i * 3));
+            item.setAttribute("gs-id", card.dataset.cardId || ("card-" + i));
+            const inner = document.createElement("div");
+            inner.className = "grid-stack-item-content";
+            inner.appendChild(card);
+            item.appendChild(inner);
+            grid.appendChild(item);
+          });
+
+          const gs = GridStack.init({
+            column: 12,
+            cellHeight: 56,
+            margin: 8,
+            float: false,
+            animate: true,
+            handle: ".gs-handle",
+            resizable: { handles: "se,sw" },
+            disableOneColumnMode: true,
+          }, grid);
+
+          // Persist layout per side
+          const KEY = "cortex.layout." + side;
+          try {
+            const saved = JSON.parse(localStorage.getItem(KEY) || "null");
+            if (saved && Array.isArray(saved)) gs.load(saved);
+          } catch (_) {}
+          const persist = () => {
+            try { localStorage.setItem(KEY, JSON.stringify(gs.save(false))); } catch (_) {}
+          };
+          gs.on("change resizestop dragstop", persist);
+        });
+
+        // Reset-layout button in the topbar
+        const topbar = document.querySelector(".topbar");
+        if (topbar && !document.getElementById("reset-layout-btn")) {
+          const btn = document.createElement("button");
+          btn.id = "reset-layout-btn";
+          btn.title = "Reset panel layout";
+          btn.style.cssText = "background:transparent;border:1px solid var(--border);"
+            + "color:var(--muted);font-size:11px;padding:5px 12px;border-radius:99px;"
+            + "cursor:pointer;margin-left:8px;transition:all 160ms var(--ease-out);";
+          btn.textContent = "↺ Reset layout";
+          btn.onmouseover = () => { btn.style.color = "var(--accent2)";
+                                     btn.style.borderColor = "var(--accent2)"; };
+          btn.onmouseout  = () => { btn.style.color = "var(--muted)";
+                                     btn.style.borderColor = "var(--border)"; };
+          btn.onclick = () => {
+            ["panel-left","panel-right"].forEach(s => localStorage.removeItem("cortex.layout."+s));
+            location.reload();
+          };
+          topbar.appendChild(btn);
+        }
+      }
+
+      if (document.readyState === "complete") init();
+      else window.addEventListener("load", () => setTimeout(init, 250));
+    })();
+    </script>
 </body>
 </html>
