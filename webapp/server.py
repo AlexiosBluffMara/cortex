@@ -543,6 +543,16 @@ def create_app(
     async def get_scan(scan_id: str) -> dict[str, Any]:
         record = await app.state.registry.get(scan_id)
         if record is None:
+            # Fall through to upstream — gallery may surface upstream ids directly
+            if TRIBE_PROXY_URL:
+                try:
+                    import httpx as _httpx
+                    async with _httpx.AsyncClient(timeout=5.0) as client:
+                        r = await client.get(f"{TRIBE_PROXY_URL.rstrip('/')}/api/scan/{scan_id}")
+                    if r.status_code == 200:
+                        return r.json()
+                except Exception:
+                    pass
             raise HTTPException(status_code=404, detail=f"Scan not found: {scan_id}")
         return await _hydrate_proxied(record)
 
@@ -553,12 +563,16 @@ def create_app(
         Returns a compact summary per scan: id, filename, status, top_rois,
         peak_t, narrations (all 4 personas), seconds_elapsed.
 
-        Proxied scans (where TRIBE was forwarded to another backend) are
-        hydrated in-line so the gallery shows them with their up-to-date
-        upstream status + narrations.
+        Proxied scans are hydrated in-line. ALSO if TRIBE_PROXY_URL is set,
+        the upstream's /api/scans is merged in so the gallery survives a local
+        restart (which wipes our in-memory registry).
         """
+        out: list[dict[str, Any]] = []
+        seen_upstream_ids: set[str] = set()
+        seen_local_ids: set[str] = set()
+
+        # 1. Local scans (direct + proxy-referenced)
         ids = app.state.registry.all_ids()
-        out = []
         for sid in ids:
             rec = await app.state.registry.get(sid)
             if rec is None:
@@ -566,6 +580,9 @@ def create_app(
             rec = await _hydrate_proxied(rec)
             if status != "all" and rec.get("status") != status:
                 continue
+            seen_local_ids.add(sid)
+            if rec.get("upstream_id"):
+                seen_upstream_ids.add(rec["upstream_id"])
             out.append({
                 "id": sid,
                 "filename": rec.get("filename"),
@@ -581,6 +598,33 @@ def create_app(
                 "created_at": rec.get("created_at"),
                 "proxied": rec.get("proxied", False),
             })
+
+        # 2. If a TRIBE proxy is configured, merge upstream's scans too — so the
+        #    gallery shows everything even after we lose our in-memory registry.
+        if TRIBE_PROXY_URL:
+            try:
+                import httpx as _httpx
+                async with _httpx.AsyncClient(timeout=5.0) as client:
+                    r = await client.get(f"{TRIBE_PROXY_URL}/api/scans?limit=200&status={status}")
+                if r.status_code == 200:
+                    upstream_data = r.json()
+                    for u in upstream_data.get("scans", []):
+                        uid = u.get("id")
+                        if not uid or uid in seen_upstream_ids:
+                            continue
+                        # Synthesize a local-style record pointing to upstream;
+                        # the gallery's <video src=/api/scan/{id}/...> will
+                        # proxy to upstream via _proxy_media because this entry
+                        # is also marked proxied.
+                        out.append({
+                            **u,
+                            "id": uid,                 # surface upstream id
+                            "proxied": True,
+                            "_upstream_only": True,
+                        })
+            except Exception as exc:
+                log.debug("[webapp] upstream /api/scans merge failed: %s", exc)
+
         # Most recent first
         out.sort(key=lambda r: r.get("created_at") or 0, reverse=True)
         return {"count": len(out), "scans": out[:limit]}
@@ -721,12 +765,24 @@ def create_app(
         """If the scan is proxied to another backend, fetch the media from there
         using the upstream_id. Returns the raw response or None if not proxied /
         upstream unreachable / not found upstream.
+
+        Three cases:
+          1. We have a local record with upstream_id+upstream_base → proxy.
+          2. We have NO local record but TRIBE_PROXY_URL is set → assume the
+             scan_id IS the upstream id (gallery merge surfaces upstream ids
+             directly), and proxy with that.
+          3. No local record AND no proxy → caller falls through to local 404.
         """
         rec = await app.state.registry.get(scan_id)
-        if not rec or not rec.get("proxied"):
-            return None
-        upstream_id = rec.get("upstream_id")
-        upstream_base = (rec.get("upstream_base") or TRIBE_PROXY_URL or "").rstrip("/")
+        upstream_id: str | None = None
+        upstream_base: str | None = None
+        if rec and rec.get("proxied"):
+            upstream_id = rec.get("upstream_id")
+            upstream_base = (rec.get("upstream_base") or TRIBE_PROXY_URL or "").rstrip("/")
+        elif rec is None and TRIBE_PROXY_URL:
+            # Gallery merged upstream scan_id directly — try as-is
+            upstream_id = scan_id
+            upstream_base = TRIBE_PROXY_URL.rstrip("/")
         if not upstream_id or not upstream_base:
             return None
         url = f"{upstream_base}/api/scan/{upstream_id}{suffix_path}"
@@ -871,18 +927,22 @@ def create_app(
         """
         # Proxy fallthrough for scans handled by another backend (returns JSON)
         rec = await app.state.registry.get(scan_id)
+        upstream_id, upstream_base = None, None
         if rec and rec.get("proxied"):
             upstream_id = rec.get("upstream_id")
             upstream_base = (rec.get("upstream_base") or TRIBE_PROXY_URL or "").rstrip("/")
-            if upstream_id and upstream_base:
-                try:
-                    import httpx as _httpx
-                    async with _httpx.AsyncClient(timeout=10.0) as client:
-                        r = await client.get(f"{upstream_base}/api/scan/{upstream_id}/bold-simulate?n_t={n_t}")
-                    if r.status_code == 200:
-                        return r.json()
-                except Exception as exc:
-                    log.debug("[webapp] bold-simulate proxy failed: %s", exc)
+        elif rec is None and TRIBE_PROXY_URL:
+            upstream_id = scan_id
+            upstream_base = TRIBE_PROXY_URL.rstrip("/")
+        if upstream_id and upstream_base:
+            try:
+                import httpx as _httpx
+                async with _httpx.AsyncClient(timeout=10.0) as client:
+                    r = await client.get(f"{upstream_base}/api/scan/{upstream_id}/bold-simulate?n_t={n_t}")
+                if r.status_code == 200:
+                    return r.json()
+            except Exception as exc:
+                log.debug("[webapp] bold-simulate proxy failed: %s", exc)
         atlas_file = PUBLIC_DIR / "atlas.json"
         if not atlas_file.exists():
             raise HTTPException(status_code=404, detail="atlas.json missing")
