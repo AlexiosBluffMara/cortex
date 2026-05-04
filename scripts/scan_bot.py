@@ -63,11 +63,20 @@ bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 @bot.event
 async def on_ready():
     log.info("logged in as %s (id=%s)", bot.user, bot.user.id if bot.user else "?")
+    log.info("connected to %d guilds", len(bot.guilds))
+    # Sync slash commands per-guild (instant) AND globally (up to 1 hr propagation)
+    for g in bot.guilds:
+        try:
+            bot.tree.copy_global_to(guild=g)
+            synced = await bot.tree.sync(guild=g)
+            log.info("synced %d slash commands to guild %s (%s)", len(synced), g.name, g.id)
+        except Exception as exc:
+            log.warning("guild sync failed for %s: %s", g.id, exc)
     try:
         synced = await bot.tree.sync()
-        log.info("synced %d slash commands", len(synced))
+        log.info("synced %d global slash commands (1hr propagation)", len(synced))
     except Exception as exc:
-        log.warning("slash sync failed: %s", exc)
+        log.warning("global sync failed: %s", exc)
     activity = discord.Game(name=f"/scan · {CORTEX_API_BASE}")
     await bot.change_presence(activity=activity, status=discord.Status.online)
 

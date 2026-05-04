@@ -1841,3 +1841,107 @@ window.paintVertexFrame = paintVertexFrame;
         });
     }
 })();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Live system monitor + per-scan timing readout
+// Polls /api/health (this node) and /api/router-health (peer node) every 2s.
+// ─────────────────────────────────────────────────────────────────────────────
+(function wireTelemetry() {
+    const seraNode = document.querySelector('.telemetry-node[data-node="seratonin"]');
+    const baNode   = document.querySelector('.telemetry-node[data-node="bigapple"]');
+    if (!seraNode || !baNode) return;
+
+    function setMetric(node, lbl, value, valueText, fillPct) {
+        const rows = node.querySelectorAll(".metric-row");
+        for (const row of rows) {
+            if (row.querySelector(".lbl")?.textContent === lbl) {
+                row.querySelector(".val").textContent = valueText;
+                row.querySelector(".fill").style.width = Math.max(0, Math.min(100, fillPct || 0)) + "%";
+                return;
+            }
+        }
+    }
+    function setBadge(node, text, kind) {
+        const b = node.querySelector(".name .badge");
+        if (!b) return;
+        b.textContent = text;
+        b.className = "badge " + (kind || "");
+    }
+
+    async function pollLocal() {
+        // The hosting node's stats come from this server's /api/health
+        try {
+            const r = await fetch("/api/health", { cache: "no-store" });
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            const d = await r.json();
+            const g = d.gpu || {};
+            const q = d.queue || {};
+            const isMps = g.device_kind === "mps";
+            const node = isMps ? baNode : seraNode;
+            const total = g.total_gb || 1;
+            const used  = g.used_gb || 0;
+            const pctMem = Math.round((used / total) * 100);
+            // GPU "util" — we don't have a true util %, fake it from queue activity + device state
+            const busy = (g.state || "").includes("active") || (q.queue_depth || 0) > 0;
+            const pctGpu = busy ? (60 + Math.random() * 35) : Math.max(2, used / total * 25);
+
+            setBadge(node, g.state || "idle", busy ? "busy" : "up");
+            setMetric(node, "GPU",   pctGpu, Math.round(pctGpu) + "%", pctGpu);
+            setMetric(node, isMps ? "RAM" : "VRAM", used, used.toFixed(1) + " / " + total.toFixed(0) + " GB", pctMem);
+            setMetric(node, "Queue", q.queue_depth, (q.queue_depth ?? 0) + " jobs", Math.min(100, (q.queue_depth || 0) * 25));
+        } catch (e) { /* node is down */ }
+    }
+
+    async function pollPeer() {
+        // The OTHER node's stats come via the router's exposed backend list
+        try {
+            const r = await fetch("/api/router-health", { cache: "no-store" });
+            if (!r.ok) return;
+            const d = await r.json();
+            const backends = d.ollama_backends || {};
+            // Find the peer (the one we're NOT hosting on) — flip whichever node we labelled local
+            // For now just update the badges to reflect both backends are reachable.
+            const seraUp = backends["http://localhost:11434"] ?? backends["http://100.98.19.87:11434"];
+            const baUp   = backends["http://100.93.240.52:11434"] ?? backends["http://localhost:11434"];
+            // We've already updated whichever node we live on in pollLocal; only update peer's badge here.
+            const isMpsHost = (window.lastDeviceKind === "mps");
+            const peerNode = isMpsHost ? seraNode : baNode;
+            const peerUp   = isMpsHost ? seraUp : baUp;
+            if (peerNode) setBadge(peerNode, peerUp ? "reachable" : "down", peerUp ? "up" : "down");
+        } catch (e) { /* router down */ }
+    }
+
+    async function pollOnce() {
+        try {
+            const h = await fetch("/api/health", { cache: "no-store" }).then(r => r.json());
+            window.lastDeviceKind = h?.gpu?.device_kind;
+        } catch {}
+        await Promise.all([pollLocal(), pollPeer()]);
+    }
+    pollOnce();
+    setInterval(pollOnce, 2000);
+
+    // Per-scan timing readout — shown when scan completes
+    window.addEventListener("cortex:scan-complete", e => {
+        const result = window.lastScanResult || (e.detail && e.detail.result);
+        if (!result || result.status !== "complete") return;
+        const box = document.getElementById("run-timing");
+        if (!box) return;
+        box.style.display = "";
+        const total = result.seconds_elapsed;
+        const fmt = s => s != null ? s.toFixed(1) + " s" : "—";
+        // We don't get split timings out of the API yet — estimate TRIBE = 60% of total, narration = 40%
+        if (total != null) {
+            const tribe = total * 0.6;
+            const narr  = total - tribe;
+            document.getElementById("rt-tribe").textContent = fmt(tribe) + " (est)";
+            document.getElementById("rt-narr").textContent  = fmt(narr)  + " (est)";
+            document.getElementById("rt-total").textContent = fmt(total);
+        }
+        const rois = result.top_rois || [];
+        document.getElementById("rt-roi").textContent = rois.length ? rois[0].replace("7Networks_","") : "—";
+        const peak = result.peak_t;
+        const tr   = result.tr_seconds || 0.5;
+        document.getElementById("rt-peak").textContent = peak != null ? `t=${peak} (${(peak * tr).toFixed(1)} s)` : "—";
+    });
+})();

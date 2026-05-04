@@ -852,6 +852,73 @@
             .narration-body { padding: 8px 14px; }
         }
 
+        /* ── Live telemetry panel (system monitor visible during runs) ── */
+        .telemetry {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 10px 12px; margin-top: 8px;
+            font-family: "JetBrains Mono", monospace;
+        }
+        .telemetry h3 {
+            font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--muted); font-weight: 600; margin-bottom: 8px;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .telemetry h3 .pulse {
+            width: 6px; height: 6px; border-radius: 50%; background: var(--good);
+            animation: telemetry-pulse 1.4s infinite;
+        }
+        @keyframes telemetry-pulse {
+            0%,100% { opacity: 0.3; transform: scale(0.85); }
+            50%     { opacity: 1; transform: scale(1.1); }
+        }
+        .telemetry-node {
+            margin-bottom: 8px; padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        .telemetry-node:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .telemetry-node .name {
+            font-size: 10.5px; font-weight: 700; color: var(--text);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .telemetry-node .name .badge {
+            font-size: 9px; padding: 1px 6px; border-radius: 99px;
+            background: var(--surface2); border: 1px solid var(--border-strong); color: var(--muted);
+        }
+        .telemetry-node .name .badge.up   { color: var(--good); border-color: rgba(74,213,150,0.4); }
+        .telemetry-node .name .badge.busy { color: var(--isu-yellow); border-color: rgba(246,169,23,0.4); }
+        .telemetry-node .name .badge.down { color: var(--accent); border-color: rgba(204,0,0,0.4); }
+        .metric-row {
+            display: flex; align-items: center; gap: 8px; margin-top: 4px;
+            font-size: 10px;
+        }
+        .metric-row .lbl { width: 38px; color: var(--muted); }
+        .metric-row .bar {
+            flex: 1; height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden;
+            position: relative;
+        }
+        .metric-row .bar .fill {
+            position: absolute; top: 0; left: 0; bottom: 0;
+            background: linear-gradient(90deg, var(--good), var(--isu-yellow), var(--accent));
+            border-radius: 3px; transition: width 0.4s ease-out;
+        }
+        .metric-row .val { width: 64px; text-align: right; color: var(--text); font-feature-settings: "tnum"; }
+
+        /* Per-scan timing readout */
+        .run-timing {
+            background: var(--surface); border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            border-radius: 8px; padding: 10px 12px; margin-top: 8px;
+            font-family: "JetBrains Mono", monospace; font-size: 10.5px;
+        }
+        .run-timing h3 {
+            font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--muted); font-weight: 600; margin-bottom: 8px;
+        }
+        .run-timing .row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .run-timing .row .lbl { color: var(--muted); }
+        .run-timing .row .val { color: var(--text); font-feature-settings: "tnum"; }
+        .run-timing .row.total .val { color: var(--accent); font-weight: 700; }
+
         /* ── Inference node status (Seratonin / Big Apple / OpenRouter) ── */
         .node-status {
             display: flex; gap: 12px; align-items: center;
@@ -966,6 +1033,33 @@
                 <p class="panel-title" style="margin-top:14px">Live activity stream</p>
                 <div id="live-stream" class="live-stream" aria-live="polite">
                     <div class="ls-empty">Waiting for backend activity…</div>
+                </div>
+
+                <!-- Live telemetry: GPU/CPU/RAM across both nodes (refreshes every 2s) -->
+                <div class="telemetry">
+                    <h3><span class="pulse"></span>System monitor</h3>
+                    <div class="telemetry-node" data-node="seratonin">
+                        <div class="name">Seratonin <span class="badge">…</span></div>
+                        <div class="metric-row"><span class="lbl">GPU</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— %</span></div>
+                        <div class="metric-row"><span class="lbl">VRAM</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— GB</span></div>
+                        <div class="metric-row"><span class="lbl">Queue</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— jobs</span></div>
+                    </div>
+                    <div class="telemetry-node" data-node="bigapple">
+                        <div class="name">Big Apple <span class="badge">…</span></div>
+                        <div class="metric-row"><span class="lbl">GPU</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— %</span></div>
+                        <div class="metric-row"><span class="lbl">RAM</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— GB</span></div>
+                        <div class="metric-row"><span class="lbl">Queue</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— jobs</span></div>
+                    </div>
+                </div>
+
+                <!-- Per-scan timing for the most recent run -->
+                <div class="run-timing" id="run-timing" style="display:none">
+                    <h3>Last scan timing</h3>
+                    <div class="row"><span class="lbl">TRIBE inference</span><span class="val" id="rt-tribe">—</span></div>
+                    <div class="row"><span class="lbl">Narration ×4</span>     <span class="val" id="rt-narr">—</span></div>
+                    <div class="row total"><span class="lbl">Total</span>      <span class="val" id="rt-total">—</span></div>
+                    <div class="row"><span class="lbl">Top region</span>      <span class="val" id="rt-roi">—</span></div>
+                    <div class="row"><span class="lbl">Peak time</span>       <span class="val" id="rt-peak">—</span></div>
                 </div>
             </div>
 

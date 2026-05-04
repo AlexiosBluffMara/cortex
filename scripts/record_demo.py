@@ -49,9 +49,11 @@ async def record_end_to_end(clip_path: str, headless: bool = False, max_wait_sec
         page = await ctx.new_page()
 
         print(f"[record] opening {DEMO_URL}")
-        await page.goto(DEMO_URL, wait_until="networkidle", timeout=60_000)
-        await page.wait_for_selector("canvas", timeout=20_000)
-        await asyncio.sleep(2)
+        await page.goto(DEMO_URL, wait_until="domcontentloaded", timeout=60_000)
+        # Three.js mounts inside #three-root; the actual canvas is appended async.
+        # Wait for the first VISIBLE canvas (not the hidden #camera-canvas).
+        await page.wait_for_selector("#three-root canvas", state="attached", timeout=30_000)
+        await asyncio.sleep(3)  # let WebGL paint a frame
 
         print(f"[record] uploading {clip.name}")
         # Drop-zone uses <input type=file id=scan-file>
@@ -106,7 +108,32 @@ async def record_end_to_end(clip_path: str, headless: bool = False, max_wait_sec
                 await tab.click()
                 await asyncio.sleep(2.5)
 
-        print("[record] starting tour mode")
+        print("[record] cycling through data-panel chart tabs")
+        for tab in ("rois", "ribbon", "polar", "rois"):
+            t_btn = await page.query_selector(f'button.data-tab[data-tab="{tab}"]')
+            if t_btn:
+                await t_btn.click()
+                await asyncio.sleep(4)
+
+        print("[record] orbiting the 3D BOLD ribbon")
+        # Switch to ribbon and drag to orbit
+        ribbon_btn = await page.query_selector('button.data-tab[data-tab="ribbon"]')
+        if ribbon_btn:
+            await ribbon_btn.click()
+            await asyncio.sleep(1)
+            mount = await page.query_selector("#chart-ribbon canvas")
+            if mount:
+                box = await mount.bounding_box()
+                if box:
+                    cx, cy = box["x"] + box["width"]/2, box["y"] + box["height"]/2
+                    for dx, dy in [(80,0),(80,30),(0,40),(-80,0),(-80,-40),(0,-40)]:
+                        await page.mouse.move(cx, cy)
+                        await page.mouse.down()
+                        await page.mouse.move(cx+dx, cy+dy, steps=20)
+                        await page.mouse.up()
+                        await asyncio.sleep(0.7)
+
+        print("[record] starting brain tour mode")
         tour_btn = await page.query_selector("#tour-btn")
         if tour_btn:
             await tour_btn.click()
