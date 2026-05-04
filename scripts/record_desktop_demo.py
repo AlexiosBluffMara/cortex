@@ -32,7 +32,12 @@ import time
 from pathlib import Path
 
 import httpx
-from playwright.async_api import async_playwright   # vanilla — Windows Defender flags patchright's binary
+from playwright.async_api import async_playwright
+# We DON'T use Playwright's bundled Chromium because Windows Defender keeps
+# quarantining the binary. Instead we launch the system's REAL Chrome (which
+# Defender trusts) with --remote-debugging-port and connect via CDP.
+import shutil as _shutil
+import subprocess as _sp
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -125,22 +130,56 @@ async def discord_post(channel_id: str, content: str, image_bytes: bytes | None 
 
 
 # ── WebUI demo via Patchright (HEADED, so it appears on the desktop) ────────
+def _find_system_browser() -> str:
+    """Locate the user's installed Chrome (or Edge as fallback). Defender trusts these."""
+    candidates = [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    ]
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
+    raise RuntimeError("No system Chrome or Edge found")
+
+
 async def run_webui_demo(clip_path: str, max_wait_sec: int = 360):
-    print(f"[webui] launching headed Chromium for {DEMO_URL}")
+    """Launch the user's REAL Chrome with remote debugging, connect via CDP, drive the demo.
+
+    We avoid Playwright's bundled chromium because Windows Defender keeps
+    quarantining it. The system browser is trusted and stable.
+    """
+    browser_exe = _find_system_browser()
+    debug_port = 9222
+    profile_dir = Path(os.environ.get("TEMP", "/tmp")) / f"cortex_demo_profile_{int(time.time())}"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"[webui] launching system browser: {browser_exe}")
+    chrome_proc = _sp.Popen([
+        browser_exe,
+        f"--remote-debugging-port={debug_port}",
+        f"--user-data-dir={profile_dir}",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--start-maximized",
+        f"--window-size=1600,950",
+        DEMO_URL,
+    ])
+    # Give Chrome a moment to start its CDP listener
+    await asyncio.sleep(4)
+
+    print(f"[webui] connecting Playwright via CDP at localhost:{debug_port}")
     async with async_playwright() as p:
-        # IMPORTANT: headed (headless=False) so the window appears on screen
-        # for the desktop recorder to capture.
-        # Use launch_persistent_context with a UNIQUE fresh dir to avoid lock conflicts
-        prof = Path(os.environ.get("TEMP", "/tmp")) / f"cortex_demo_profile_{int(time.time())}"
-        prof.mkdir(parents=True, exist_ok=True)
-        ctx = await p.chromium.launch_persistent_context(
-            user_data_dir=str(prof),
-            headless=False,
-            viewport={"width": 1600, "height": 950},
-            args=["--start-maximized", "--window-position=0,0", "--disable-blink-features=AutomationControlled"],
-        )
-        browser = None
-        page = await ctx.new_page()
+        try:
+            browser = await p.chromium.connect_over_cdp(f"http://localhost:{debug_port}")
+        except Exception as exc:
+            chrome_proc.terminate()
+            raise RuntimeError(f"CDP connect failed (Chrome may not have started): {exc}")
+        ctx = browser.contexts[0] if browser.contexts else await browser.new_context()
+        page = ctx.pages[0] if ctx.pages else await ctx.new_page()
+        # Make sure we're on the demo URL even if a tab opened on something else
+        if DEMO_URL not in page.url:
+            await page.goto(DEMO_URL, wait_until="domcontentloaded", timeout=60_000)
 
         await page.goto(DEMO_URL, wait_until="domcontentloaded", timeout=60_000)
         await page.wait_for_selector("#three-root canvas", state="attached", timeout=30_000)
@@ -201,7 +240,20 @@ async def run_webui_demo(clip_path: str, max_wait_sec: int = 360):
             await asyncio.sleep(8)
             await tour_btn.click()
 
-        await ctx.close()
+        # Disconnect Playwright (don't close ctx — we'd kill the user's chrome)
+        try:
+            await browser.close()
+        except Exception:
+            pass
+    # Politely terminate the Chrome we spawned
+    try:
+        chrome_proc.terminate()
+        chrome_proc.wait(timeout=8)
+    except Exception:
+        try:
+            chrome_proc.kill()
+        except Exception:
+            pass
 
 
 # ── Discord demo: bot posts a real scan to the channel ──────────────────────
