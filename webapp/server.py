@@ -22,6 +22,7 @@ Run locally::
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -102,24 +103,56 @@ TRIBE_NEEDED_EXTS = ALLOWED_VIDEO | ALLOWED_AUDIO | ALLOWED_TEXT | ALLOWED_DOCUM
 # ---------------------------------------------------------------------------
 
 class ScanRegistry:
-    """In-memory store of scan results, keyed by scan_id.
+    """SQLite-backed scan registry — durable across backend restarts.
 
-    For the hackathon demo this is fine; production would back this with Redis
-    or Firestore + a TTL on each entry.
+    Schema:  scans(id TEXT PRIMARY KEY, payload JSON, updated REAL)
+    Reads are in-memory cache + write-through to SQLite. Writes are async-safe
+    (one big lock) but fast because SQLite handles a few hundred writes/sec
+    on local disk without breaking a sweat.
+
+    To migrate from the prior in-memory implementation: existing scans on disk
+    (in tribev2_cache/, scans/, etc.) aren't auto-imported — only NEW scans
+    starting from this revision get persisted. The merge in /api/scans against
+    upstream's gallery still surfaces the old scans, so users see them anyway.
     """
 
     def __init__(self) -> None:
         self._store: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
+        # Open a single connection for the lifetime of the process.
+        # check_same_thread=False because asyncio may dispatch to threadpool.
+        import sqlite3 as _sqlite3
+        db_path = Path(__file__).resolve().parent.parent / "scans" / "registry.sqlite"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn = _sqlite3.connect(str(db_path), check_same_thread=False, isolation_level=None)
+        self._conn.execute("PRAGMA journal_mode=WAL;")
+        self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS scans (
+                id      TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                updated REAL NOT NULL
+            )
+        """)
+        self._conn.commit()
+        # Eager-load on startup
+        import json as _json
+        for row in self._conn.execute("SELECT id, payload FROM scans"):
+            try:
+                self._store[row[0]] = _json.loads(row[1])
+            except Exception:
+                continue
+        log.info("[registry] loaded %d scans from %s", len(self._store), db_path)
 
     async def put(self, scan_id: str, payload: dict[str, Any]) -> None:
         async with self._lock:
             self._store[scan_id] = payload
+            self._persist(scan_id, payload)
 
     async def update(self, scan_id: str, **fields: Any) -> None:
         async with self._lock:
             if scan_id in self._store:
                 self._store[scan_id].update(fields)
+                self._persist(scan_id, self._store[scan_id])
 
     async def get(self, scan_id: str) -> dict[str, Any] | None:
         async with self._lock:
@@ -127,6 +160,19 @@ class ScanRegistry:
 
     def all_ids(self) -> list[str]:
         return list(self._store.keys())
+
+    def _persist(self, scan_id: str, payload: dict[str, Any]) -> None:
+        """Write-through to SQLite. Errors are logged but don't break the request."""
+        try:
+            import json as _json
+            blob = _json.dumps(payload, default=str)
+            self._conn.execute(
+                "INSERT INTO scans(id, payload, updated) VALUES (?, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET payload=excluded.payload, updated=excluded.updated",
+                (scan_id, blob, time.time()),
+            )
+        except Exception as exc:
+            log.warning("[registry] persist failed for %s: %s", scan_id, exc)
 
 
 class WebSocketHub:
@@ -247,6 +293,115 @@ def create_app(
         except Exception:
             pass
         return {"ok": False, "ollama_backends": {}, "openrouter": False}
+
+    @app.get("/api/fleet-health")
+    async def fleet_health() -> dict[str, Any]:
+        """One-stop fleet status. Aggregates:
+          - this node's GPU/queue (from _scheduler.vram_report() + _queue.status())
+          - peer node (via TRIBE_PROXY_URL or Tailscale IP) — same data
+          - inference router on this node + the peer (port 8766)
+          - Ollama on each node (port 11434)
+          - OpenRouter quota (best-effort)
+
+        Frontend telemetry widget consumes this single endpoint instead of stitching
+        multiple calls together.
+        """
+        import asyncio as _asyncio
+        import httpx as _httpx
+        import os as _os
+        from cortex import device as _device
+
+        peer_base = (TRIBE_PROXY_URL or "").rstrip("/")
+        # Identify roles deterministically: cuda host = "seratonin", mps = "bigapple"
+        my_kind = _device.DEVICE_KIND
+        my_role = "seratonin" if my_kind == "cuda" else "bigapple" if my_kind == "mps" else my_kind
+        peer_role = "bigapple" if my_role == "seratonin" else "seratonin"
+
+        # Local snapshot (cheap, in-process)
+        local_gpu = _scheduler.vram_report()
+        local_queue = _queue.status()
+        my_view = {
+            "role": my_role,
+            "alive": True,
+            "device_kind": my_kind,
+            "device_name": local_gpu.get("device_name", "?"),
+            "gpu_state": local_gpu.get("state"),
+            "free_gb": local_gpu.get("free_gb"),
+            "used_gb": local_gpu.get("used_gb"),
+            "total_gb": local_gpu.get("total_gb"),
+            "tribe_fits": local_gpu.get("tribe_fits"),
+            "queue_depth": local_queue.get("queue_depth"),
+            "completed": local_queue.get("completed"),
+            "failed": local_queue.get("failed"),
+            "active": local_queue.get("active_request"),
+        }
+
+        async def _get_json(client, url, timeout=2.0):
+            try:
+                r = await client.get(url, timeout=timeout)
+                return r.json() if r.status_code == 200 else None
+            except Exception:
+                return None
+
+        async def _check_port(client, url, timeout=2.0):
+            try:
+                r = await client.get(url, timeout=timeout)
+                return r.status_code == 200
+            except Exception:
+                return False
+
+        async with _httpx.AsyncClient() as client:
+            tasks = {
+                "router_local":   _get_json(client, "http://localhost:8766/healthz"),
+                "ollama_local":   _check_port(client, "http://localhost:11434/api/tags"),
+            }
+            if peer_base:
+                tasks["peer_view"]    = _get_json(client, f"{peer_base}/api/health")
+                tasks["router_peer"]  = _get_json(client, f"{peer_base}/api/router-health")
+                # peer's ollama port: extract host from peer_base, replace port with 11434
+                from urllib.parse import urlparse as _urlparse
+                p = _urlparse(peer_base)
+                tasks["ollama_peer"] = _check_port(client, f"http://{p.hostname}:11434/api/tags")
+            results = dict(zip(tasks.keys(), await _asyncio.gather(*tasks.values())))
+
+        router_local = results.get("router_local") or {}
+        peer_view = results.get("peer_view") or {}
+        peer_gpu = peer_view.get("gpu", {}) if peer_view else {}
+        peer_queue = peer_view.get("queue", {}) if peer_view else {}
+        their_view = {
+            "role": peer_role,
+            "alive": bool(peer_view),
+            "device_kind": peer_gpu.get("device_kind"),
+            "device_name": peer_gpu.get("device_name"),
+            "gpu_state": peer_gpu.get("state"),
+            "free_gb": peer_gpu.get("free_gb"),
+            "used_gb": peer_gpu.get("used_gb"),
+            "total_gb": peer_gpu.get("total_gb"),
+            "tribe_fits": peer_gpu.get("tribe_fits"),
+            "queue_depth": peer_queue.get("queue_depth"),
+            "completed": peer_queue.get("completed"),
+            "failed": peer_queue.get("failed"),
+            "active": peer_queue.get("active_request"),
+        } if peer_base else None
+
+        return {
+            "ok": True,
+            "ts": int(time.time()),
+            "host": my_role,
+            "nodes": {my_role: my_view, **({peer_role: their_view} if their_view else {})},
+            "services": {
+                "router_local": bool(router_local),
+                "ollama_local": bool(results.get("ollama_local")),
+                "router_peer":  bool(results.get("router_peer")),
+                "ollama_peer":  bool(results.get("ollama_peer")) if peer_base else None,
+                "openrouter":   bool(router_local.get("openrouter")) if router_local else False,
+            },
+            "router": {
+                "ollama_backends": router_local.get("ollama_backends", {}) if router_local else {},
+                "openrouter": router_local.get("openrouter") if router_local else False,
+            },
+            "tribe_proxy_url": peer_base or None,
+        }
 
     @app.get("/api/utilization")
     async def utilization() -> dict[str, Any]:
@@ -594,6 +749,9 @@ def create_app(
                 "n_t": rec.get("n_t"),
                 "size_mb": rec.get("size_mb"),
                 "seconds_elapsed": rec.get("seconds_elapsed"),
+                "tribe_seconds": rec.get("tribe_seconds"),
+                "narration_seconds": rec.get("narration_seconds"),
+                "narration_timings": rec.get("narration_timings", {}),
                 "narrations": rec.get("narrations", {}),
                 "created_at": rec.get("created_at"),
                 "proxied": rec.get("proxied", False),
@@ -1110,6 +1268,14 @@ def create_app(
         @app.get("/specs.html")
         async def specs_page() -> FileResponse:
             return FileResponse(str(PUBLIC_DIR / "specs.html"))
+
+        @app.get("/status.html")
+        async def status_page() -> FileResponse:
+            return FileResponse(str(PUBLIC_DIR / "status.html"))
+
+        @app.get("/status")
+        async def status_alias() -> FileResponse:
+            return FileResponse(str(PUBLIC_DIR / "status.html"))
 
         # Mount the entire public dir at /static/* for asset references like
         # /static/main.js, /static/style.css, /static/atlas.json, etc.
@@ -1653,6 +1819,7 @@ async def _run_scan_background(
         await registry.update(scan_id, status=phase)
 
     try:
+        scan_t0 = time.time()
         await _emit("running")
         result = await queue.submit(
             request_type=RequestType.BRAIN_SCAN,
@@ -1660,7 +1827,8 @@ async def _run_scan_background(
             priority=0 if source == "webui" else 5,
             source=source,
         )
-        await _emit("narrating")
+        tribe_seconds = round(time.time() - scan_t0, 2)
+        await _emit("narrating", tribe_seconds=tribe_seconds)
 
         # Persist the per-vertex BOLD trace so the WebUI can render the full
         # 20,484-vertex animation (not just the 50-region downsample) and so
@@ -1695,7 +1863,10 @@ async def _run_scan_background(
         user_prompt = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
 
         narrations: dict[str, str] = {}
+        narration_timings: dict[str, float] = {}
+        narr_t0 = time.time()
         for persona_id, (tier_n, sys_prompt) in _prompts.PERSONA_CONFIGS.items():
+            t_pers = time.time()
             narrations[persona_id] = await _narrate_with_model(
                 model=narration_model,
                 prompt=user_prompt,
@@ -1706,6 +1877,8 @@ async def _run_scan_background(
                 queue=queue,
                 source=source,
             )
+            narration_timings[persona_id] = round(time.time() - t_pers, 2)
+        narration_seconds = round(time.time() - narr_t0, 2)
 
         preds = getattr(result, "preds", None)
         await registry.update(
@@ -1714,6 +1887,9 @@ async def _run_scan_background(
             top_rois=getattr(result, "top_rois", None),
             peak_t=getattr(result, "peak_t", None),
             seconds_elapsed=getattr(result, "seconds_elapsed", None),
+            tribe_seconds=tribe_seconds,
+            narration_seconds=narration_seconds,
+            narration_timings=narration_timings,
             narration=narrations.get("american", ""),
             narrations=narrations,
             tr_seconds=0.5,

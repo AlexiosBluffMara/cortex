@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cortex · Fleet status</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #0a0d12;
+    --panel: #11161d;
+    --panel-2: #161c25;
+    --border: rgba(255,255,255,0.08);
+    --text: #e7ecf3;
+    --muted: #7e8a9b;
+    --accent: #4285F4;
+    --ok: #34a853;
+    --warn: #fbbc04;
+    --bad: #ea4335;
+    --cardinal: #CC0000;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: 'Google Sans', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    font-size: 14px; line-height: 1.45; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 28px 24px 80px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  header h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  header h1 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--ok); margin-right: 8px; vertical-align: middle; }
+  header h1.degraded .dot { background: var(--warn); }
+  header h1.down     .dot { background: var(--bad); }
+  header .ts { color: var(--muted); font-size: 12px; font-feature-settings: 'tnum'; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 13px; }
+  .sub a { color: var(--muted); border-bottom: 1px dotted var(--muted); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+  .card h2 { margin: 0 0 10px; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .card h2 .role { color: var(--muted); font-weight: 400; font-size: 12px; }
+
+  .pill { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; line-height: 1.5;
+    background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid rgba(255,255,255,0.06); }
+  .pill.up   { color: var(--ok);  background: rgba(52,168,83,0.10); border-color: rgba(52,168,83,0.25); }
+  .pill.busy { color: var(--accent); background: rgba(66,133,244,0.10); border-color: rgba(66,133,244,0.25); }
+  .pill.warn { color: var(--warn); background: rgba(251,188,4,0.10); border-color: rgba(251,188,4,0.25); }
+  .pill.down { color: var(--bad);  background: rgba(234,67,53,0.10); border-color: rgba(234,67,53,0.25); }
+
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 4px 14px; margin-top: 10px; }
+  .kv .k { color: var(--muted); }
+  .kv .v { color: var(--text); font-feature-settings: 'tnum'; }
+
+  .bar { height: 6px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .bar > .fill { height: 100%; background: var(--accent); transition: width .4s ease; }
+  .bar.warn > .fill { background: var(--warn); }
+  .bar.bad  > .fill { background: var(--bad); }
+
+  .svc-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 12px; }
+  @media (max-width: 760px) { .svc-grid { grid-template-columns: 1fr 1fr; } }
+  .svc { background: var(--panel-2); border: 1px solid var(--border); padding: 10px 12px; border-radius: 10px; }
+  .svc .name { font-size: 12px; color: var(--muted); }
+  .svc .state { font-size: 14px; margin-top: 2px; font-weight: 600; }
+  .svc.up   .state { color: var(--ok); }
+  .svc.down .state { color: var(--bad); }
+  .svc.unknown .state { color: var(--muted); }
+
+  .scans { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+  .scans th, .scans td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .scans th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .scans td.id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
+  .scans td.tnum { font-feature-settings: 'tnum'; color: var(--muted); }
+
+  .footer { margin-top: 28px; color: var(--muted); font-size: 12px; }
+  .footer code { background: var(--panel-2); border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="overall-h1"><span class="dot"></span> Cortex fleet · <span id="overall-text">checking…</span></h1>
+    <div class="ts">last update <span id="last-ts">—</span></div>
+  </header>
+  <p class="sub">
+    Public face: <a href="https://big-apple.scylla-betta.ts.net" target="_blank">big-apple.scylla-betta.ts.net</a>
+    · TRIBE inference: <a href="https://seratonin.scylla-betta.ts.net" target="_blank">seratonin.scylla-betta.ts.net</a>
+    · <a href="/gallery.html">gallery</a> · <a href="/personas.html">personas</a> · <a href="/specs.html">specs</a>
+  </p>
+
+  <div class="grid">
+    <!-- Seratonin card -->
+    <div class="card" id="card-seratonin">
+      <h2>Seratonin <span class="role">RTX 5090 · TRIBE worker · Chicago</span> <span class="pill" id="pill-seratonin">…</span></h2>
+      <div class="kv" id="kv-seratonin"></div>
+    </div>
+    <!-- Big Apple card -->
+    <div class="card" id="card-bigapple">
+      <h2>Big Apple <span class="role">M4 Max · public face · Chicago</span> <span class="pill" id="pill-bigapple">…</span></h2>
+      <div class="kv" id="kv-bigapple"></div>
+    </div>
+  </div>
+
+  <!-- Services -->
+  <div class="card" style="margin-top: 16px;">
+    <h2>Services</h2>
+    <div class="svc-grid" id="services"></div>
+  </div>
+
+  <!-- Watchdog (only shown if reachable) -->
+  <div class="card" style="margin-top: 16px; display: none;" id="watchdog-card">
+    <h2>Watchdog <span class="role">port 8780 on Seratonin</span> <span class="pill up">live</span></h2>
+    <div class="svc-grid" id="watchdog-grid"></div>
+  </div>
+
+  <!-- Recent scans -->
+  <div class="card" style="margin-top: 16px;">
+    <h2>Recent scans</h2>
+    <table class="scans" id="scans-table">
+      <thead><tr><th>id</th><th>file</th><th>status</th><th>top region</th><th class="tnum">TRIBE</th><th class="tnum">narration</th><th class="tnum">total</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <p class="footer">
+    Polls <code>/api/fleet-health</code> every 2s and <code>/api/scans</code> every 5s.
+    Watchdog status sourced from <code>http://seratonin:8780/status</code> when reachable.
+  </p>
+</div>
+
+<script>
+const $ = sel => document.querySelector(sel);
+const els = {
+  h1:        $("#overall-h1"),
+  txt:       $("#overall-text"),
+  ts:        $("#last-ts"),
+  kvSera:    $("#kv-seratonin"),
+  kvBA:      $("#kv-bigapple"),
+  pillSera:  $("#pill-seratonin"),
+  pillBA:    $("#pill-bigapple"),
+  services:  $("#services"),
+  watchdog:  $("#watchdog-card"),
+  watchdogG: $("#watchdog-grid"),
+  scans:     $("#scans-table tbody"),
+};
+
+function fmtBytes(gb) {
+  if (gb == null || isNaN(gb)) return "—";
+  return Number(gb).toFixed(1) + " GB";
+}
+function fmtSec(s) {
+  if (s == null || isNaN(s)) return "—";
+  return Number(s).toFixed(1) + " s";
+}
+function paintNode(prefix, view, services) {
+  const kv = prefix === "seratonin" ? els.kvSera : els.kvBA;
+  const pill = prefix === "seratonin" ? els.pillSera : els.pillBA;
+  if (!view || !view.alive) {
+    pill.textContent = "offline";
+    pill.className = "pill down";
+    kv.innerHTML = '<div class="k">status</div><div class="v">unreachable</div>';
+    return false;
+  }
+  const total = view.total_gb || 0;
+  const used  = view.used_gb || 0;
+  const pct   = total ? Math.round((used / total) * 100) : 0;
+  const busy  = (view.gpu_state || "").includes("active") || (view.queue_depth || 0) > 0 || !!view.active;
+  pill.textContent = busy ? "busy" : "ready";
+  pill.className   = "pill " + (busy ? "busy" : "up");
+  const memBar = pct > 85 ? "bad" : (pct > 65 ? "warn" : "");
+  kv.innerHTML = `
+    <div class="k">device</div><div class="v">${view.device_name || "?"} (${view.device_kind || "?"})</div>
+    <div class="k">${prefix === "bigapple" ? "RAM" : "VRAM"}</div>
+      <div class="v">${fmtBytes(used)} / ${fmtBytes(total)} — ${pct}%
+        <div class="bar ${memBar}"><div class="fill" style="width:${Math.max(0,Math.min(100,pct))}%"></div></div></div>
+    <div class="k">queue</div><div class="v">${view.queue_depth ?? 0} jobs${view.active ? " · 1 active" : ""}</div>
+    <div class="k">completed</div><div class="v">${view.completed ?? 0}</div>
+    <div class="k">failed</div><div class="v">${view.failed ?? 0}</div>
+    <div class="k">tribe fits</div><div class="v">${view.tribe_fits ? "✓ in VRAM" : "spill to host"}</div>
+  `;
+  return true;
+}
+function renderServices(services) {
+  const order = [
+    ["router_local",  "Router · local (8766)"],
+    ["ollama_local",  "Ollama · local (11434)"],
+    ["router_peer",   "Router · peer (8766)"],
+    ["ollama_peer",   "Ollama · peer (11434)"],
+    ["openrouter",    "OpenRouter (cloud)"],
+  ];
+  els.services.innerHTML = order.map(([k, label]) => {
+    const v = services?.[k];
+    let cls = "unknown", state = "unknown";
+    if (v === true)  { cls = "up";   state = "UP"; }
+    if (v === false) { cls = "down"; state = "DOWN"; }
+    if (v == null)   { cls = "unknown"; state = "n/a"; }
+    return `<div class="svc ${cls}"><div class="name">${label}</div><div class="state">${state}</div></div>`;
+  }).join("");
+}
+function overallState(d) {
+  const nodes = d?.nodes || {};
+  const services = d?.services || {};
+  const seraOk = nodes.seratonin?.alive;
+  const baOk   = nodes.bigapple?.alive;
+  const routerOk = services.router_local;
+  const ollamaOk = services.ollama_local || services.ollama_peer;
+  if (!seraOk && !baOk)            return ["down",     "all nodes offline"];
+  if (!routerOk || !ollamaOk)      return ["degraded", "inference degraded"];
+  if (!seraOk || !baOk)            return ["degraded", "one node offline"];
+  return ["healthy", "operational"];
+}
+
+async function pollFleet() {
+  try {
+    const r = await fetch("/api/fleet-health", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    paintNode("seratonin", d.nodes?.seratonin, d.services);
+    paintNode("bigapple",  d.nodes?.bigapple,  d.services);
+    renderServices(d.services || {});
+    const [cls, txt] = overallState(d);
+    els.h1.className = cls;
+    els.txt.textContent = txt;
+    const date = new Date((d.ts || Date.now() / 1000) * 1000);
+    els.ts.textContent = date.toLocaleTimeString();
+  } catch (e) {
+    els.h1.className = "down";
+    els.txt.textContent = "fleet-health unreachable";
+  }
+}
+
+async function pollScans() {
+  try {
+    const r = await fetch("/api/scans?limit=8", { cache: "no-store" });
+    if (!r.ok) return;
+    const d = await r.json();
+    const rows = (d.scans || []).map(s => {
+      const id = (s.id || "").slice(0, 8);
+      const file = s.filename || "—";
+      const status = s.status || "?";
+      const roi = (s.top_rois?.[0] || "").replace("7Networks_", "") || "—";
+      const tribe = fmtSec(s.tribe_seconds);
+      const narr  = fmtSec(s.narration_seconds);
+      const total = fmtSec(s.seconds_elapsed);
+      const cls = status === "complete" ? "up" : status === "failed" ? "down" : "warn";
+      return `<tr>
+        <td class="id"><a href="/?scan=${s.id}">${id}</a></td>
+        <td>${file}</td>
+        <td><span class="pill ${cls}">${status}</span></td>
+        <td>${roi}</td>
+        <td class="tnum">${tribe}</td>
+        <td class="tnum">${narr}</td>
+        <td class="tnum">${total}</td>
+      </tr>`;
+    }).join("");
+    els.scans.innerHTML = rows || `<tr><td colspan="7" style="color:var(--muted)">no scans yet</td></tr>`;
+  } catch {}
+}
+
+async function pollWatchdog() {
+  // Best-effort fetch from Seratonin's watchdog port. Cross-origin so we use
+  // the public Tailscale Funnel hostname; falls silent if not reachable.
+  const candidates = [
+    "http://localhost:8780/status",
+    "http://100.98.19.87:8780/status",
+  ];
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url, { cache: "no-store", mode: "cors" });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const items = Object.entries(d.services || {});
+      if (!items.length) continue;
+      els.watchdog.style.display = "";
+      els.watchdogG.innerHTML = items.map(([name, v]) => {
+        const cls = v.alive ? "up" : "down";
+        const restartCount = v.restarts_window?.length || 0;
+        const extra = restartCount ? ` · ${restartCount} restart${restartCount > 1 ? "s" : ""}/10m` : "";
+        return `<div class="svc ${cls}">
+          <div class="name">${name}${v.monitor_only ? " · monitor" : ""}</div>
+          <div class="state">${v.alive ? "UP" : "DOWN"}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">${v.role}${extra}</div>
+        </div>`;
+      }).join("");
+      return;
+    } catch {}
+  }
+}
+
+pollFleet();
+pollScans();
+pollWatchdog();
+setInterval(pollFleet, 2000);
+setInterval(pollScans, 5000);
+setInterval(pollWatchdog, 10000);
+</script>
+</body>
+</html>

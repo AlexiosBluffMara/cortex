@@ -1844,14 +1844,14 @@ window.paintVertexFrame = paintVertexFrame;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Live system monitor + per-scan timing readout
-// Polls /api/health (this node) and /api/router-health (peer node) every 2s.
+// Polls /api/fleet-health every 2s — single endpoint, both nodes + services.
 // ─────────────────────────────────────────────────────────────────────────────
 (function wireTelemetry() {
     const seraNode = document.querySelector('.telemetry-node[data-node="seratonin"]');
     const baNode   = document.querySelector('.telemetry-node[data-node="bigapple"]');
     if (!seraNode || !baNode) return;
 
-    function setMetric(node, lbl, value, valueText, fillPct) {
+    function setMetric(node, lbl, valueText, fillPct) {
         const rows = node.querySelectorAll(".metric-row");
         for (const row of rows) {
             if (row.querySelector(".lbl")?.textContent === lbl) {
@@ -1868,55 +1868,56 @@ window.paintVertexFrame = paintVertexFrame;
         b.className = "badge " + (kind || "");
     }
 
-    async function pollLocal() {
-        // The hosting node's stats come from this server's /api/health
-        try {
-            const r = await fetch("/api/health", { cache: "no-store" });
-            if (!r.ok) throw new Error("HTTP " + r.status);
-            const d = await r.json();
-            const g = d.gpu || {};
-            const q = d.queue || {};
-            const isMps = g.device_kind === "mps";
-            const node = isMps ? baNode : seraNode;
-            const total = g.total_gb || 1;
-            const used  = g.used_gb || 0;
-            const pctMem = Math.round((used / total) * 100);
-            // GPU "util" — we don't have a true util %, fake it from queue activity + device state
-            const busy = (g.state || "").includes("active") || (q.queue_depth || 0) > 0;
-            const pctGpu = busy ? (60 + Math.random() * 35) : Math.max(2, used / total * 25);
+    function paintNode(node, view, services, role) {
+        if (!view || !view.alive) {
+            setBadge(node, "offline", "down");
+            setMetric(node, "GPU",  "—", 0);
+            setMetric(node, role === "bigapple" ? "RAM" : "VRAM", "—", 0);
+            setMetric(node, "Queue", "—", 0);
+            return;
+        }
+        const total = view.total_gb || 1;
+        const used  = view.used_gb || 0;
+        const pctMem = Math.round((used / total) * 100);
+        const busy = (view.gpu_state || "").includes("active") || (view.queue_depth || 0) > 0 || !!view.active;
+        const pctGpu = busy ? (60 + Math.random() * 35) : Math.max(2, used / total * 25);
 
-            setBadge(node, g.state || "idle", busy ? "busy" : "up");
-            setMetric(node, "GPU",   pctGpu, Math.round(pctGpu) + "%", pctGpu);
-            setMetric(node, isMps ? "RAM" : "VRAM", used, used.toFixed(1) + " / " + total.toFixed(0) + " GB", pctMem);
-            setMetric(node, "Queue", q.queue_depth, (q.queue_depth ?? 0) + " jobs", Math.min(100, (q.queue_depth || 0) * 25));
-        } catch (e) { /* node is down */ }
-    }
+        // Compose badge — include services for this node
+        const isLocal = (services && (role === "seratonin"
+            ? services.router_local || services.ollama_local
+            : services.router_peer  || services.ollama_peer));
+        let badgeText = view.gpu_state || "idle";
+        if (busy) badgeText = "busy";
+        const ollamaUp = role === "seratonin" ? services?.ollama_local : services?.ollama_peer;
+        const routerUp = role === "seratonin" ? services?.router_local : services?.router_peer;
+        if (ollamaUp === false) badgeText = "ollama down";
+        else if (routerUp === false) badgeText = "router down";
+        setBadge(node, badgeText, busy ? "busy" : (ollamaUp === false || routerUp === false ? "down" : "up"));
 
-    async function pollPeer() {
-        // The OTHER node's stats come via the router's exposed backend list
-        try {
-            const r = await fetch("/api/router-health", { cache: "no-store" });
-            if (!r.ok) return;
-            const d = await r.json();
-            const backends = d.ollama_backends || {};
-            // Find the peer (the one we're NOT hosting on) — flip whichever node we labelled local
-            // For now just update the badges to reflect both backends are reachable.
-            const seraUp = backends["http://localhost:11434"] ?? backends["http://100.98.19.87:11434"];
-            const baUp   = backends["http://100.93.240.52:11434"] ?? backends["http://localhost:11434"];
-            // We've already updated whichever node we live on in pollLocal; only update peer's badge here.
-            const isMpsHost = (window.lastDeviceKind === "mps");
-            const peerNode = isMpsHost ? seraNode : baNode;
-            const peerUp   = isMpsHost ? seraUp : baUp;
-            if (peerNode) setBadge(peerNode, peerUp ? "reachable" : "down", peerUp ? "up" : "down");
-        } catch (e) { /* router down */ }
+        setMetric(node, "GPU",   Math.round(pctGpu) + "%", pctGpu);
+        setMetric(node, role === "bigapple" ? "RAM" : "VRAM",
+                  used.toFixed(1) + " / " + total.toFixed(0) + " GB", pctMem);
+        setMetric(node, "Queue",
+                  ((view.queue_depth ?? 0) + (view.active ? 1 : 0)) + " jobs",
+                  Math.min(100, ((view.queue_depth || 0) + (view.active ? 1 : 0)) * 25));
     }
 
     async function pollOnce() {
         try {
-            const h = await fetch("/api/health", { cache: "no-store" }).then(r => r.json());
-            window.lastDeviceKind = h?.gpu?.device_kind;
-        } catch {}
-        await Promise.all([pollLocal(), pollPeer()]);
+            const r = await fetch("/api/fleet-health", { cache: "no-store" });
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            const d = await r.json();
+            const nodes = d.nodes || {};
+            const services = d.services || {};
+            // Always paint based on role names
+            paintNode(seraNode, nodes.seratonin, services, "seratonin");
+            paintNode(baNode,   nodes.bigapple,  services, "bigapple");
+            // Stash for other widgets
+            window.lastFleet = d;
+        } catch (e) {
+            setBadge(seraNode, "unreachable", "down");
+            setBadge(baNode,   "unreachable", "down");
+        }
     }
     pollOnce();
     setInterval(pollOnce, 2000);
@@ -1929,19 +1930,41 @@ window.paintVertexFrame = paintVertexFrame;
         if (!box) return;
         box.style.display = "";
         const total = result.seconds_elapsed;
-        const fmt = s => s != null ? s.toFixed(1) + " s" : "—";
-        // We don't get split timings out of the API yet — estimate TRIBE = 60% of total, narration = 40%
-        if (total != null) {
+        const fmt = s => s != null ? Number(s).toFixed(1) + " s" : "—";
+        // Real timings if backend provided them; fall back to estimate.
+        const tribeS = result.tribe_seconds;
+        const narrS  = result.narration_seconds;
+        const tribeEl = document.getElementById("rt-tribe");
+        const narrEl  = document.getElementById("rt-narr");
+        const totalEl = document.getElementById("rt-total");
+        if (tribeS != null && narrS != null) {
+            tribeEl.textContent = fmt(tribeS);
+            narrEl.textContent  = fmt(narrS);
+        } else if (total != null) {
             const tribe = total * 0.6;
             const narr  = total - tribe;
-            document.getElementById("rt-tribe").textContent = fmt(tribe) + " (est)";
-            document.getElementById("rt-narr").textContent  = fmt(narr)  + " (est)";
-            document.getElementById("rt-total").textContent = fmt(total);
+            tribeEl.textContent = fmt(tribe) + " (est)";
+            narrEl.textContent  = fmt(narr)  + " (est)";
         }
+        if (totalEl) totalEl.textContent = fmt(total);
         const rois = result.top_rois || [];
-        document.getElementById("rt-roi").textContent = rois.length ? rois[0].replace("7Networks_","") : "—";
+        const roiEl = document.getElementById("rt-roi");
+        if (roiEl) roiEl.textContent = rois.length ? rois[0].replace("7Networks_","") : "—";
         const peak = result.peak_t;
         const tr   = result.tr_seconds || 0.5;
-        document.getElementById("rt-peak").textContent = peak != null ? `t=${peak} (${(peak * tr).toFixed(1)} s)` : "—";
+        const peakEl = document.getElementById("rt-peak");
+        if (peakEl) peakEl.textContent = peak != null ? `t=${peak} (${(peak * tr).toFixed(1)} s)` : "—";
+
+        // Per-persona timings if present — render into #rt-personas
+        const persEl = document.getElementById("rt-personas");
+        const timings = result.narration_timings || {};
+        if (persEl && Object.keys(timings).length) {
+            const order = ["student","patient","clinician","ml_scientist"];
+            const labels = { student:"Student", patient:"Patient", clinician:"Clinician", ml_scientist:"ML Scientist" };
+            persEl.innerHTML = order
+                .filter(k => timings[k] != null)
+                .map(k => `<span class="chip">${labels[k]}: ${fmt(timings[k])}</span>`)
+                .join(" ");
+        }
     });
 })();
