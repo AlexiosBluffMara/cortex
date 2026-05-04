@@ -636,12 +636,34 @@ def create_app(
     @app.get("/api/scan/{scan_id}/narrations")
     async def get_narrations(scan_id: str) -> dict[str, Any]:
         record = await app.state.registry.get(scan_id)
+        # Fall through to upstream if no local record (gallery surfaced upstream ids)
+        if record is None and TRIBE_PROXY_URL:
+            try:
+                import httpx as _httpx
+                async with _httpx.AsyncClient(timeout=5.0) as client:
+                    r = await client.get(f"{TRIBE_PROXY_URL.rstrip('/')}/api/scan/{scan_id}/narrations")
+                if r.status_code == 200:
+                    return r.json()
+            except Exception:
+                pass
         if record is None:
             raise HTTPException(status_code=404, detail=f"Scan not found: {scan_id}")
-        # Hydrate from upstream if proxied (so narrations show even before the
-        # next /api/scans poll merges them into the local record)
+        # Hydrate from upstream if proxied
         record = await _hydrate_proxied(record)
         narrations = record.get("narrations") or {}
+        # If local hydrate gave us nothing and we have a proxy, ask upstream directly
+        if not narrations and TRIBE_PROXY_URL:
+            try:
+                import httpx as _httpx
+                upstream_id = record.get("upstream_id") or scan_id
+                upstream_base = (record.get("upstream_base") or TRIBE_PROXY_URL).rstrip("/")
+                async with _httpx.AsyncClient(timeout=5.0) as client:
+                    r = await client.get(f"{upstream_base}/api/scan/{upstream_id}/narrations")
+                if r.status_code == 200:
+                    j = r.json()
+                    narrations = j.get("narrations") or {}
+            except Exception:
+                pass
         if not narrations and record.get("narration"):
             narrations = {"college": record["narration"]}
         return {"scan_id": scan_id, "narrations": narrations, "status": record.get("status")}
