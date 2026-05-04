@@ -594,6 +594,9 @@ def create_app(
         record = await app.state.registry.get(scan_id)
         if record is None:
             raise HTTPException(status_code=404, detail=f"Scan not found: {scan_id}")
+        # Hydrate from upstream if proxied (so narrations show even before the
+        # next /api/scans poll merges them into the local record)
+        record = await _hydrate_proxied(record)
         narrations = record.get("narrations") or {}
         if not narrations and record.get("narration"):
             narrations = {"college": record["narration"]}
@@ -714,6 +717,40 @@ def create_app(
         import json as _json
         return _json.loads(atlas_file.read_text(encoding="utf-8"))
 
+    async def _proxy_media(scan_id: str, suffix_path: str) -> Response | None:
+        """If the scan is proxied to another backend, fetch the media from there
+        using the upstream_id. Returns the raw response or None if not proxied /
+        upstream unreachable / not found upstream.
+        """
+        rec = await app.state.registry.get(scan_id)
+        if not rec or not rec.get("proxied"):
+            return None
+        upstream_id = rec.get("upstream_id")
+        upstream_base = (rec.get("upstream_base") or TRIBE_PROXY_URL or "").rstrip("/")
+        if not upstream_id or not upstream_base:
+            return None
+        url = f"{upstream_base}/api/scan/{upstream_id}{suffix_path}"
+        try:
+            import httpx as _httpx
+            async with _httpx.AsyncClient(timeout=20.0) as client:
+                r = await client.get(url)
+            if r.status_code == 200:
+                return Response(
+                    content=r.content,
+                    media_type=r.headers.get("content-type", "application/octet-stream"),
+                    headers={
+                        "Cache-Control": "public, max-age=300",
+                        "X-Proxied-From": upstream_base,
+                        "X-Upstream-Scan-Id": upstream_id,
+                        # Mirror upstream's per-vertex shape headers if present
+                        **({k: v for k, v in r.headers.items()
+                            if k.lower() in ("x-n-t", "x-n-vert", "x-scan-id")}),
+                    },
+                )
+        except Exception as exc:
+            log.debug("[webapp] media proxy failed (%s%s): %s", scan_id, suffix_path, exc)
+        return None
+
     @app.get("/api/scan/{scan_id}/manim-video")
     async def manim_video_endpoint(scan_id: str, scene: str = "BoldTimeseries") -> Response:
         """Serve the Manim brain activation explainer video for a completed scan.
@@ -721,6 +758,10 @@ def create_app(
         Scenes: BoldTimeseries | BrainNetworkDiagram
         Status 202 if still generating, 404 if not available.
         """
+        # Proxy fallthrough for scans handled by another backend
+        proxied = await _proxy_media(scan_id, f"/manim-video?scene={scene}")
+        if proxied is not None:
+            return proxied
         manim_dir = Path("D:/cortex/scans/manim")
         for subdir in [
             manim_dir / "videos" / "manim_bold_scene" / "l480p15",
@@ -749,6 +790,10 @@ def create_app(
         Generated automatically after scan completes. Returns the .mp4 file.
         Status 202 if still generating, 404 if not available.
         """
+        # Proxy fallthrough for scans handled by another backend
+        proxied = await _proxy_media(scan_id, "/ascii-video")
+        if proxied is not None:
+            return proxied
         ascii_dir  = Path("D:/cortex/scans/ascii")
         mp4_path   = ascii_dir / f"{scan_id}_ascii.mp4"
         if mp4_path.exists():
@@ -779,6 +824,10 @@ def create_app(
         completed, or persistence failed) we 404 — the client falls back to
         the per-region `/bold-simulate` endpoint automatically.
         """
+        # Proxy fallthrough for scans handled by another backend
+        proxied = await _proxy_media(scan_id, f"/bold-vertex?n_t={n_t}")
+        if proxied is not None:
+            return proxied
         scans_dir = Path("D:/cortex/scans")
         npy = scans_dir / f"{scan_id}.npy"
         if not npy.exists():
@@ -820,6 +869,20 @@ def create_app(
         so the time scrubber can demo on the placeholder index page even when
         no real inference has run. Trace shape: (n_t, n_regions).
         """
+        # Proxy fallthrough for scans handled by another backend (returns JSON)
+        rec = await app.state.registry.get(scan_id)
+        if rec and rec.get("proxied"):
+            upstream_id = rec.get("upstream_id")
+            upstream_base = (rec.get("upstream_base") or TRIBE_PROXY_URL or "").rstrip("/")
+            if upstream_id and upstream_base:
+                try:
+                    import httpx as _httpx
+                    async with _httpx.AsyncClient(timeout=10.0) as client:
+                        r = await client.get(f"{upstream_base}/api/scan/{upstream_id}/bold-simulate?n_t={n_t}")
+                    if r.status_code == 200:
+                        return r.json()
+                except Exception as exc:
+                    log.debug("[webapp] bold-simulate proxy failed: %s", exc)
         atlas_file = PUBLIC_DIR / "atlas.json"
         if not atlas_file.exists():
             raise HTTPException(status_code=404, detail="atlas.json missing")
