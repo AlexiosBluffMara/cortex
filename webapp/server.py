@@ -211,6 +211,18 @@ class WebSocketHub:
 # Lifespan
 # ---------------------------------------------------------------------------
 
+async def _build_fleet_snapshot(app: FastAPI) -> dict[str, Any]:
+    """Build the fleet-health snapshot via the closure registered by create_app().
+    This indirection lets the lifespan-level telemetry loop reuse the same
+    code path as the HTTP /api/fleet-health endpoint without duplicating logic
+    or moving everything to module scope.
+    """
+    fn = getattr(app.state, "fleet_snapshot", None)
+    if fn is None:
+        return {"ok": False, "error": "fleet_snapshot not yet registered"}
+    return await fn()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Wire scheduler state-change notifications to the WebSocket hub
@@ -227,9 +239,47 @@ async def lifespan(app: FastAPI):
             pass  # No running loop (happens during shutdown)
 
     scheduler.on_state_change(_on_state_change)
-    log.info("[webapp] startup complete (scheduler=%s)", scheduler.state.value)
-    yield
-    log.info("[webapp] shutdown")
+
+    # ── Live telemetry broadcaster ──────────────────────────────────────────
+    # Pushes fleet-health snapshots over the WS hub at 2 Hz, but ONLY when the
+    # snapshot has actually changed. Drops the per-client polling load by ~100×
+    # and gives the UI sub-200 ms updates instead of the old 2 s interval.
+    async def _telemetry_loop() -> None:
+        import json as _json
+        last_sig = None
+        while True:
+            try:
+                snap = await _build_fleet_snapshot(app)
+                # Sign on the volatile bits only — ignore `ts` and exact float
+                # noise so we don't push every tick.
+                sig_payload = {
+                    "nodes": {
+                        k: {kk: v.get(kk) for kk in
+                            ("alive", "device_kind", "gpu_state",
+                             "queue_depth", "completed", "failed", "active")}
+                        for k, v in (snap.get("nodes") or {}).items()
+                    },
+                    "services": snap.get("services"),
+                }
+                sig = _json.dumps(sig_payload, sort_keys=True)
+                if sig != last_sig:
+                    await hub.broadcast({"type": "fleet:health", "data": snap})
+                    last_sig = sig
+            except Exception as exc:  # noqa: BLE001 — never let this crash startup
+                log.debug("[telemetry] tick failed: %s", exc)
+            await asyncio.sleep(0.5)
+
+    telemetry_task = asyncio.create_task(_telemetry_loop())
+    log.info("[webapp] startup complete (scheduler=%s, telemetry=on)", scheduler.state.value)
+    try:
+        yield
+    finally:
+        telemetry_task.cancel()
+        try:
+            await telemetry_task
+        except (asyncio.CancelledError, Exception):
+            pass
+        log.info("[webapp] shutdown")
 
 
 # ---------------------------------------------------------------------------
@@ -296,16 +346,14 @@ def create_app(
 
     @app.get("/api/fleet-health")
     async def fleet_health() -> dict[str, Any]:
-        """One-stop fleet status. Aggregates:
-          - this node's GPU/queue (from _scheduler.vram_report() + _queue.status())
-          - peer node (via TRIBE_PROXY_URL or Tailscale IP) — same data
-          - inference router on this node + the peer (port 8766)
-          - Ollama on each node (port 11434)
-          - OpenRouter quota (best-effort)
-
-        Frontend telemetry widget consumes this single endpoint instead of stitching
-        multiple calls together.
+        """One-stop fleet status — same payload that the lifespan telemetry
+        loop pushes over the WebSocket as `fleet:health` events. Kept as a
+        REST endpoint for first-paint + clients that don't want to upgrade to
+        WS (curl, monitoring scripts, etc.).
         """
+        return await _build_fleet_snapshot(app)
+
+    async def _do_fleet_snapshot() -> dict[str, Any]:
         import asyncio as _asyncio
         import httpx as _httpx
         import os as _os
@@ -425,6 +473,9 @@ def create_app(
             },
             "tribe_proxy_url": peer_base or None,
         }
+
+    # Expose the closure on the app so the lifespan loop can call it
+    app.state.fleet_snapshot = _do_fleet_snapshot
 
     @app.get("/api/utilization")
     async def utilization() -> dict[str, Any]:
@@ -1310,14 +1361,26 @@ def create_app(
         # by bare name (main.js, style.css, atlas.json, brain_fsaverage5.glb, etc.).
         # We expose these explicitly rather than mounting public/ at "/" because
         # mounting at "/" shadows every API route.
-        for _name in ("main.js", "style.css", "atlas.json", "brain_fsaverage5.glb",
+        # Each response gets a long Cache-Control so Cloudflare and browsers
+        # cache hard. Bust by bumping the ?v=… query string in the HTML <script>
+        # tags when assets change.
+        STATIC_CACHE = {
+            ".js":   "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800, immutable",
+            ".css":  "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800, immutable",
+            ".glb":  "public, max-age=86400, s-maxage=2592000, stale-while-revalidate=2592000, immutable",
+            ".json": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+            ".svg":  "public, max-age=86400, s-maxage=2592000, immutable",
+        }
+        for _name in ("main.js", "charts.js", "style.css", "atlas.json", "brain_fsaverage5.glb",
                       "vertex_labels.json", "favicon.svg",
-                      "gridstack-all.js", "gridstack.min.css"):
+                      "gridstack-all.js", "gridstack.min.css", "router.js"):
             _path = PUBLIC_DIR / _name
             if _path.exists():
-                # Capture loop var via default arg to avoid late-binding bug
-                async def _serve(_p=_path):
-                    return FileResponse(str(_p))
+                _ext = _path.suffix.lower()
+                _ttl = STATIC_CACHE.get(_ext, "public, max-age=3600")
+                # Capture loop vars via default args to avoid late-binding
+                async def _serve(_p=_path, _ct=_ttl):
+                    return FileResponse(str(_p), headers={"Cache-Control": _ct})
                 app.add_api_route(f"/{_name}", _serve, methods=["GET"])
 
     # AdSense / SEO files served regardless of PUBLIC_DIR

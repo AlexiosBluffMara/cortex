@@ -1942,25 +1942,59 @@ window.paintVertexFrame = paintVertexFrame;
                   Math.min(100, ((view.queue_depth || 0) + (view.active ? 1 : 0)) * 25));
     }
 
+    function applySnapshot(d) {
+        const nodes = d.nodes || {};
+        const services = d.services || {};
+        paintNode(seraNode, nodes.seratonin, services, "seratonin");
+        paintNode(baNode,   nodes.bigapple,  services, "bigapple");
+        window.lastFleet = d;
+    }
+
     async function pollOnce() {
         try {
             const r = await fetch("/api/fleet-health", { cache: "no-store" });
             if (!r.ok) throw new Error("HTTP " + r.status);
-            const d = await r.json();
-            const nodes = d.nodes || {};
-            const services = d.services || {};
-            // Always paint based on role names
-            paintNode(seraNode, nodes.seratonin, services, "seratonin");
-            paintNode(baNode,   nodes.bigapple,  services, "bigapple");
-            // Stash for other widgets
-            window.lastFleet = d;
+            applySnapshot(await r.json());
         } catch (e) {
             setBadge(seraNode, "unreachable", "down");
             setBadge(baNode,   "unreachable", "down");
         }
     }
+
+    // First paint via REST so the page lights up immediately.
     pollOnce();
-    setInterval(pollOnce, 2000);
+
+    // ── WebSocket-driven live updates (sub-200 ms when something changes) ──
+    let ws = null;
+    let wsReconnectTimer = null;
+    let wsLastSeen = 0;
+    function openSocket() {
+        try {
+            const proto = location.protocol === "https:" ? "wss:" : "ws:";
+            ws = new WebSocket(proto + "//" + location.host + "/api/ws");
+            ws.addEventListener("message", e => {
+                wsLastSeen = Date.now();
+                let m;
+                try { m = JSON.parse(e.data); } catch { return; }
+                if (m && m.type === "fleet:health" && m.data) applySnapshot(m.data);
+            });
+            ws.addEventListener("close", () => {
+                clearTimeout(wsReconnectTimer);
+                wsReconnectTimer = setTimeout(openSocket, 2000);
+            });
+            ws.addEventListener("error", () => { try { ws.close(); } catch (_) {} });
+        } catch (_) {
+            wsReconnectTimer = setTimeout(openSocket, 2000);
+        }
+    }
+    openSocket();
+
+    // Watchdog: if the WS hasn't pushed anything in 8s, fall back to a single
+    // REST refresh to surface state. Cheap, correct, and keeps mobile/proxied
+    // clients honest when WS upgrade fails silently.
+    setInterval(() => {
+        if (!wsLastSeen || (Date.now() - wsLastSeen) > 8000) pollOnce();
+    }, 8000);
 
     // Per-scan timing readout — shown when scan completes
     window.addEventListener("cortex:scan-complete", e => {
