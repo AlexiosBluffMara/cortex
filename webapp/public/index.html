@@ -1318,7 +1318,9 @@
         { sel: "#run-timing",         title: "Last scan timing",  open: false },
         { sel: ".mode-tabs",          title: "Submit a scan",     open: true,
           alsoMove: ".mode-panel" },
-        { sel: ".narration-tabs",     title: "Persona narrations",open: true,
+        // Default-COLLAPSED until a scan completes — opens automatically via
+        // the cortex:scan-complete event handler at the bottom.
+        { sel: ".narration-tabs",     title: "Persona narrations",open: false,
           alsoMove: ".narration-body, #run-cost-badge" },
         { sel: "#data-panel",         title: "Charts & ROIs",     open: false },
       ];
@@ -1377,6 +1379,21 @@
       } else {
         applyAll();
       }
+
+      // Auto-open the Narrations + Charts cards the moment a scan finishes —
+      // so the user lands on the result without having to hunt for it. They
+      // can collapse manually after that; we don't fight them.
+      function openCardBySel(sel) {
+        const root = document.querySelector(sel);
+        if (!root) return;
+        const card = root.closest("details.cd-card");
+        if (card && !card.open) card.open = true;
+      }
+      window.addEventListener("cortex:scan-complete", () => {
+        openCardBySel(".narration-tabs");
+        openCardBySel("#data-panel");
+        openCardBySel("#run-timing");
+      });
     })();
     </script>
 </head>
@@ -1522,15 +1539,15 @@
                 <button id="text-submit-btn" class="submit-btn">Analyze text</button>
             </div>
 
-            <!-- Narration tier (shared across all modes) -->
-            <div class="tier-section">
-                <p class="panel-title">Narration tier</p>
-                <div class="tier-row">
-                    <span class="tier-label">0 toddler</span>
-                    <input type="range" id="scan-tier" min="0" max="6" value="4" />
-                    <span class="tier-label">6 researcher</span>
-                </div>
+            <!-- Narration tier (hidden — every persona has its own tier baked in,
+                 the slider was UX dead weight. Kept in DOM so existing JS that reads
+                 #scan-tier doesn't crash. Default value 4 is the per-scan
+                 fallback used for non-persona narration paths.) -->
+            <div class="tier-section" style="display:none">
+                <input type="range" id="scan-tier" min="0" max="6" value="4" />
                 <output id="tier-display">4</output>
+            </div>
+            <div class="tier-section">
 
                 <!-- Narration model selector -->
                 <p class="panel-title" style="margin-top:12px">Narration model</p>
