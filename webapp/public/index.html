@@ -974,6 +974,170 @@
         .live-stream .ls-tag.error   { color: var(--accent); }
         .live-stream .ls-msg  { flex: 1; }
         .live-stream .ls-empty { color: var(--muted); font-style: italic; }
+
+        /* ════════════════════════════════════════════════════════════════════════
+           Claude Design overlay (2026-05-04)
+           — Warm dark theme with Claude Sandstone (#D97757) accent
+           — Equal 2-column layout (centre brain stays as hero)
+           — Collapsible <details>-style sections with smooth animations
+           — Auto-stick log slider with "↓ new logs" pill
+           ══════════════════════════════════════════════════════════════════════ */
+        :root {
+            /* Warm Claude palette — overrides the cardinal-red defaults above */
+            --bg:           #1F1E1D;          /* warm near-black */
+            --surface:      #262524;          /* card */
+            --surface2:     #2E2C2A;          /* hover/elevated */
+            --surface3:     #38352F;          /* highest elevation */
+            --border:       rgba(245, 241, 232, 0.08);
+            --border-strong:rgba(245, 241, 232, 0.16);
+            --text:         #F5F1E8;          /* warm cream */
+            --text-strong:  #FFFFFF;
+            --muted:        #A8A29E;          /* warm stone */
+            --muted2:       #78716C;
+            --accent:       #D97757;          /* Claude Sandstone */
+            --accent-soft:  rgba(217, 119, 87, 0.16);
+            --accent-deep:  #B05B3D;
+            --accent2:      #C99876;          /* secondary warm */
+            --good:         #94B27C;          /* warm sage instead of harsh green */
+            --warn:         #D8A86A;          /* amber */
+            --bad:          #C5705B;          /* warm muted red */
+            --radius:       14px;
+            --radius-lg:    18px;
+        }
+
+        /* 2-column equal layout: brain stays centred, side panels split the rest */
+        @media (min-width: 1280px) {
+            .layout {
+                grid-template-columns: minmax(360px, 1fr) minmax(640px, 1.2fr) minmax(360px, 1fr);
+                gap: 0;
+            }
+        }
+        .panel-left, .panel-right {
+            background: var(--bg);
+            border-color: var(--border);
+        }
+        .panel-section { border-color: var(--border); }
+
+        /* ── Collapsible cards ── */
+        details.cd-card {
+            margin: 8px 12px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            transition: background 120ms ease;
+        }
+        details.cd-card[open] { background: var(--surface2); }
+        details.cd-card > summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 12px 16px;
+            font-size: 12px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.06em;
+            color: var(--muted);
+            display: flex; align-items: center; gap: 10px;
+            user-select: none;
+            transition: color 120ms ease;
+        }
+        details.cd-card > summary::-webkit-details-marker { display: none; }
+        details.cd-card > summary::before {
+            content: "›";
+            display: inline-block;
+            font-family: ui-monospace, SFMono-Regular, monospace;
+            font-size: 14px;
+            transition: transform 160ms ease;
+            color: var(--accent);
+            width: 14px;
+        }
+        details.cd-card[open] > summary::before { transform: rotate(90deg); }
+        details.cd-card > summary:hover { color: var(--text); }
+        details.cd-card > summary .cd-badge {
+            margin-left: auto;
+            font-size: 10px; font-weight: 600;
+            padding: 2px 8px; border-radius: 99px;
+            background: var(--accent-soft);
+            color: var(--accent);
+            text-transform: none;
+            letter-spacing: 0.02em;
+        }
+        details.cd-card > .cd-body {
+            padding: 4px 16px 16px;
+            border-top: 1px solid var(--border);
+            background: var(--surface);
+        }
+
+        /* Make existing panel-titles match the collapsible style if they
+           remain non-collapsed (e.g. Live activity stream which auto-fills) */
+        .panel-title {
+            color: var(--muted) !important;
+            letter-spacing: 0.06em;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* Brand color overrides for now-orange accent */
+        .brand-mark { color: var(--accent); }
+        #scan-submit {
+            background: var(--accent);
+            color: #1F1E1D;
+            font-weight: 700;
+            border-radius: 999px;     /* pill */
+            padding: 11px 20px;
+        }
+        #scan-submit:hover { background: var(--accent-deep); color: #fff; }
+        .pipeline-tab.active { background: var(--surface2); color: var(--text); }
+        .pipeline-tab[data-pipeline="local"].active { color: var(--good); }
+        .pipeline-tab[data-pipeline="cloud"].active { color: var(--accent); }
+        .narration-tabs .narr-tab.active {
+            background: var(--surface2); color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+        .pipeline-badge.local { color: var(--good); border-color: var(--good); }
+        .pipeline-badge.cloud { color: var(--accent); border-color: var(--accent); }
+
+        /* ── Live log "↓ new logs" pill (auto-stick fix) ── */
+        .ls-jump-pill {
+            position: absolute;
+            right: 16px; bottom: 14px;
+            z-index: 30;
+            font-size: 11px; font-weight: 700;
+            background: var(--accent);
+            color: #1F1E1D;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 99px;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+            animation: cd-pill-pop 180ms ease;
+        }
+        .ls-jump-pill:hover { background: var(--accent-deep); color: #fff; }
+        @keyframes cd-pill-pop {
+            from { transform: translateY(8px); opacity: 0; }
+            to   { transform: translateY(0);   opacity: 1; }
+        }
+
+        /* The live-stream container needs position:relative so the pill anchors */
+        #live-stream { position: relative; max-height: 220px; overflow-y: auto;
+                       scrollbar-width: thin; scrollbar-color: var(--accent) var(--surface); }
+        #live-stream::-webkit-scrollbar { width: 8px; }
+        #live-stream::-webkit-scrollbar-track { background: var(--surface); }
+        #live-stream::-webkit-scrollbar-thumb { background: var(--accent-soft);
+                                                 border-radius: 4px; }
+        #live-stream::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+        /* Soft warm typography for the brand */
+        body, button, input, select { letter-spacing: -0.005em; }
+
+        /* Smooth open/close height anim for <details> */
+        details.cd-card > .cd-body {
+            opacity: 0; transform: translateY(-4px);
+            max-height: 0; overflow: hidden;
+            transition: opacity 200ms ease, transform 200ms ease, max-height 250ms ease;
+        }
+        details.cd-card[open] > .cd-body {
+            opacity: 1; transform: translateY(0);
+            max-height: 1200px;
+        }
     </style>
     <!-- GA4 — replace G-MBRS3TCQTL with your Measurement ID -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-MBRS3TCQTL"></script>
@@ -982,6 +1146,80 @@
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
       gtag('config', 'G-MBRS3TCQTL', { send_page_view: true });
+    </script>
+
+    <!-- Claude Design overlay: convert dense panels into collapsible cards -->
+    <script>
+    (function () {
+      // Map of "anchor selector or id" → { title, defaultOpen, badge() }
+      const COLLAPSIBLE_TARGETS = [
+        { sel: "#event-log",          title: "Pipeline events",   open: true,
+          badge: () => {
+            const c = document.querySelectorAll("#event-log li").length;
+            return c ? c + "" : "";
+          } },
+        { sel: ".telemetry",          title: "System monitor",    open: true },
+        { sel: "#live-stream",        title: "Live activity stream", open: true },
+        { sel: "#run-timing",         title: "Last scan timing",  open: false },
+        { sel: ".mode-tabs",          title: "Submit a scan",     open: true,
+          alsoMove: ".mode-panel" },
+        { sel: ".narration-tabs",     title: "Persona narrations",open: true,
+          alsoMove: ".narration-body, #run-cost-badge" },
+        { sel: "#data-panel",         title: "Charts & ROIs",     open: false },
+      ];
+
+      function wrap(target) {
+        const root = document.querySelector(target.sel);
+        if (!root || root.closest("details.cd-card")) return;
+
+        // Find the title/heading element to detach (so we don't show a duplicate)
+        let titleEl = null;
+        const panelTitleSibling = root.previousElementSibling;
+        if (panelTitleSibling && panelTitleSibling.classList.contains("panel-title")) {
+          titleEl = panelTitleSibling;
+        }
+
+        // Build <details>
+        const details = document.createElement("details");
+        details.className = "cd-card";
+        if (target.open) details.open = true;
+        const summary = document.createElement("summary");
+        const titleText = (titleEl && titleEl.textContent.trim()) || target.title;
+        summary.innerHTML = `<span class="cd-title">${titleText}</span>`;
+        if (target.badge) {
+          const b = document.createElement("span");
+          b.className = "cd-badge";
+          const text = target.badge();
+          if (text) { b.textContent = text; summary.appendChild(b); }
+        }
+        const body = document.createElement("div");
+        body.className = "cd-body";
+
+        // Insert details where the (title or root) was, then move root + extras into body
+        const insertBefore = titleEl || root;
+        insertBefore.parentNode.insertBefore(details, insertBefore);
+        details.appendChild(summary);
+        details.appendChild(body);
+        if (titleEl) titleEl.remove();
+        body.appendChild(root);
+
+        if (target.alsoMove) {
+          target.alsoMove.split(",").map(s => s.trim()).forEach(sel => {
+            document.querySelectorAll(sel).forEach(el => body.appendChild(el));
+          });
+        }
+      }
+
+      function applyAll() {
+        COLLAPSIBLE_TARGETS.forEach(wrap);
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", applyAll);
+      } else {
+        applyAll();
+      }
+    })();
     </script>
 </head>
 <body>

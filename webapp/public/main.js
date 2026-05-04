@@ -1012,10 +1012,50 @@ function pushStream(tag, msg) {
     const row = document.createElement("div");
     row.className = "ls-row";
     row.innerHTML = `<span class="ls-time">${hh}:${mm}:${ss}</span><span class="ls-tag ${esc(tag)}">${esc(tag)}</span><span class="ls-msg">${esc(msg)}</span>`;
+
+    // Auto-stick to bottom UNLESS the user has scrolled up. The threshold
+    // (within 24 px of the bottom) is generous so a small wheel-scroll while
+    // new content is rapidly appending doesn't fight the user.
+    const wasAtBottom =
+        (el.scrollTop + el.clientHeight) >= (el.scrollHeight - 24);
+
     el.appendChild(row);
     while (el.children.length > STREAM_MAX) el.removeChild(el.firstChild);
-    el.scrollTop = el.scrollHeight;
+
+    if (wasAtBottom) {
+        // requestAnimationFrame ensures we measure post-layout
+        requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+    } else {
+        // Show a "new logs ↓" pill so the user knows there are unread events
+        let pill = document.getElementById("ls-jump-pill");
+        if (!pill) {
+            pill = document.createElement("button");
+            pill.id = "ls-jump-pill";
+            pill.className = "ls-jump-pill";
+            pill.textContent = "↓ new logs";
+            pill.onclick = () => {
+                el.scrollTop = el.scrollHeight;
+                pill.remove();
+            };
+            // place it inside the stream container's wrapping parent so it
+            // floats over the bottom-right of the log
+            (el.parentElement || el).appendChild(pill);
+        }
+    }
 }
+
+// When the user scrolls back to the bottom, dismiss the pill automatically.
+document.addEventListener("DOMContentLoaded", () => {
+    const ls = document.getElementById("live-stream");
+    if (!ls) return;
+    ls.addEventListener("scroll", () => {
+        const atBottom = (ls.scrollTop + ls.clientHeight) >= (ls.scrollHeight - 8);
+        if (atBottom) {
+            const pill = document.getElementById("ls-jump-pill");
+            if (pill) pill.remove();
+        }
+    });
+});
 
 // ── Inference node status poller (Seratonin / Big Apple / OpenRouter) ───────
 async function pollNodeStatus() {
