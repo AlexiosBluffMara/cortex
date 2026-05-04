@@ -1347,9 +1347,27 @@ def create_app(
         async def status_page() -> FileResponse:
             return FileResponse(str(PUBLIC_DIR / "status.html"))
 
+        # Clean URLs (no .html). The bare paths are the canonical form;
+        # the .html paths above stay for backward compat with old links.
         @app.get("/status")
         async def status_alias() -> FileResponse:
             return FileResponse(str(PUBLIC_DIR / "status.html"))
+
+        @app.get("/gallery")
+        async def gallery_alias() -> FileResponse:
+            return FileResponse(str(PUBLIC_DIR / "gallery.html"))
+
+        @app.get("/personas")
+        async def personas_alias() -> FileResponse:
+            return FileResponse(str(PUBLIC_DIR / "personas.html"))
+
+        @app.get("/specs")
+        async def specs_alias() -> FileResponse:
+            return FileResponse(str(PUBLIC_DIR / "specs.html"))
+
+        @app.get("/demo")
+        async def demo_alias() -> FileResponse:
+            return FileResponse(str(PUBLIC_DIR / "index.html"))
 
         # Mount the entire public dir at /static/* for asset references like
         # /static/main.js, /static/style.css, /static/atlas.json, etc.
@@ -1373,7 +1391,8 @@ def create_app(
         }
         for _name in ("main.js", "charts.js", "style.css", "atlas.json", "brain_fsaverage5.glb",
                       "vertex_labels.json", "favicon.svg",
-                      "gridstack-all.js", "gridstack.min.css", "router.js"):
+                      "gridstack-all.js", "gridstack.min.css",
+                      "cortex-nav.js"):
             _path = PUBLIC_DIR / _name
             if _path.exists():
                 _ext = _path.suffix.lower()

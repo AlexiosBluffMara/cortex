@@ -1278,6 +1278,56 @@
             animation: cd-shimmer 2.4s linear infinite;
         }
 
+        /* ── Top nav (clean URLs, View Transitions API for smooth fades) ── */
+        .cortex-nav {
+            display: flex; gap: 4px; align-items: center;
+            margin-left: 24px; padding: 4px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 999px;
+            border: 1px solid var(--border);
+        }
+        .cortex-nav .nav-link {
+            display: inline-flex; align-items: center;
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 12px; font-weight: 600;
+            color: var(--muted);
+            text-decoration: none;
+            transition: color 160ms var(--ease-out),
+                        background 200ms var(--ease-out),
+                        transform 180ms var(--spring);
+            letter-spacing: 0.01em;
+        }
+        .cortex-nav .nav-link:hover {
+            color: var(--text);
+            background: rgba(255,255,255,0.04);
+        }
+        .cortex-nav .nav-link[aria-current="page"] {
+            background: var(--grad-hero);
+            color: #fff;
+            box-shadow: var(--shadow-glow-red);
+        }
+        @media (max-width: 900px) {
+            .cortex-nav { margin-left: 8px; }
+            .cortex-nav .nav-link { padding: 5px 10px; font-size: 11px; }
+        }
+
+        /* View-Transitions API enables Apple-style cross-page fades on Chrome/Edge */
+        @view-transition { navigation: auto; }
+        ::view-transition-old(root) {
+            animation: cd-vt-out 220ms var(--ease-out) both;
+        }
+        ::view-transition-new(root) {
+            animation: cd-vt-in 320ms var(--ease-out) both;
+        }
+        @keyframes cd-vt-out {
+            to { opacity: 0; transform: translateY(-6px) scale(.995); filter: blur(2px); }
+        }
+        @keyframes cd-vt-in {
+            from { opacity: 0; transform: translateY(8px) scale(1.005); filter: blur(2px); }
+            to   { opacity: 1; transform: none; filter: none; }
+        }
+
         /* Brain hero vignette so the centre column reads as a focal point */
         .panel-centre::after {
             content: ""; position: absolute; inset: 0; pointer-events: none;
@@ -1395,6 +1445,42 @@
         openCardBySel("#run-timing");
       });
     })();
+
+    // ── Top-nav active state + same-origin View Transition fallback ─────────
+    (function () {
+      function markActive() {
+        const path = location.pathname.replace(/\/$/, "") || "/";
+        const route = path === "/" ? "demo"
+                    : path.startsWith("/demo")     ? "demo"
+                    : path.startsWith("/gallery")  ? "gallery"
+                    : path.startsWith("/personas") ? "personas"
+                    : path.startsWith("/specs")    ? "specs"
+                    : path.startsWith("/status")   ? "status"
+                    : null;
+        document.querySelectorAll(".cortex-nav .nav-link").forEach(a => {
+          if (a.dataset.route === route) a.setAttribute("aria-current", "page");
+          else a.removeAttribute("aria-current");
+        });
+      }
+      function init() {
+        markActive();
+        // Soft-trigger the View Transition for browsers that opted-in via @view-transition
+        // (Chrome/Edge/Opera). Safari/FF do a normal hard-load, which still works.
+        document.querySelectorAll(".cortex-nav .nav-link").forEach(a => {
+          a.addEventListener("click", e => {
+            // Let modifier-clicks (cmd/ctrl/shift) open in new tab unmolested
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+            // Same-origin only; same-document navigations are auto-handled by @view-transition
+            // We don't intercept default — browser does the right thing.
+          });
+        });
+      }
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+      } else {
+        init();
+      }
+    })();
     </script>
 </head>
 <body>
@@ -1403,11 +1489,15 @@
             <span class="brand-mark">⌬</span>
             <span class="brand-name">Cortex</span>
         </div>
-        <nav class="pipeline-tabs">
-            <a class="pipeline-tab active" href="/">Demo</a>
-            <a class="pipeline-tab" href="/gallery.html">Gallery</a>
-            <a class="pipeline-tab" href="/personas.html">Personas</a>
-            <a class="pipeline-tab" href="/specs.html">Specs</a>
+        <nav class="cortex-nav" id="cortex-nav" aria-label="Site sections">
+            <a class="nav-link" href="/demo"     data-route="demo">Demo</a>
+            <a class="nav-link" href="/gallery"  data-route="gallery">Gallery</a>
+            <a class="nav-link" href="/personas" data-route="personas">Personas</a>
+            <a class="nav-link" href="/specs"    data-route="specs">Specs</a>
+            <a class="nav-link" href="/status"   data-route="status">Status</a>
+        </nav>
+        <nav class="pipeline-tabs" style="display:none">
+            <a class="pipeline-tab" href="/">Demo</a>
         </nav>
         <div id="node-status" class="node-status" title="Live status of inference nodes">
             <span class="node node-seratonin" data-node="seratonin">
