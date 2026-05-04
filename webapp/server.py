@@ -521,7 +521,7 @@ def create_app(
         file: UploadFile = File(...),
         tier: int = Form(default=1, ge=0, le=6),
         source: str = Form(default="webui"),
-        narration_model: str = Form(default="local:gemma4:e4b"),
+        narration_model: str = Form(default="local:gemma4:26b"),
         external_scan_id: str = Form(default=""),
     ) -> JSONResponse:
         if not file.filename:
@@ -1167,7 +1167,7 @@ def create_app(
         text: str = Form(...),
         tier: int = Form(default=1, ge=0, le=6),
         source: str = Form(default="webui"),
-        narration_model: str = Form(default="local:gemma4:e4b"),
+        narration_model: str = Form(default="local:gemma4:26b"),
     ) -> JSONResponse:
         if not text.strip():
             return JSONResponse({"error": "empty text"}, status_code=400)
@@ -1474,7 +1474,7 @@ async def _run_image_scan_background(
     media_path: str,
     tier: int,
     source: str,
-    narration_model: str = "local:gemma4:e4b",
+    narration_model: str = "local:gemma4:26b",
 ) -> None:
     """Image scan: Gemma vision describes the image, then Gemma narrates neural correlates."""
     queue: RequestQueue = app.state.queue
@@ -1533,7 +1533,7 @@ async def _run_document_scan_background(
     media_path: str,
     tier: int,
     source: str,
-    narration_model: str = "local:gemma4:e4b",
+    narration_model: str = "local:gemma4:26b",
 ) -> None:
     """Document scan: extract text, then narrates expected neural correlates."""
     queue: RequestQueue = app.state.queue
@@ -1800,7 +1800,7 @@ async def _run_scan_background(
     media_path: str,
     tier: int,
     source: str,
-    narration_model: str = "local:gemma4:e4b",
+    narration_model: str = "local:gemma4:26b",
     external_scan_id: str | None = None,
 ) -> None:
     """Run a brain scan in the background and stream progress to WebSocket clients."""
@@ -1930,7 +1930,7 @@ async def _run_text_scan_background(
     text: str,
     tier: int,
     source: str,
-    narration_model: str = "local:gemma4:e4b",
+    narration_model: str = "local:gemma4:26b",
 ) -> None:
     queue: RequestQueue = app.state.queue
     registry: ScanRegistry = app.state.registry
