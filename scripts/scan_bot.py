@@ -129,15 +129,13 @@ async def _do_scan(channel: discord.abc.Messageable, file_bytes: bytes, filename
             pass
 
     payload = format_for_discord(result)
-    text = payload["text"]
+    text   = payload["text"]
+    embeds_dicts = payload.get("embeds") or []
     img_b64 = payload.get("image_b64")
 
-    # Discord caps message body at 2000 chars; split if needed.
-    chunks: list[str] = []
-    while text:
-        chunks.append(text[:1900])
-        text = text[1900:]
-
+    # Build a single rich message: header text + screenshot file + 4 embeds
+    # (one per persona) so nothing gets truncated. Discord allows 10 embeds /
+    # 6000 chars total per message; 4 narrations easily fit.
     files: list[discord.File] = []
     if img_b64:
         try:
@@ -146,12 +144,27 @@ async def _do_scan(channel: discord.abc.Messageable, file_bytes: bytes, filename
         except Exception as exc:
             log.warning("could not decode screenshot: %s", exc)
 
-    # First chunk goes on the original notice (with image attachment)
-    await notice.edit(content=chunks[0])
-    if files:
-        await channel.send(files=files)
-    for chunk in chunks[1:]:
-        await channel.send(chunk)
+    embeds: list[discord.Embed] = []
+    for e in embeds_dicts:
+        emb = discord.Embed(
+            title=e.get("title") or "",
+            description=e.get("description") or "",
+            color=e.get("color") or 0x808080,
+        )
+        if e.get("footer"):
+            emb.set_footer(text=e["footer"].get("text", ""))
+        embeds.append(emb)
+
+    header = text[:1900] if text else ""
+    # Edit the original "starting" notice with the header, then send the
+    # screenshot + all four embeds in a follow-up message.
+    try:
+        await notice.edit(content=header)
+    except Exception:
+        # If notice was deleted/expired, post fresh
+        await channel.send(content=header)
+    if files or embeds:
+        await channel.send(files=files, embeds=embeds)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

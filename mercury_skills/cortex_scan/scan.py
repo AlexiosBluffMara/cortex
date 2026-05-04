@@ -164,27 +164,56 @@ def _guess_mime(p: Path) -> str:
     }.get(ext, "application/octet-stream")
 
 
+PERSONA_META = {
+    "student":      {"label": "🎓 Student",     "tagline": "ISU undergraduate, Normal IL",                "color": 0xCC0000},
+    "patient":      {"label": "🏥 Patient",     "tagline": "Carle / BroMenn waiting room, Bloomington-Normal", "color": 0x1A73E8},
+    "clinician":   {"label": "👨‍⚕️ Clinician",   "tagline": "Northwestern Memorial / RUSH neurologist, Chicago", "color": 0x4E2A84},
+    "ml_scientist": {"label": "🧪 ML Scientist","tagline": "Senior research scientist, Chicago tech corridor", "color": 0x4285F4},
+}
+
+
 def format_for_discord(r: ScanResult) -> dict[str, Any]:
-    """Render the result as a Discord-style payload: text + image attachment."""
-    if r.status == "complete":
-        rois = ", ".join(t.replace("7Networks_", "") for t in r.top_rois[:3]) or "(none)"
-        body = (
-            f"**Scan `{r.scan_id[:8]}` complete** — {r.filename}\n"
-            f"Top regions: `{rois}` · peak t={r.peak_t} · {r.elapsed_sec:.0f}s end-to-end\n"
-            f"<{r.gallery_url}> · <{r.scan_url}>\n\n"
-        )
-        for who, text in r.narrations.items():
-            label = {
-                "student": "🎓 Student",
-                "patient": "🏥 Patient",
-                "clinician": "👨‍⚕️ Clinician",
-                "ml_scientist": "🧪 ML Scientist",
-            }.get(who, who.title())
-            body += f"**{label}** — {text[:280]}\n\n"
-        return {"text": body, "image_b64": r.brain_screenshot_png_b64}
+    """Render the result for Discord using rich embeds (no narration truncation).
 
-    if r.status == "failed":
-        msg = (r.error or {}).get("message", "?") if r.error else "?"
-        return {"text": f"❌ Scan `{r.scan_id[:8]}` failed: {msg}", "image_b64": None}
+    Discord embed limits we respect:
+      - description: 4096 chars (we cap at 4000 to be safe)
+      - one message can carry up to 10 embeds
+      - total embed payload: 6000 chars
 
-    return {"text": f"⏰ Scan `{r.scan_id[:8]}` timed out after {r.elapsed_sec:.0f}s", "image_b64": None}
+    A typical 4-narration result is ~1500-2500 chars total → fits in one message.
+    """
+    if r.status != "complete":
+        if r.status == "failed":
+            msg = (r.error or {}).get("message", "?") if r.error else "?"
+            return {"text": f"❌ Scan `{r.scan_id[:8]}` failed: {msg}",
+                    "image_b64": None, "embeds": []}
+        return {"text": f"⏰ Scan `{r.scan_id[:8]}` timed out after {r.elapsed_sec:.0f}s",
+                "image_b64": None, "embeds": []}
+
+    rois = ", ".join(t.replace("7Networks_", "") for t in r.top_rois[:3]) or "(none)"
+    header_text = (
+        f"**Scan `{r.scan_id[:8]}` complete** — {r.filename}\n"
+        f"Top regions: `{rois}` · peak t={r.peak_t} · {r.elapsed_sec:.0f}s end-to-end\n"
+        f"<{r.gallery_url}> · <{r.scan_url}>"
+    )
+
+    embeds = []
+    # Order: student → patient → clinician → ml_scientist for the same UX as the WebUI
+    for key in ("student", "patient", "clinician", "ml_scientist"):
+        text = r.narrations.get(key)
+        if not text:
+            continue
+        meta = PERSONA_META.get(key, {"label": key.title(), "tagline": "", "color": 0x808080})
+        # Cap at 4000 to stay under embed.description's 4096 limit
+        snippet = text[:4000] + ("…" if len(text) > 4000 else "")
+        embeds.append({
+            "title":       meta["label"],
+            "description": snippet,
+            "color":       meta["color"],
+            "footer":      {"text": meta["tagline"]},
+        })
+    return {
+        "text":      header_text,
+        "embeds":    embeds,
+        "image_b64": r.brain_screenshot_png_b64,
+    }

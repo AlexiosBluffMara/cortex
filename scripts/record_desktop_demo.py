@@ -107,20 +107,23 @@ class DesktopRecorder:
 
 # ── Discord bot API helpers ─────────────────────────────────────────────────
 async def discord_post(channel_id: str, content: str, image_bytes: bytes | None = None,
-                       image_filename: str = "brain.png"):
-    """Post a message (with optional image) as the bot."""
+                       image_filename: str = "brain.png", embeds: list | None = None):
+    """Post a message (with optional image + rich embeds) as the bot."""
     if not DISCORD_TOKEN:
         print("[discord] no token — skipping post")
         return None
     headers = {"Authorization": f"Bot {DISCORD_TOKEN}"}
     url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
+    payload: dict = {"content": content}
+    if embeds:
+        payload["embeds"] = embeds
     async with httpx.AsyncClient(timeout=20.0) as client:
         if image_bytes is None:
-            r = await client.post(url, headers=headers, json={"content": content})
+            r = await client.post(url, headers=headers, json=payload)
         else:
             files = {
                 "files[0]": (image_filename, image_bytes, "image/png"),
-                "payload_json": (None, json.dumps({"content": content})),
+                "payload_json": (None, json.dumps(payload)),
             }
             r = await client.post(url, headers=headers, files=files)
     if r.status_code >= 400:
@@ -276,19 +279,22 @@ async def run_discord_demo(clip_path: str):
         conversation_id="demo-recording",
     )
 
-    # 3. Post the formatted result + brain screenshot to the channel
+    # 3. Post the formatted result + brain screenshot + 4 narration embeds
     payload = format_for_discord(result)
     text = payload["text"]
+    embeds = payload.get("embeds") or []
     img_b64 = payload.get("image_b64")
     img_bytes = base64.b64decode(img_b64) if img_b64 else None
 
-    # Discord caps text at 2000 chars; chunk if needed
-    parts = [text[i:i+1900] for i in range(0, len(text), 1900)] or ["(no text)"]
-    await discord_post(DISCORD_CHANNEL, parts[0], image_bytes=img_bytes,
-                       image_filename=f"brain_{result.scan_id[:8]}.png")
-    for p in parts[1:]:
-        await discord_post(DISCORD_CHANNEL, p)
-    print("[discord] demo posted")
+    # All 4 narration embeds + screenshot fit in one message — no truncation.
+    await discord_post(
+        DISCORD_CHANNEL,
+        text[:1900],
+        image_bytes=img_bytes,
+        image_filename=f"brain_{result.scan_id[:8]}.png",
+        embeds=embeds,
+    )
+    print("[discord] demo posted (full narrations as embeds)")
     return result
 
 
