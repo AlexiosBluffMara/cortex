@@ -1311,7 +1311,8 @@ def create_app(
         # We expose these explicitly rather than mounting public/ at "/" because
         # mounting at "/" shadows every API route.
         for _name in ("main.js", "style.css", "atlas.json", "brain_fsaverage5.glb",
-                      "vertex_labels.json", "favicon.svg"):
+                      "vertex_labels.json", "favicon.svg",
+                      "gridstack-all.js", "gridstack.min.css"):
             _path = PUBLIC_DIR / _name
             if _path.exists():
                 # Capture loop var via default arg to avoid late-binding bug
