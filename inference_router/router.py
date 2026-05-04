@@ -45,14 +45,18 @@ _rr_counter = itertools.count()
 def _pick_backends(cfg: RouterConfig, model: str | None = None) -> list[str]:
     """Return all backends in priority order for this model.
 
-    Model affinity (env-overridable):
-      gemma4:31b  → prefer Big Apple (M4 Max — vision describer, room for 31B)
-      gemma4:26b  → prefer Seratonin (RTX 5090 — narration, room for TRIBE+26B)
-      gemma4:e4b  → round-robin (small model, both nodes handle it cheaply)
+    Model affinity (post-2026-05-04 plan; OpenRouter is cloud-first so local
+    Ollama is mostly a failover path):
+      gemma4:e4b  → prefer Seratonin (kept warm next to TRIBE; both fit in 32 GB)
+      gemma4:e2b  → prefer Seratonin (same as e4b)
+      gemma4:26b  → prefer Big Apple (M4 Max 48 GB — kept warm here, Sera reserved
+                                       for TRIBE + e4b)
+      gemma4:31b  → prefer Big Apple (only M4 Max has the headroom; Sera would
+                                       evict TRIBE/e4b to load it)
       anything else → round-robin
 
     The non-preferred backend is still appended for failover. So if Big Apple
-    is down, gemma4:31b still runs on Seratonin (slower but works).
+    is down, 26b/31b still run on Seratonin (slower because of the swap).
     """
     backends = list(cfg.ollama_backends)
     if len(backends) <= 1:
@@ -64,11 +68,11 @@ def _pick_backends(cfg: RouterConfig, model: str | None = None) -> list[str]:
 
     if model and bigapple and sera:
         m = model.lower()
-        if "31b" in m and bigapple:
-            # Vision / heavy describer → Big Apple primary
+        # Big-model affinity: Big Apple has the headroom for 26b/31b.
+        if ("26b" in m or "31b" in m) and bigapple:
             return [bigapple] + [b for b in backends if b != bigapple]
-        if "26b" in m and sera:
-            # Narration → Seratonin primary
+        # Small-model affinity: e4b/e2b stay warm on Sera with TRIBE.
+        if ("e4b" in m or "e2b" in m) and sera:
             return [sera] + [b for b in backends if b != sera]
 
     # Default: round-robin starting from the next slot
@@ -338,14 +342,17 @@ async def _hf_generate(prompt: str, model: str, cfg: RouterConfig, **kwargs: Any
 # ---------------------------------------------------------------------------
 
 # Canonical model name → OpenRouter model ID
+# Cloud-first preference: 31b is the cloud default (free, no local VRAM cost,
+# best quality available on the OpenRouter free tier). Smaller local models
+# upgrade to 31b when the request reaches the cloud hop.
 _OR_MODEL_MAP: dict[str, str] = {
-    "gemma4:26b":     "google/gemma-4-26b-a4b-it:free",
-    "gemma4:26b-a4b": "google/gemma-4-26b-a4b-it:free",
     "gemma4:31b":     "google/gemma-4-31b-it:free",
-    "gemma4:e4b":     "google/gemma-4-26b-a4b-it:free",   # best free alternative
-    "gemma4:e2b":     "google/gemma-4-26b-a4b-it:free",
+    "gemma4:26b":     "google/gemma-4-31b-it:free",       # upgrade in cloud
+    "gemma4:26b-a4b": "google/gemma-4-31b-it:free",       # upgrade in cloud
+    "gemma4:e4b":     "google/gemma-4-31b-it:free",       # upgrade in cloud
+    "gemma4:e2b":     "google/gemma-4-31b-it:free",       # upgrade in cloud
 }
-_OR_FALLBACK = "google/gemma-4-26b-a4b-it:free"
+_OR_FALLBACK = "google/gemma-4-31b-it:free"
 
 
 def _or_model(name: str) -> str:
@@ -355,7 +362,41 @@ def _or_model(name: str) -> str:
 async def _openrouter_generate(prompt: str, model: str, cfg: RouterConfig, **kwargs: Any) -> str:
     if not cfg.openrouter_api_key:
         raise RuntimeError("openrouter_api_key not configured")
-    or_model = _or_model(model)
+    # Try the preferred OpenRouter model, then fall back to the other free
+    # model (31b ↔ 26b) if the upstream is rate-limited (429). e4b/e2b aren't
+    # available on OpenRouter free, so we only juggle 31b and 26b.
+    primary = _or_model(model)
+    secondary = (
+        "google/gemma-4-26b-a4b-it:free"
+        if "31b" in primary
+        else "google/gemma-4-31b-it:free"
+    )
+    candidates: list[str] = [primary]
+    if secondary not in candidates:
+        candidates.append(secondary)
+    last_err: Exception | None = None
+    for or_model in candidates:
+        try:
+            text = await _openrouter_call_one(prompt, or_model, cfg, **kwargs)
+            log.info("openrouter served via %s", or_model)
+            return text
+        except _OpenRouterRateLimited as exc:
+            log.info("openrouter %s rate-limited, trying next: %s", or_model, exc)
+            last_err = exc
+            continue
+        except Exception as exc:
+            # Non-rate-limit error — give up immediately so we fall through to Ollama
+            raise
+    if last_err:
+        raise last_err
+    raise RuntimeError("no openrouter candidates")
+
+
+class _OpenRouterRateLimited(RuntimeError):
+    pass
+
+
+async def _openrouter_call_one(prompt: str, or_model: str, cfg: RouterConfig, **kwargs: Any) -> str:
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {cfg.openrouter_api_key}",
@@ -373,13 +414,25 @@ async def _openrouter_generate(prompt: str, model: str, cfg: RouterConfig, **kwa
     timeout = httpx.Timeout(PAID_TOTAL_TIMEOUT_S, connect=CONNECT_TIMEOUT_S)
     async with _AsyncClient(timeout=timeout) as client:
         r = await client.post(url, headers=headers, json=body)
+        if r.status_code == 429:
+            raise _OpenRouterRateLimited(
+                f"openrouter 429 for {or_model}: {r.text[:160]}"
+            )
         if r.status_code >= 400:
+            # Some providers return 200 with an error body containing 429 inside
             raise httpx.HTTPStatusError(
                 f"openrouter returned {r.status_code}: {r.text[:200]}",
                 request=r.request,
                 response=r,
             )
     data = r.json()
+    # OpenRouter sometimes returns 200 with an error body when the upstream
+    # provider rate-limits a free model. Detect that and raise so we can fall
+    # through to the next candidate.
+    if isinstance(data.get("error"), dict):
+        err = data["error"]
+        if err.get("code") == 429 or "rate" in str(err.get("message", "")).lower():
+            raise _OpenRouterRateLimited(f"openrouter inline 429 for {or_model}: {err}")
     try:
         return data["choices"][0]["message"]["content"]
     except (KeyError, IndexError) as exc:

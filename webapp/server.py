@@ -1502,9 +1502,10 @@ async def _run_image_scan_background(
         label = Path(media_path).name
         user_prompt = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
 
-        narrations: dict[str, str] = {}
-        for persona_id, (tier_n, sys_prompt) in _prompts.PERSONA_CONFIGS.items():
-            narrations[persona_id] = await _narrate_with_model(
+        # Run all 4 persona narrations in parallel — Ollama NUM_PARALLEL=4 batches
+        # them on the same model instance, OpenRouter handles them concurrently.
+        async def _one(pid: str, tier_n: int, sys_prompt: str) -> tuple[str, str]:
+            text = await _narrate_with_model(
                 model=narration_model,
                 prompt=user_prompt,
                 system=sys_prompt,
@@ -1514,6 +1515,11 @@ async def _run_image_scan_background(
                 queue=queue,
                 source=source,
             )
+            return pid, text
+        results = await asyncio.gather(*[
+            _one(pid, t, sp) for pid, (t, sp) in _prompts.PERSONA_CONFIGS.items()
+        ])
+        narrations: dict[str, str] = dict(results)
 
         await registry.update(scan_id, status="complete", narration=narrations.get("american", ""), narrations=narrations, top_rois=None, peak_t=None)
         await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
@@ -1558,9 +1564,9 @@ async def _run_document_scan_background(
         )
         user_prompt = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
 
-        narrations: dict[str, str] = {}
-        for persona_id, (tier_n, sys_prompt) in _prompts.PERSONA_CONFIGS.items():
-            narrations[persona_id] = await _narrate_with_model(
+        # Run all 4 persona narrations in parallel.
+        async def _one(pid: str, tier_n: int, sys_prompt: str) -> tuple[str, str]:
+            text = await _narrate_with_model(
                 model=narration_model,
                 prompt=user_prompt,
                 system=sys_prompt,
@@ -1570,6 +1576,11 @@ async def _run_document_scan_background(
                 queue=queue,
                 source=source,
             )
+            return pid, text
+        results = await asyncio.gather(*[
+            _one(pid, t, sp) for pid, (t, sp) in _prompts.PERSONA_CONFIGS.items()
+        ])
+        narrations: dict[str, str] = dict(results)
 
         await registry.update(scan_id, status="complete", narration=narrations.get("american", ""), narrations=narrations, top_rois=None, peak_t=None)
         await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
@@ -1862,12 +1873,15 @@ async def _run_scan_background(
         label = Path(media_path).name
         user_prompt = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
 
+        # Fan out all 4 persona narrations concurrently — Ollama NUM_PARALLEL=4
+        # batches them on one model instance, OpenRouter handles them in parallel.
         narrations: dict[str, str] = {}
         narration_timings: dict[str, float] = {}
         narr_t0 = time.time()
-        for persona_id, (tier_n, sys_prompt) in _prompts.PERSONA_CONFIGS.items():
+
+        async def _one_narr(pid: str, tier_n: int, sys_prompt: str) -> tuple[str, str, float]:
             t_pers = time.time()
-            narrations[persona_id] = await _narrate_with_model(
+            text = await _narrate_with_model(
                 model=narration_model,
                 prompt=user_prompt,
                 system=sys_prompt,
@@ -1877,7 +1891,14 @@ async def _run_scan_background(
                 queue=queue,
                 source=source,
             )
-            narration_timings[persona_id] = round(time.time() - t_pers, 2)
+            return pid, text, round(time.time() - t_pers, 2)
+
+        narr_results = await asyncio.gather(*[
+            _one_narr(pid, t, sp) for pid, (t, sp) in _prompts.PERSONA_CONFIGS.items()
+        ])
+        for pid, text, dt in narr_results:
+            narrations[pid] = text
+            narration_timings[pid] = dt
         narration_seconds = round(time.time() - narr_t0, 2)
 
         preds = getattr(result, "preds", None)
