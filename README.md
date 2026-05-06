@@ -18,7 +18,9 @@ The demo URL is a real RTX 5090 in Bloomington–Normal, Illinois. Upload anythi
 
 ---
 
-Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma-4-good-hackathon) (Health & Sciences track) and the [Nous Research × Kimi Creative Hackathon](https://nousresearch.com) (Creative track) by **Alexios Bluff Mara LLC (dba Red Team Kitchen)**.
+Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma-4-good-hackathon) (Health track) and the [Nous Research × Kimi Creative Hackathon](https://nousresearch.com) (Creative track) by **Alexios Bluff Mara LLC (dba Red Team Kitchen)**.
+
+Cortex shares its RTX 5090 with [Mercury](https://github.com/AlexiosBluffMara/mercury) (the agent gateway, same submission). The contract that lets them coexist is documented at [`mercury/docs/MERCURY_CORTEX_CONTRACT.md`](https://github.com/AlexiosBluffMara/mercury/blob/main/docs/MERCURY_CORTEX_CONTRACT.md) — Cortex owns the GPU swap state machine and exposes `GET /api/utilization` on port 8773; Mercury polls it before any Gemma load.
 
 *Gemma is a trademark of Google LLC.*
 
