@@ -10,6 +10,20 @@
           "serviceId": "cortex-relay",
           "region": "us-central1"
         }
+      },
+      {
+        "source": "/scan/**",
+        "run": {
+          "serviceId": "cortex-relay",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/gallery",
+        "run": {
+          "serviceId": "cortex-relay",
+          "region": "us-central1"
+        }
       }
     ],
     "headers": [

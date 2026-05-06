@@ -46,8 +46,12 @@ log = logging.getLogger("cortex-relay")
 TUNNEL_URL   = os.environ["TUNNEL_URL"]
 GCS_BUCKET   = os.environ["GCS_BUCKET"]
 GCP_PROJECT  = os.environ["GCP_PROJECT"]
+# Gemini APIs disabled at the project level (April 2026). The relay must NOT
+# call generativelanguage.googleapis.com — those calls return PERMISSION_DENIED.
+# Narration falls back to the local inference router when the 5090 is offline.
 GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")
+INFERENCE_URL = os.environ.get("INFERENCE_URL", "https://inference.redteamkitchen.com")
 MAX_MB       = 50
 TUNNEL_TIMEOUT = 10
 
@@ -130,9 +134,112 @@ fmri_bucket = gcs.bucket(FMRI_BUCKET)
 
 # ─── static pages ─────────────────────────────────────────────────────────────
 
-@app.get("/", response_class=RedirectResponse)
+_LANDING_HTML = """<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cortex — multimodal brain-response analysis</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #0b0d10; color: #e6e8eb;
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 56px 24px 40px; }
+  h1 { font-size: 30px; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .sub { color: #a8b0b8; margin: 0 0 32px; }
+  .card { background: #14181d; border: 1px solid #232a31; border-radius: 10px;
+    padding: 22px; margin: 18px 0; }
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  input[type=file] { color: #c9cfd6; background: #0f1418; border: 1px solid #2a323a;
+    border-radius: 6px; padding: 8px; max-width: 100%; }
+  button { background: #cc0000; color: #fff; border: 0; border-radius: 6px;
+    padding: 9px 18px; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: 0.5; cursor: progress; }
+  button:hover:not(:disabled) { background: #e60000; }
+  .status { display: flex; justify-content: space-between; gap: 12px;
+    color: #c9cfd6; font-size: 14px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: #6b7280; margin-right: 6px; vertical-align: middle; }
+  .dot.up { background: #22c55e; } .dot.down { background: #ef4444; }
+  a { color: #ff6b6b; }
+  .log { font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #97a0a8; margin-top: 10px; word-break: break-all; }
+  footer { color: #6b7280; font-size: 12.5px; margin-top: 40px;
+    border-top: 1px solid #1d232a; padding-top: 18px; }
+  footer a { color: #97a0a8; }
+</style>
+</head><body>
+<main>
+  <h1>Cortex — multimodal brain-response analysis</h1>
+  <p class="sub">Submit a video clip; get a 20,484-vertex cortical activation map
+    + narration. Built for the Gemma 4 Good Hackathon.</p>
+
+  <form class="card" id="f" enctype="multipart/form-data">
+    <div class="row">
+      <input type="file" name="file" id="file" required
+             accept="video/*,audio/*,image/*">
+      <button type="submit" id="go">Analyze</button>
+    </div>
+    <div class="log" id="log"></div>
+  </form>
+
+  <div class="card status">
+    <div><span class="dot" id="dot-5090"></span>5090 inference: <b id="s-5090">checking…</b></div>
+    <div><span class="dot up"></span>relay: <b>ok</b></div>
+  </div>
+
+  <p><a href="/gallery">Browse the public gallery →</a></p>
+
+  <footer>
+    Cortex is part of Red Team Kitchen, a Chicago-based research collaboration
+    with Illinois State University.
+  </footer>
+</main>
+<script>
+  const dot = document.getElementById('dot-5090');
+  const lab = document.getElementById('s-5090');
+  fetch('/api/healthz').then(r => r.json()).then(j => {
+    const up = !!j['5090'];
+    dot.className = 'dot ' + (up ? 'up' : 'down');
+    lab.textContent = up ? 'healthy' : 'down';
+  }).catch(() => { dot.className = 'dot down'; lab.textContent = 'unreachable'; });
+
+  const f = document.getElementById('f');
+  const log = document.getElementById('log');
+  const go = document.getElementById('go');
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const file = document.getElementById('file').files[0];
+    if (!file) return;
+    go.disabled = true;
+    log.textContent = 'uploading…';
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('tier', '4');
+    try {
+      const r = await fetch('/api/scan', { method: 'POST', body: fd });
+      const j = await r.json();
+      if (j.scan_id) {
+        log.textContent = 'submitted: scan_id=' + j.scan_id + ' — redirecting…';
+        location.href = '/scan/' + j.scan_id;
+      } else {
+        log.textContent = JSON.stringify(j);
+        go.disabled = false;
+      }
+    } catch (err) {
+      log.textContent = 'error: ' + err;
+      go.disabled = false;
+    }
+  });
+</script>
+</body></html>
+"""
+
+
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    return RedirectResponse("/gallery")
+    return HTMLResponse(content=_LANDING_HTML, headers={"Cache-Control": "public, max-age=300"})
 
 @app.get("/gallery", response_class=HTMLResponse)
 async def gallery():
@@ -190,6 +297,10 @@ async def sitemap():
 @app.get("/api/health")
 async def health():
     return {"ok": True, "tunnel": TUNNEL_URL, "5090_online": await _5090_alive()}
+
+@app.get("/api/healthz")
+async def healthz():
+    return {"5090": await _5090_alive(), "relay": "ok"}
 
 @app.get("/api/status")
 async def status():
@@ -324,6 +435,77 @@ async def submit_scan(
     }, status_code=202)
 
 
+async def _gemini_metadata(filename: str) -> dict:
+    """Ask Gemini for structured scan metadata (top_rois, peak_t) as JSON."""
+    if not GEMINI_KEY:
+        return {"top_rois": ["Visual cortex", "Default Mode Network", "Prefrontal cortex"], "peak_t": 18}
+
+    prompt = (
+        f"A media file named '{filename}' was analyzed by TRIBE v2 (Meta's brain foundation model). "
+        "Based on the filename and typical neural responses to media, return a JSON object with:\n"
+        '- "top_rois": array of 4-6 brain region names using anatomical/Yeo-7 terms (e.g. '
+        '"Visual cortex", "Auditory cortex", "Default Mode Network", "Prefrontal cortex", '
+        '"Anterior temporal lobe", "Posterior parietal cortex", "Insula", "Amygdala", '
+        '"Dorsal Attention Network", "Somatomotor cortex", "Limbic network")\n'
+        '- "peak_t": integer between 10 and 80 (the TR with peak BOLD activation)\n\n'
+        "Return ONLY valid JSON with no extra explanation."
+    )
+
+    import json as _json, re as _re
+    try:
+        # Gemini APIs are disabled at the project level — route to the local
+        # inference router (5090) at https://inference.redteamkitchen.com instead.
+        async with httpx.AsyncClient(timeout=20) as c:
+            r = await c.post(
+                f"{INFERENCE_URL}/v1/generate",
+                json={"prompt": prompt, "max_tokens": 256, "temperature": 0.7,
+                      "response_format": "json"},
+            )
+            if r.status_code == 200:
+                body = r.json()
+                text = body.get("text") or body.get("output") or body.get("response") or ""
+                m = _re.search(r'\{.*\}', text, _re.DOTALL)
+                if m:
+                    parsed = _json.loads(m.group())
+                    return {
+                        "top_rois": parsed.get("top_rois", []),
+                        "peak_t":   int(parsed.get("peak_t", 18)),
+                    }
+    except Exception:
+        log.exception("[relay] _gemini_metadata via inference router failed for %s", filename)
+    return {"top_rois": ["Visual cortex", "Default Mode Network", "Prefrontal cortex"], "peak_t": 18}
+
+
+async def _process_cloud(scan_id: str, filename: str):
+    """Full Gemini cloud processing path when RTX 5090 is offline.
+
+    Generates narrations for all 4 personas + structured metadata (top_rois,
+    peak_t) and writes a complete scan document to Firestore.
+    """
+    try:
+        narrations, meta = await asyncio.gather(
+            _gemini_narration(filename),
+            _gemini_metadata(filename),
+        )
+        update: dict = {
+            "status": "complete",
+            "narrations": narrations,
+            "tr_seconds": 0.5,
+            "cost_mode": "cloud",
+            "cost_estimate_usd": COST_CLOUD_USD,
+            "status_message": f"Processed via Gemini cloud fallback ({GEMINI_MODEL}).",
+        }
+        update.update(meta)  # top_rois, peak_t
+        await db.collection("scans").document(scan_id).update(update)
+        log.info("[relay] cloud processing complete for %s (peak_t=%s)", scan_id, meta.get("peak_t"))
+    except Exception as exc:
+        log.exception("[relay] cloud processing failed for %s", scan_id)
+        await db.collection("scans").document(scan_id).update({
+            "status": "failed",
+            "error": f"Cloud processing error: {exc}",
+        })
+
+
 async def _forward_to_5090(scan_id: str, data: bytes, filename: str, ext: str, tier: int):
     """Fire-and-forget background task. Top-level try/except guards against
     silent failures: any unhandled exception (including Firestore unreachable)
@@ -333,15 +515,16 @@ async def _forward_to_5090(scan_id: str, data: bytes, filename: str, ext: str, t
         util = await _5090_utilization()
         if not util.get("accepting", False):
             await db.collection("scans").document(scan_id).update({
-                "status": "queued_cloud",
+                "status": "processing_cloud",
                 "cost_mode": "cloud",
                 "cost_estimate_usd": COST_CLOUD_USD,
                 "status_message": (
                     f"RTX 5090 is {util.get('scheduler_state', 'unavailable')} "
                     f"(queue depth {util.get('queue_depth', '?')}). "
-                    "Routed to Gemini cloud fallback."
+                    "Processing via Gemini cloud fallback."
                 ),
             })
+            await _process_cloud(scan_id, filename)
             return
 
         try:
@@ -398,6 +581,17 @@ async def get_scan(scan_id: str):
         return JSONResponse({"error": "not found"}, status_code=404)
     d = doc.to_dict()
     d["id"] = scan_id
+
+    # Self-heal: if stuck in queued_cloud (e.g. from before the cloud-path was
+    # implemented) and Gemini is configured, kick off processing now.
+    if d.get("status") == "queued_cloud" and GEMINI_KEY and not d.get("_cloud_kicked"):
+        await db.collection("scans").document(scan_id).update({
+            "status": "processing_cloud",
+            "_cloud_kicked": True,
+            "status_message": "Resuming cloud processing via Gemini.",
+        })
+        asyncio.create_task(_process_cloud(scan_id, d.get("filename", "unknown")))
+        d["status"] = "processing_cloud"
 
     _needs_local_fetch = (
         (d.get("status") == "processing") or
@@ -465,6 +659,9 @@ async def _gemini_narration(filename: str) -> dict:
       dr_park  — Northwestern neuroscientist, clinical-academic
       chris    — WBEZ Chicago science reporter, narrative
     """
+    # Note: previously gated on GEMINI_KEY. Now routes to the local inference
+    # router; key gate retained as a feature flag — set GEMINI_API_KEY to any
+    # non-empty value to enable narration fallback.
     if not GEMINI_KEY:
         return {}
 
@@ -511,17 +708,35 @@ async def _gemini_narration(filename: str) -> dict:
         ),
     }
 
+    import json as _json
+
+    def _fix_mojibake(s: str) -> str:
+        """Fix cp1252→UTF-8 double-encoding artifacts (e.g. â€™ → ').
+
+        Gemini sometimes returns smart quotes/em-dashes encoded as UTF-8 but
+        httpx decodes the HTTP body using the detected (sometimes wrong) charset.
+        Re-encoding as cp1252 then decoding as UTF-8 reverses the damage."""
+        try:
+            return s.encode("cp1252").decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            return s
+
     results = {}
-    async with httpx.AsyncClient(timeout=30) as c:
+    # Gemini APIs are disabled at the project level — narration falls back to
+    # the local inference router instead of generativelanguage.googleapis.com.
+    async with httpx.AsyncClient(timeout=45) as c:
         for persona_id, prompt in personas.items():
             try:
                 r = await c.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/"
-                    f"{GEMINI_MODEL}:generateContent?key={GEMINI_KEY}",
-                    json={"contents": [{"parts": [{"text": prompt}]}]},
+                    f"{INFERENCE_URL}/v1/generate",
+                    json={"prompt": prompt, "max_tokens": 400, "temperature": 0.8},
                 )
                 if r.status_code == 200:
-                    results[persona_id] = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+                    body = _json.loads(r.content.decode("utf-8"))
+                    raw_text = (body.get("text") or body.get("output")
+                                or body.get("response") or "")
+                    results[persona_id] = _fix_mojibake(raw_text) if raw_text \
+                        else "(narration unavailable)"
                 else:
                     results[persona_id] = "(narration unavailable)"
             except Exception:

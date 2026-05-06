@@ -20,6 +20,12 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# Import real cortex modules HERE, before any test file contaminates sys.modules.
+# Fixtures that patch these modules MUST use the module object directly (not a
+# string path) so that monkeypatch targets the real namespace even when a zzz
+# test has replaced sys.modules["cortex.xyz"] with a lightweight fake.
+import cortex.gpu_scheduler as _REAL_GPU_SCHEDULER  # noqa: E402
+
 
 # ---------------------------------------------------------------------------
 # Filesystem isolation
@@ -147,7 +153,7 @@ def mock_model_manager(monkeypatch: pytest.MonkeyPatch):
     fake.fast_model.return_value = "gemma4:e4b"
     fake.deep_model.return_value = "gemma4:26b"
     fake.expert_model.return_value = "gemma4:31b"
-    monkeypatch.setattr("cortex.gpu_scheduler.get_manager", lambda: fake)
+    monkeypatch.setattr(_REAL_GPU_SCHEDULER, "get_manager", lambda: fake)
     return fake
 
 

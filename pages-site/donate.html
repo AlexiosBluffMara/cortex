@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Donate — Red Team Kitchen</title>
+<meta name="description" content="Support Alexios Bluff Mara LLC (dba Red Team Kitchen). One-time donation, any amount $5–1000.">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="stylesheet" href="/assets/style.css">
+<style>
+  .pay-card { max-width: 560px; margin: 2rem auto; padding: 2rem; border: 1px solid #e5e5e5; border-radius: 14px; background: #fff; }
+  .pay-card h1 { margin-top: 0; }
+  .amount-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; }
+  .amount-row button { padding: 0.6rem 1rem; border: 1px solid #ccc; background: #f7f7f7; border-radius: 999px; cursor: pointer; font-size: 1rem; }
+  .amount-row button.active { background: #CC0000; color: #fff; border-color: #CC0000; }
+  .amt-input { display: flex; align-items: center; gap: 0.5rem; margin: 1rem 0; }
+  .amt-input input { flex: 1; padding: 0.7rem; font-size: 1.1rem; border: 1px solid #ccc; border-radius: 8px; }
+  .amt-input span { font-size: 1.2rem; font-weight: 600; }
+  .pay-btn { display: block; width: 100%; padding: 0.9rem; font-size: 1.05rem; font-weight: 600; background: #CC0000; color: #fff; border: 0; border-radius: 10px; cursor: pointer; }
+  .pay-btn:disabled { background: #999; cursor: not-allowed; }
+  .err { color: #CC0000; margin-top: 0.5rem; min-height: 1.2em; font-size: 0.9rem; }
+  .fineprint { font-size: 0.85rem; color: #666; margin-top: 1rem; }
+</style>
+</head>
+<body>
+
+<nav class="sitenav">
+  <a href="/">Home</a>
+  <a href="/cortex.html">Cortex</a>
+  <a href="/mercury.html">Mercury</a>
+  <a href="/access.html">Access</a>
+  <a href="/donate.html" class="active">Donate</a>
+</nav>
+
+<div class="wrap">
+<div class="pay-card">
+  <h1>Support the lab</h1>
+  <p>Red Team Kitchen is the dba of Alexios Bluff Mara LLC, a research-and-software lab in collaboration with Illinois State University. One-time gift, any amount $5&ndash;1000. Card payments are processed by Stripe; we never see your card number.</p>
+
+  <div class="amount-row" id="presets">
+    <button data-amt="10">$10</button>
+    <button data-amt="25">$25</button>
+    <button data-amt="50" class="active">$50</button>
+    <button data-amt="100">$100</button>
+    <button data-amt="250">$250</button>
+  </div>
+
+  <div class="amt-input">
+    <span>$</span>
+    <input id="amount" type="number" min="5" max="1000" step="1" value="50" inputmode="decimal">
+  </div>
+
+  <div id="turnstile-donate"></div>
+
+  <button id="pay" class="pay-btn">Donate with card</button>
+  <div class="err" id="err"></div>
+  <p class="fineprint">Donations are not tax-deductible. Alexios Bluff Mara LLC is a for-profit entity. By proceeding you agree that the gift is non-refundable.</p>
+</div>
+</div>
+
+<script src="https://js.stripe.com/v3/"></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<script src="/app.js"></script>
+<script>
+  RTKPay.initDonate({
+    presetsId: 'presets',
+    amountId: 'amount',
+    payBtnId: 'pay',
+    errId: 'err',
+    turnstileId: 'turnstile-donate',
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,76 @@
+The visual cortex is the primary cortical region of the brain that receives, integrates, and processes visual information relayed from the retinas. Our work focuses on building a real-time pipeline that streams retinal data into a multi-tier inference system. The retina performs an initial layer of compression and feature extraction, much like a convolutional layer in modern deep neural networks. Output from this stage is sent through the optic nerve to the lateral geniculate nucleus, then onward to V1, V2, V4 and the inferior temporal cortex.
+
+In a small kitchen at the back of the house, with sunlight slanting in from a high window, an old man stirred a pot of soup. He lifted the spoon to his lips and tasted carefully, considering, then nodded once and added a pinch of thyme. The soup smelled of garlic and good butter. Outside, a dog barked, then was quiet. The clock on the wall ticked patiently.
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class BitLinear(nn.Module):
+    def __init__(self, in_features, out_features):
+        super().__init__()
+        self.weight = nn.Parameter(torch.empty(out_features, in_features))
+        self.bias = nn.Parameter(torch.zeros(out_features))
+        nn.init.kaiming_uniform_(self.weight)
+
+    def forward(self, x):
+        scale = self.weight.abs().mean().clamp_min(1e-5)
+        w_q = (self.weight / scale).round().clamp(-1, 1)
+        a_scale = x.abs().amax(dim=-1, keepdim=True).clamp_min(1e-5) / 127.0
+        x_q = (x / a_scale).round().clamp(-128, 127)
+        return F.linear(x_q, w_q, None) * a_scale * scale + self.bias
+
+def fibonacci(n):
+    if n < 2:
+        return n
+    a, b = 0, 1
+    for _ in range(n - 1):
+        a, b = b, a + b
+    return b
+
+SELECT customer_id, COUNT(*) AS order_count, SUM(total_amount) AS lifetime_value
+FROM orders
+WHERE order_date >= DATE_SUB(CURRENT_DATE, INTERVAL 90 DAY)
+GROUP BY customer_id
+HAVING SUM(total_amount) > 500
+ORDER BY lifetime_value DESC
+LIMIT 100;
+
+The Roman Empire reached its territorial peak under Trajan in 117 CE. From this point onward the empire managed a complex network of provinces stretching from Britain to Mesopotamia. Roads, aqueducts, and amphitheatres knit the provinces together. The Pax Romana, lasting roughly two centuries, allowed unprecedented trade across the Mediterranean basin. Egyptian grain fed the Italian peninsula, Iberian silver paid the legions, and pottery from Gaul reached every coast. Yet beneath this stability lay constant pressure on the frontiers from Germanic tribes, Parthian armies, and rebellious provinces.
+
+Question: What is the capital of France?
+Answer: Paris.
+
+Question: Who painted the Mona Lisa?
+Answer: Leonardo da Vinci painted the Mona Lisa between 1503 and 1519. The painting now hangs in the Louvre Museum in Paris.
+
+Question: How many bones are in the human body?
+Answer: An adult human skeleton typically has 206 bones. Newborns are born with about 270 bones, many of which fuse together as the child grows.
+
+Question: What is the speed of light?
+Answer: The speed of light in a vacuum is approximately 299,792,458 meters per second, often rounded to 3 × 10^8 m/s.
+
+The Raspberry Pi 5 features a Broadcom BCM2712 system-on-chip with four ARM Cortex-A76 cores running at 2.4 gigahertz. It supports the ARMv8.2-A instruction set architecture with NEON SIMD and dot-product extensions for accelerated integer matrix multiplication. The chip lacks the I8MM instructions that arrive with ARMv8.6, and it has no SVE or BF16 support. Memory bandwidth is approximately 12 to 14 gigabytes per second effective, which is the limiting factor for transformer inference at the per-token level. Sustained inference requires an active cooler to prevent thermal throttling.
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main(int argc, char **argv) {
+    if (argc != 2) {
+        fprintf(stderr, "usage: %s <name>\n", argv[0]);
+        return 1;
+    }
+    printf("Hello, %s!\n", argv[1]);
+    return 0;
+}
+
+In quantum mechanics, the principle of superposition states that any quantum system can exist in multiple states simultaneously until it is measured. This is famously illustrated by Schrodinger's cat thought experiment, in which a cat in a sealed box is considered to be both alive and dead until the box is opened and the state of the cat is observed. Modern quantum computers exploit superposition by manipulating qubits, which can represent both zero and one at the same time, enabling certain algorithms to outpace any classical algorithm by exponential factors.
+
+The recipe calls for two cups of all-purpose flour, one teaspoon of kosher salt, four large eggs, one cup of whole milk, and three tablespoons of melted unsalted butter. Whisk the dry ingredients together in a large bowl, then make a well in the center. Crack the eggs into the well and add the milk gradually while whisking. Once the batter is smooth, whisk in the melted butter and let the mixture rest for thirty minutes before cooking. Heat a non-stick pan over medium heat, brush lightly with oil, and ladle a quarter cup of batter into the pan. Cook for ninety seconds per side, until the edges are golden.
+
+Photosynthesis is the process by which plants, algae, and certain bacteria convert light energy, usually from the sun, into chemical energy stored in glucose. The reaction takes place primarily in the chloroplasts and uses water and carbon dioxide as inputs, releasing oxygen as a byproduct. The simplified equation is 6 CO2 + 6 H2O + light -> C6H12O6 + 6 O2. The energy stored in glucose powers the metabolism of the organism and, ultimately, much of the food web on Earth.
+
+A transformer language model is a sequence-to-sequence neural network that uses attention as its primary computational primitive. Each layer applies multi-head self-attention followed by a feedforward sublayer, with residual connections and layer normalization. The attention mechanism allows each token to gather information from all other tokens in the context, weighted by learned compatibility scores. Modern decoder-only transformers, such as the GPT family, predict the next token in a sequence by attending only to previous tokens. Pretraining on large text corpora produces broadly capable language models that can be further fine-tuned on specific tasks.
+
+Bash scripting fundamentals: every script should begin with a shebang line specifying the interpreter, such as #!/usr/bin/env bash. Use set -euo pipefail near the top to catch errors early. Variables are referenced with a leading dollar sign and assigned without spaces around the equals sign. Command substitution is written as $(command). The double-bracket conditional is preferred over single-bracket for arithmetic and string comparisons. Always quote variables that contain user input or paths to avoid word splitting and globbing surprises.

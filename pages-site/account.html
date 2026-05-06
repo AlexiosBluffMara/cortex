@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your Account — Red Team Kitchen</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="stylesheet" href="/assets/style.css">
+<style>
+  .acct-card { max-width: 640px; margin: 2rem auto; padding: 2rem; border: 1px solid #e5e5e5; border-radius: 14px; background: #fff; }
+  .kv { display: grid; grid-template-columns: 160px 1fr; gap: 0.5rem 1rem; margin: 1rem 0; }
+  .kv dt { color: #666; }
+  .kv dd { margin: 0; font-weight: 600; }
+  .bar { height: 10px; background: #eee; border-radius: 999px; overflow: hidden; margin: 0.5rem 0 1.5rem; }
+  .bar > span { display: block; height: 100%; background: #CC0000; }
+  input[type="text"] { width: 100%; padding: 0.6rem; border: 1px solid #ccc; border-radius: 8px; font-size: 1rem; }
+  button { padding: 0.7rem 1.2rem; border: 0; background: #111; color: #fff; border-radius: 8px; cursor: pointer; }
+  .err { color: #CC0000; min-height: 1.2em; }
+  .muted { color: #666; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<nav class="sitenav">
+  <a href="/">Home</a>
+  <a href="/cortex.html">Cortex</a>
+  <a href="/mercury.html">Mercury</a>
+  <a href="/access.html">Access</a>
+  <a href="/donate.html">Donate</a>
+  <a href="/account.html" class="active">Account</a>
+</nav>
+
+<div class="wrap">
+<div class="acct-card">
+  <h1>Your account</h1>
+
+  <div id="signin">
+    <p>Paste the access token from your subscription receipt email.</p>
+    <input id="token" type="text" placeholder="rtk_live_..." autocomplete="off">
+    <p class="muted">Your token is stored in localStorage and used to fetch your plan + usage. We never log it.</p>
+    <button id="load">Load my account</button>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div id="account" hidden>
+    <dl class="kv">
+      <dt>Email</dt><dd id="email">&mdash;</dd>
+      <dt>Plan</dt><dd id="plan">&mdash;</dd>
+      <dt>Status</dt><dd id="status">&mdash;</dd>
+      <dt>Calls used</dt><dd id="usage">&mdash;</dd>
+      <dt>Resets</dt><dd id="reset">&mdash;</dd>
+    </dl>
+    <div class="bar"><span id="bar" style="width:0%"></span></div>
+    <p><a id="portal" href="#" target="_blank" rel="noopener">Manage billing &amp; cancel &rarr;</a></p>
+    <p class="muted">API base: <code>https://redteamkitchen.com/api</code>. Send your token as <code>Authorization: Bearer &lt;token&gt;</code>.</p>
+    <button id="signout" style="background:#666">Forget this token</button>
+  </div>
+</div>
+</div>
+
+<script src="/app.js"></script>
+<script>RTKPay.initAccount();</script>
+</body>
+</html>

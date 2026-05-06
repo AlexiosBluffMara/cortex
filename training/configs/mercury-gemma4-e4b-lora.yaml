@@ -1,0 +1,65 @@
+# Unsloth LoRA fine-tune config for Mercury agent on Gemma 4 e4b
+# Tuned for a single RTX 5090 (32 GB GDDR7, sm_120 Blackwell)
+
+base_model: unsloth/gemma-4-E4B-it-unsloth-bnb-4bit   # 4-bit pre-quantized
+max_seq_length: 8192                          # Gemma 4 supports much more, 8K is enough for compressed trajectories
+load_in_4bit: true                            # QLoRA, fits on 5090 with room
+
+# LoRA hyperparameters
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.0
+  bias: "none"
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+  use_gradient_checkpointing: "unsloth"       # unsloth-optimized rematerialization
+  random_state: 3407
+
+# Dataset (resolved at runtime by train_lora.py)
+dataset:
+  path: "datasets/mercury-LATEST.jsonl"       # symlink updated by extract_trajectories.py
+  format: "sharegpt"                          # Mercury's native trajectory format
+  chat_template: "gemma-4"
+
+# Training hyperparameters
+training:
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 4              # effective batch = 8
+  warmup_steps: 10
+  num_train_epochs: 3
+  learning_rate: 2.0e-4
+  lr_scheduler_type: "cosine"
+  weight_decay: 0.01
+  seed: 3407
+  logging_steps: 5
+  save_strategy: "epoch"
+  optim: "adamw_8bit"
+  fp16: false
+  bf16: true                                  # 5090 supports bf16 natively
+  report_to: "none"                           # add wandb / tb later
+  output_dir: "checkpoints/mercury-gemma4-e4b"
+
+# Export config
+export:
+  gguf:
+    quant: "q4_k_m"                           # default Ollama quant
+    target: "exports/"
+    ollama_modelfile: |
+      FROM ./mercury-gemma4-e4b-{date}.gguf
+      TEMPLATE """{{ if .System }}<start_of_turn>system
+      {{ .System }}<end_of_turn>
+      {{ end }}{{ range .Messages }}<start_of_turn>{{ .Role }}
+      {{ .Content }}<end_of_turn>
+      {{ end }}<start_of_turn>model
+      """
+      PARAMETER stop "<end_of_turn>"
+  mlx:
+    quant_bits: 4
+    target: "exports/"

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cortex kiosk - Baby Pi</title>
+<link rel="stylesheet" href="/assets/style.css">
+<meta http-equiv="refresh" content="2">
+</head>
+<body class="kiosk">
+<main>
+  <h1>Cortex Kiosk</h1>
+  <p class="sub">Live state from the rtk-5090 cluster. Auto-refresh: 2s.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Tunnel</h2>
+      <div class="status">
+        <span class="dot" id="dot-tunnel"></span>
+        <b id="s-tunnel">checking...</b>
+      </div>
+      <div class="log" id="l-tunnel"></div>
+    </div>
+
+    <div class="card">
+      <h2>Inference router</h2>
+      <div class="status">
+        <span class="dot" id="dot-inf"></span>
+        <b id="s-inf">checking...</b>
+      </div>
+      <div class="log" id="l-inf"></div>
+    </div>
+
+    <div class="card">
+      <h2>Loaded models</h2>
+      <div class="log" id="l-models">checking...</div>
+    </div>
+
+    <div class="card wide">
+      <h2>Last 10 narrations</h2>
+      <ol class="log" id="l-narr"><li>checking...</li></ol>
+    </div>
+  </div>
+
+  <footer>
+    cortex.redteamkitchen.com - Cloudflare Pages -&gt; rtk-5090 tunnel
+  </footer>
+</main>
+<script src="/assets/app.js" data-mode="kiosk"></script>
+</body>
+</html>

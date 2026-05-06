@@ -1,0 +1,14 @@
+name = "cortex-api"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[routes]]
+pattern = "cortex.redteamkitchen.com/api/*"
+zone_name = "redteamkitchen.com"
+
+[vars]
+INFERENCE_BASE = "https://inference.redteamkitchen.com"
+OLLAMA_BASE = "https://ollama.redteamkitchen.com"
+ALLOWED_ORIGIN = "https://cortex.redteamkitchen.com"
+MAX_UPLOAD_BYTES = "52428800"

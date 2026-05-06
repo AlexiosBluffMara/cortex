@@ -1,0 +1,300 @@
+# Cortex Edge — AdGuard Home configuration
+# Pre-populated config dropped at /opt/AdGuardHome/AdGuardHome.yaml on first boot.
+# Default admin: soumit / ChangeMeNow!  (CHANGE IMMEDIATELY in web UI)
+
+http:
+  pprof:
+    port: 6060
+    enabled: false
+  address: 0.0.0.0:80
+  session_ttl: 720h
+users:
+  - name: soumit
+    # bcrypt cost-10 hash of "ChangeMeNow!" — change in web UI on first login
+    password: $2a$10$kk9Q7DH9nvXqs5VJg7K6yu5q6S2Pjc0wfMqLqCl2Q9QKnYa7p6LqW
+auth_attempts: 5
+block_auth_min: 15
+http_proxy: ""
+language: en
+theme: auto
+debug_pprof: false
+web_session_ttl: 720h
+dns:
+  bind_hosts:
+    - 0.0.0.0
+  port: 53
+  anonymize_client_ip: false
+  protection_enabled: true
+  blocking_mode: default
+  blocking_ipv4: ""
+  blocking_ipv6: ""
+  blocked_response_ttl: 10
+  parental_block_host: family-block.dns.adguard.com
+  safebrowsing_block_host: standard-block.dns.adguard.com
+  ratelimit: 0                  # 0 = unlimited (LAN trusted)
+  ratelimit_subnet_len_ipv4: 24
+  ratelimit_subnet_len_ipv6: 56
+  ratelimit_whitelist: []
+  refuse_any: true
+  upstream_dns:
+    - https://dns.cloudflare.com/dns-query
+    - https://dns.google/dns-query
+    - quic://dns.adguard-dns.com
+  upstream_dns_file: ""
+  bootstrap_dns:
+    - 1.1.1.1
+    - 8.8.8.8
+    - 2606:4700:4700::1111
+    - 2001:4860:4860::8888
+  fallback_dns: []
+  upstream_mode: load_balance
+  fastest_timeout: 1s
+  allowed_clients: []
+  disallowed_clients: []
+  blocked_hosts:
+    - version.bind
+    - id.server
+    - hostname.bind
+  trusted_proxies:
+    - 127.0.0.0/8
+    - ::1/128
+  cache_size: 4194304
+  cache_ttl_min: 0
+  cache_ttl_max: 0
+  cache_optimistic: true
+  bogus_nxdomain: []
+  aaaa_disabled: false
+  enable_dnssec: true
+  edns_client_subnet:
+    custom_ip: ""
+    enabled: false
+    use_custom: false
+  max_goroutines: 300
+  handle_ddr: true
+  ipset: []
+  ipset_file: ""
+  bootstrap_prefer_ipv6: false
+  upstream_timeout: 10s
+  private_networks: []
+  use_private_ptr_resolvers: true
+  local_ptr_upstreams: []
+  use_dns64: false
+  dns64_prefixes: []
+  serve_http3: false
+  use_http3_upstreams: false
+  serve_plain_dns: true
+  hostsfile_enabled: true
+tls:
+  enabled: false
+  server_name: ""
+  force_https: false
+  port_https: 443
+  port_dns_over_tls: 853
+  port_dns_over_quic: 853
+  port_dnscrypt: 0
+  dnscrypt_config_file: ""
+  allow_unencrypted_doh: false
+  certificate_chain: ""
+  private_key: ""
+  certificate_path: ""
+  private_key_path: ""
+  strict_sni_check: false
+querylog:
+  ignored: []
+  interval: 168h
+  size_memory: 1000
+  enabled: true
+  file_enabled: true
+statistics:
+  ignored: []
+  interval: 168h
+  enabled: true
+filters:
+  - enabled: true
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt
+    name: AdGuard DNS filter
+    id: 1
+  - enabled: true
+    url: https://big.oisd.nl/
+    name: OISD Big (compatible blocklist)
+    id: 2
+  - enabled: true
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/light.txt
+    name: Hagezi Light (curated for app/streaming compat)
+    id: 3
+  - enabled: true
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/tif.txt
+    name: Hagezi Threat Intelligence Feed (malware/scams)
+    id: 4
+whitelist_filters: []
+user_rules:
+  # ===== iOS / macOS / Apple services =====
+  - "@@||push.apple.com^"
+  - "@@||gateway.push.apple.com^"
+  - "@@||init.itunes.apple.com^"
+  - "@@||icloud.com^"
+  - "@@||icloud-content.com^"
+  - "@@||me.com^"
+  - "@@||mzstatic.com^"
+  - "@@||apple-cloudkit.com^"
+  - "@@||cdn-apple.com^"
+  - "@@||apple.com^"
+  # ===== Android / Google FCM / Play Services =====
+  - "@@||clientservices.googleapis.com^"
+  - "@@||mtalk.google.com^"
+  - "@@||gvt1.com^"
+  - "@@||gvt2.com^"
+  - "@@||gvt3.com^"
+  - "@@||fcm.googleapis.com^"
+  - "@@||firebaseinstallations.googleapis.com^"
+  - "@@||firebaseio.com^"
+  - "@@||googleusercontent.com^"
+  - "@@||googleapis.com^"
+  - "@@||play.googleapis.com^"
+  - "@@||android.com^"
+  # ===== Streaming services =====
+  - "@@||nflxvideo.net^"           # Netflix CDN
+  - "@@||nflxso.net^"
+  - "@@||netflix.com^"
+  - "@@||dssott.com^"              # Disney+
+  - "@@||disney-plus.net^"
+  - "@@||disneyplus.com^"
+  - "@@||hbo.com^"
+  - "@@||hbomaxcdn.com^"
+  - "@@||max.com^"
+  - "@@||twitchcdn.net^"
+  - "@@||ttvnw.net^"
+  - "@@||twitch.tv^"
+  - "@@||ytimg.com^"
+  - "@@||googlevideo.com^"
+  - "@@||youtube.com^"
+  - "@@||primevideo.com^"
+  - "@@||aiv-cdn.net^"
+  - "@@||amazon.com^"
+  - "@@||spotify.com^"
+  - "@@||scdn.co^"                 # Spotify CDN
+  - "@@||spotifycdn.com^"
+  # ===== Gaming =====
+  - "@@||steamcommunity.com^"
+  - "@@||steampowered.com^"
+  - "@@||steamcontent.com^"
+  - "@@||steamserver.net^"
+  - "@@||epicgames.com^"
+  - "@@||epicgames.dev^"
+  - "@@||unrealengine.com^"
+  - "@@||battle.net^"
+  - "@@||blizzard.com^"
+  - "@@||riotgames.com^"
+  - "@@||playstation.net^"
+  - "@@||xbox.com^"
+  - "@@||xboxlive.com^"
+  - "@@||nintendo.net^"
+  # ===== Smart home / IoT =====
+  - "@@||meethue.com^"
+  - "@@||philips.com^"
+  - "@@||philips-hue.com^"
+  - "@@||hue.com^"
+  - "@@||googlecast.com^"
+  - "@@||nest.com^"
+  - "@@||home.google.com^"
+  - "@@||makers.googleusercontent.com^"
+  - "@@||tplinkcloud.com^"          # router itself
+  - "@@||tplinkra.com^"
+  # ===== Tailscale =====
+  - "@@||tailscale.com^"
+  - "@@||tailscale.io^"
+  - "@@||ts.net^"
+  - "@@||log.tailscale.io^"
+  # ===== Cloudflare =====
+  - "@@||cloudflareclient.com^"
+  - "@@||cloudflareaccess.com^"
+  - "@@||trycloudflare.com^"
+  - "@@||cloudflare.com^"
+  - "@@||cloudflare-dns.com^"
+  - "@@||one.one.one.one^"
+  # ===== AI / dev =====
+  - "@@||anthropic.com^"
+  - "@@||claude.ai^"
+  - "@@||openai.com^"
+  - "@@||oaiusercontent.com^"
+  - "@@||github.com^"
+  - "@@||githubusercontent.com^"
+  - "@@||raw.githubusercontent.com^"
+  - "@@||huggingface.co^"
+  - "@@||hf.co^"
+  - "@@||cdn-lfs.huggingface.co^"
+  # ===== Discord / comms =====
+  - "@@||discord.com^"
+  - "@@||discordapp.com^"
+  - "@@||discord.gg^"
+  - "@@||slack.com^"
+  - "@@||zoom.us^"
+  - "@@||teams.microsoft.com^"
+  # ===== Projectors / TVs (firmware + streaming app endpoints) =====
+  # Hisense (VIDAA OS) — Soumit's projector
+  - "@@||hisense.com^"
+  - "@@||hismarttv.com^"
+  - "@@||vidaa.com^"
+  - "@@||vidaa.network^"
+  - "@@||hicloud.com^"
+  - "@@||tvsignin.hismarttv.com^"
+  - "@@||appstore.hismarttv.com^"
+  # Other smart-TV / projector ecosystems
+  - "@@||benq.com^"
+  - "@@||optoma.com^"
+  - "@@||epson.com^"
+  - "@@||lge.com^"                  # LG smart TV
+  - "@@||samsungcloudsolution.com^" # Samsung TV
+  - "@@||samsungelectronics.com^"
+  - "@@||sonyselect.com^"
+  - "@@||vizio.com^"
+  - "@@||roku.com^"                 # Roku stick / TVs
+  - "@@||rokuapi.net^"
+filtering:
+  blocking_ipv4: ""
+  blocking_ipv6: ""
+  blocked_services:
+    schedule:
+      time_zone: Local
+    ids: []
+  protection_disabled_until: null
+  safe_search:
+    enabled: false
+    bing: true
+    duckduckgo: true
+    google: true
+    pixabay: true
+    yandex: true
+    youtube: true
+  blocking_mode: default
+  parental_block_host: family-block.dns.adguard.com
+  safebrowsing_block_host: standard-block.dns.adguard.com
+  rewrites: []
+  blocked_response_ttl: 10
+  filtering_enabled: true
+  filters_update_interval: 24
+  parental_enabled: false
+  safebrowsing_enabled: false
+  protection_enabled: true
+clients:
+  runtime_sources:
+    whois: true
+    arp: true
+    rdns: true
+    dhcp: true
+    hosts: true
+  persistent: []
+log:
+  enabled: true
+  file: ""
+  max_backups: 0
+  max_size: 100
+  max_age: 3
+  compress: false
+  local_time: false
+  verbose: false
+os:
+  group: ""
+  user: ""
+  rlimit_nofile: 0
+schema_version: 28

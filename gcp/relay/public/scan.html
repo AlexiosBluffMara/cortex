@@ -821,7 +821,7 @@
     ? ''
     : 'https://cortex-relay-846100819386.us-central1.run.app';
   const API        = RELAY ? `${RELAY}/api` : '/api';
-  const VIEWER_URL = (window.LIVE_VIEWER_URL || '').replace(/\/$/, '') || 'http://localhost:8765';
+  const VIEWER_URL = (window.LIVE_VIEWER_URL || '').replace(/\/$/, '');
 
   /* open access — no auth required */
 
@@ -970,7 +970,8 @@
       statTopRoi.textContent = d.top_rois[0];
     }
 
-    if (d.upload_url) renderMedia(d.upload_url, d.filename || '');
+    const mediaUrl = d.file_url || d.upload_url || '';
+    if (mediaUrl) renderMedia(mediaUrl, d.filename || '');
 
     if (d.narrations) {
       currentNarrations = d.narrations;
@@ -1071,6 +1072,7 @@
   }
 
   function injectViewer(d) {
+    if (!VIEWER_URL) return;  // no live viewer in cloud-only mode
     if (viewerPanel.querySelector('.viewer-iframe')) return;
     const iframe = document.createElement('iframe');
     iframe.className = 'viewer-iframe';

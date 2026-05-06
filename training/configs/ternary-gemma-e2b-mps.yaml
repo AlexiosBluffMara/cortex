@@ -1,0 +1,48 @@
+# PyTorch+MPS QAT for Big Apple (M4 Max, 48 GB unified)
+
+teacher: /Users/soumitlahiri/cortex-training/gemma-4-E2B-it
+student_init: /Users/soumitlahiri/cortex-training/gemma-4-E2B-it
+
+ternarise:
+  patterns:
+    - "*.q_proj"
+    - "*.k_proj"
+    - "*.v_proj"
+    - "*.o_proj"
+    - "*.gate_proj"
+    - "*.up_proj"
+    - "*.down_proj"
+  exclude:
+    - "embed_tokens"
+    - "lm_head"
+    - "norm"
+
+distill:
+  alpha_kl: 0.7
+  alpha_ce: 0.3
+  temperature: 2.0
+  enabled: true
+
+dataset:
+  sources:
+    - {name: "wikitext", subset: "wikitext-2-raw-v1", weight: 0.30}
+    - {name: "HuggingFaceFW/fineweb-edu", subset: "sample-10BT", weight: 0.45, max_examples: 200000}
+    - {name: "databricks/databricks-dolly-15k", weight: 0.15}
+    - {name: "tatsu-lab/alpaca", weight: 0.10}
+  max_seq_length: 1024
+
+training:
+  output_dir: "/Users/soumitlahiri/cortex-training/checkpoints/ternary-gemma-e2b-mps"
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 16
+  num_train_epochs: 1
+  max_steps: 6000
+  warmup_steps: 100
+  learning_rate: 5.0e-5
+  lr_scheduler_type: "cosine"
+  weight_decay: 0.0
+  logging_steps: 10
+  save_steps: 1000
+  save_strategy: "steps"
+  eval_strategy: "no"
+  gradient_checkpointing: true

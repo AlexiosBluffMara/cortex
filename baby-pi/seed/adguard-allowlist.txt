@@ -1,0 +1,122 @@
+# ===== iOS / macOS / Apple services =====
+@@||push.apple.com^
+@@||gateway.push.apple.com^
+@@||init.itunes.apple.com^
+@@||icloud.com^
+@@||icloud-content.com^
+@@||me.com^
+@@||mzstatic.com^
+@@||apple-cloudkit.com^
+@@||cdn-apple.com^
+@@||apple.com^
+# ===== Android / Google FCM / Play Services =====
+@@||clientservices.googleapis.com^
+@@||mtalk.google.com^
+@@||gvt1.com^
+@@||gvt2.com^
+@@||gvt3.com^
+@@||fcm.googleapis.com^
+@@||firebaseinstallations.googleapis.com^
+@@||firebaseio.com^
+@@||googleusercontent.com^
+@@||googleapis.com^
+@@||play.googleapis.com^
+@@||android.com^
+# ===== Streaming services =====
+@@||nflxvideo.net^
+@@||nflxso.net^
+@@||netflix.com^
+@@||dssott.com^
+@@||disney-plus.net^
+@@||disneyplus.com^
+@@||hbo.com^
+@@||hbomaxcdn.com^
+@@||max.com^
+@@||twitchcdn.net^
+@@||ttvnw.net^
+@@||twitch.tv^
+@@||ytimg.com^
+@@||googlevideo.com^
+@@||youtube.com^
+@@||primevideo.com^
+@@||aiv-cdn.net^
+@@||amazon.com^
+@@||spotify.com^
+@@||scdn.co^
+@@||spotifycdn.com^
+# ===== Gaming =====
+@@||steamcommunity.com^
+@@||steampowered.com^
+@@||steamcontent.com^
+@@||steamserver.net^
+@@||epicgames.com^
+@@||epicgames.dev^
+@@||unrealengine.com^
+@@||battle.net^
+@@||blizzard.com^
+@@||riotgames.com^
+@@||playstation.net^
+@@||xbox.com^
+@@||xboxlive.com^
+@@||nintendo.net^
+# ===== Smart home / IoT =====
+@@||meethue.com^
+@@||philips.com^
+@@||philips-hue.com^
+@@||hue.com^
+@@||googlecast.com^
+@@||nest.com^
+@@||home.google.com^
+@@||makers.googleusercontent.com^
+@@||tplinkcloud.com^
+@@||tplinkra.com^
+# ===== Tailscale =====
+@@||tailscale.com^
+@@||tailscale.io^
+@@||ts.net^
+@@||log.tailscale.io^
+# ===== Cloudflare =====
+@@||cloudflareclient.com^
+@@||cloudflareaccess.com^
+@@||trycloudflare.com^
+@@||cloudflare.com^
+@@||cloudflare-dns.com^
+@@||one.one.one.one^
+# ===== AI / dev =====
+@@||anthropic.com^
+@@||claude.ai^
+@@||openai.com^
+@@||oaiusercontent.com^
+@@||github.com^
+@@||githubusercontent.com^
+@@||raw.githubusercontent.com^
+@@||huggingface.co^
+@@||hf.co^
+@@||cdn-lfs.huggingface.co^
+# ===== Discord / comms =====
+@@||discord.com^
+@@||discordapp.com^
+@@||discord.gg^
+@@||slack.com^
+@@||zoom.us^
+@@||teams.microsoft.com^
+# ===== Projectors / TVs (firmware + streaming app endpoints) =====
+# Hisense (VIDAA OS) — Soumit's projector
+@@||hisense.com^
+@@||hismarttv.com^
+@@||vidaa.com^
+@@||vidaa.network^
+@@||hicloud.com^
+@@||tvsignin.hismarttv.com^
+@@||appstore.hismarttv.com^
+# Other smart-TV / projector ecosystems
+@@||benq.com^
+@@||optoma.com^
+@@||epson.com^
+@@||lge.com^
+@@||samsungcloudsolution.com^
+@@||samsungelectronics.com^
+@@||sonyselect.com^
+@@||vizio.com^
+@@||roku.com^
+@@||rokuapi.net^

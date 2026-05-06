@@ -246,7 +246,7 @@ disallow_untyped_defs = false
 # ---------------------------------------------------------------------------
 [tool.coverage.run]
 branch = true
-source = ["cortex", "hermes", "cli"]
+source = ["cortex", "hermes", "cli", "gcp/relay"]
 omit = ["tests/*", "scripts/*"]
 
 [tool.coverage.report]

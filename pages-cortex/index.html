@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cortex - multimodal brain-response analysis</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<main>
+  <h1>Cortex - multimodal brain-response analysis</h1>
+  <p class="sub">Submit a video clip; get a 20,484-vertex cortical activation map
+    + narration. Built for the Gemma 4 Good Hackathon, in collaboration with
+    Illinois State University.</p>
+
+  <form class="card" id="f" enctype="multipart/form-data">
+    <div class="row">
+      <input type="file" name="file" id="file" required
+             accept="video/*,audio/*,image/*">
+      <button type="submit" id="go">Analyze</button>
+    </div>
+    <div class="log" id="log"></div>
+  </form>
+
+  <div class="card status">
+    <div><span class="dot" id="dot-5090"></span>5090 inference: <b id="s-5090">checking...</b></div>
+    <div><span class="dot up"></span>edge: <b>ok</b></div>
+  </div>
+
+  <p><a href="/dashboard.html">Open Baby Pi kiosk dashboard -&gt;</a></p>
+
+  <footer>
+    Cortex is part of Red Team Kitchen, a Chicago-based research collaboration
+    with Illinois State University.
+  </footer>
+</main>
+<script src="/assets/app.js"></script>
+</body>
+</html>

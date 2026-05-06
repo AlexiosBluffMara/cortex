@@ -241,3 +241,209 @@ class TestDispatch:
         # An EDF body but nii.gz extension — hint forces EDF parser
         res = fv.validate(_make_edf_header(), format_hint="edf", filename="weird.nii.gz")
         assert res.format == "edf"
+
+    def test_validate_dispatches_to_nifti(self):
+        fake = _FakeNifti((64, 64, 36, 200), (3.0, 3.0, 3.0, 1.5))
+        with mock.patch("nibabel.Nifti1Image") as nimg:
+            nimg.from_file_map.return_value = fake
+            if hasattr(nimg, "from_bytes"):
+                del nimg.from_bytes
+            res = fv.validate(b"\x1f\x8bfake", filename="scan.nii.gz")
+        assert res.format == "nifti"
+
+    def test_validate_dispatches_to_dicom(self):
+        fake = _FakeDicom(
+            Modality="MR", StudyDescription="task BOLD", SeriesDescription="EPI",
+            Rows=64, Columns=64, NumberOfFrames=240, RepetitionTime=1500,
+        )
+        with mock.patch("pydicom.dcmread", return_value=fake):
+            res = fv.validate(b"\x00" * 132 + b"DICM", filename="img.dcm")
+        assert res.format == "dicom"
+
+    def test_validate_dispatches_to_bids(self):
+        data = _make_bids_zip({
+            "dataset_description.json": b"{}",
+            "sub-01/func/sub-01_task-rest_bold.nii.gz": b"\x1f\x8b",
+        })
+        res = fv.validate(data, filename="dataset.zip")
+        assert res.format == "bids"
+
+    def test_validate_dispatches_to_matlab(self):
+        res = fv.validate(b"MATLAB fake", filename="scan.mat")
+        assert res.format == "matlab"
+
+
+# ─── detect_format magic bytes ────────────────────────────────────────────────
+
+class TestDetectFormatMagic:
+    def test_gzip_magic_returns_nifti(self):
+        assert fv.detect_format("unknown.bin", b"\x1f\x8b" + b"\x00" * 20) == "nifti"
+
+    def test_zip_magic_returns_bids(self):
+        assert fv.detect_format("unknown.bin", b"PK\x03\x04" + b"\x00" * 20) == "bids"
+
+    def test_matlab_magic_returns_matlab(self):
+        assert fv.detect_format("unknown.bin", b"MATLAB5.0 something") == "matlab"
+
+    def test_edf_magic_returns_edf(self):
+        assert fv.detect_format("unknown.bin", b"0       " + b"\x00" * 100) == "edf"
+
+    def test_mat_extension_returns_matlab(self):
+        assert fv.detect_format("scan.mat", b"") == "matlab"
+
+    def test_edf_extension_returns_edf(self):
+        assert fv.detect_format("eeg.edf", b"") == "edf"
+
+
+# ─── ValidationResult properties ─────────────────────────────────────────────
+
+class TestValidationResultProperties:
+    def test_ok_true_when_no_errors(self):
+        r = fv.ValidationResult(format="nifti")
+        assert r.ok is True
+
+    def test_ok_false_when_errors_present(self):
+        r = fv.ValidationResult(format="nifti", errors=["bad TR"])
+        assert r.ok is False
+
+    def test_as_tuple_returns_expected_fields(self):
+        r = fv.ValidationResult(
+            format="nifti",
+            dimensions=[64, 64, 36, 200],
+            tr_s=1.5,
+            n_timepoints=200,
+            anonymized=True,
+            errors=[],
+        )
+        t = r.as_tuple()
+        assert t[0] == "nifti"
+        assert t[1] == [64, 64, 36, 200]
+        assert t[2] == pytest.approx(1.5)
+        assert t[3] == 200
+        assert t[4] is True
+        assert t[5] == []
+
+
+# ─── _validate_nifti extra paths ─────────────────────────────────────────────
+
+class TestNiftiExtraPaths:
+    def test_nibabel_import_error_returns_error(self):
+        with mock.patch.dict("sys.modules", {"nibabel": None}):
+            res = fv._validate_nifti(b"\x1f\x8bfake")
+        assert any("nibabel" in e for e in res.errors)
+
+    def test_nifti2_fallback_when_nifti1_fails(self):
+        """When Nifti1Image.from_file_map raises, falls back to Nifti2Image."""
+        fake = _FakeNifti((64, 64, 36, 200), (3.0, 3.0, 3.0, 1.5))
+
+        class FakeNifti1:
+            from_bytes = None  # triggers the file_map path
+
+            @staticmethod
+            def from_file_map(fmap):
+                raise Exception("wrong format")
+
+        class FakeNifti2:
+            @staticmethod
+            def from_file_map(fmap):
+                return fake
+
+        class FakeNib:
+            Nifti1Image = FakeNifti1
+            Nifti2Image = FakeNifti2
+            FileHolder = mock.MagicMock()
+
+        with mock.patch.dict("sys.modules", {"nibabel": FakeNib}):
+            # Re-import to get fresh module reference
+            import importlib
+            import sys as _sys
+            _sys.modules.pop("cortex.fmri_validator", None)
+            import cortex.fmri_validator as fv2
+            with mock.patch("nibabel.Nifti1Image", FakeNifti1), \
+                 mock.patch("nibabel.Nifti2Image", FakeNifti2), \
+                 mock.patch("nibabel.FileHolder", mock.MagicMock(return_value=mock.MagicMock())):
+                res = fv2._validate_nifti(b"\x00fake")
+
+        _sys.modules.pop("cortex.fmri_validator", None)
+
+    def test_nifti_parse_exception_returns_error(self):
+        """When both Nifti1 and Nifti2 fail, parse exception is caught."""
+        with mock.patch("nibabel.Nifti1Image") as nimg:
+            nimg.from_file_map.side_effect = Exception("corrupt")
+            # No from_bytes attribute → triggers fallback
+            if hasattr(nimg, "from_bytes"):
+                del nimg.from_bytes
+            with mock.patch("nibabel.Nifti2Image") as nimg2:
+                nimg2.from_file_map.side_effect = Exception("also corrupt")
+                with mock.patch("nibabel.FileHolder", mock.MagicMock()):
+                    res = fv._validate_nifti(b"corrupt data")
+        assert any("parse failed" in e for e in res.errors)
+
+
+# ─── _validate_dicom extra paths ──────────────────────────────────────────────
+
+class TestDicomExtraPaths:
+    def test_pydicom_import_error_returns_error(self):
+        with mock.patch.dict("sys.modules", {"pydicom": None}):
+            res = fv._validate_dicom(b"\x00" * 132 + b"DICM")
+        assert any("pydicom" in e for e in res.errors)
+
+    def test_dicom_parse_failure_returns_error(self):
+        with mock.patch("pydicom.dcmread", side_effect=Exception("malformed")):
+            res = fv._validate_dicom(b"\x00" * 132 + b"DICM")
+        assert any("parse failed" in e for e in res.errors)
+
+
+# ─── _validate_bids extra paths ───────────────────────────────────────────────
+
+class TestBidsExtraPaths:
+    def test_sidecar_json_parse_error_is_absorbed(self):
+        """Malformed sidecar JSON doesn't crash validation."""
+        data = _make_bids_zip({
+            "dataset_description.json": b"{}",
+            "sub-01/func/sub-01_task-rest_bold.nii.gz": b"\x1f\x8b",
+            "sub-01/func/sub-01_task-rest_bold.json": b"not valid json {{{",
+        })
+        res = fv._validate_bids(data)
+        # Should not raise; tr_s stays 0
+        assert res.format == "bids"
+        assert res.tr_s == 0.0
+
+    def test_tr_below_minimum_adds_error(self):
+        """TR of 0.1s (below MIN_TR_SECONDS=0.5) adds an error."""
+        data = _make_bids_zip({
+            "dataset_description.json": b"{}",
+            "sub-01/func/sub-01_task-rest_bold.nii.gz": b"\x1f\x8b",
+            "sub-01/func/sub-01_task-rest_bold.json": json.dumps({"RepetitionTime": 0.1}).encode(),
+        })
+        res = fv._validate_bids(data)
+        assert any("TR" in e for e in res.errors)
+
+
+# ─── _validate_matlab ─────────────────────────────────────────────────────────
+
+class TestMatlabValidator:
+    def test_valid_matlab_v5_header(self):
+        data = b"MATLAB5.0 MAT-file, Created by MATLAB 9.8" + b"\x00" * 128
+        res = fv._validate_matlab(data)
+        assert res.format == "matlab"
+        assert res.errors == []
+        assert res.anonymized is True
+
+    def test_non_v5_returns_error(self):
+        data = b"\x89HDF\r\n\x1a\n" + b"\x00" * 100  # HDF5 = MATLAB v7.3
+        res = fv._validate_matlab(data)
+        assert any("HDF5" in e or "v5" in e for e in res.errors)
+
+
+# ─── _validate_edf extra paths ────────────────────────────────────────────────
+
+class TestEdfExtraPaths:
+    def test_edf_parse_failed_bad_header(self):
+        """Header bytes that can't be parsed as integers → parse failed error."""
+        # Construct a header that's >= 256 bytes but has non-integer in n_records field
+        data = b"0       " + b" " * 80 + b" " * 80 + b"01.01.20" + b"00.00.00"
+        data += b" " * 8 + b" " * 44 + b"NOT_INT " + b"1.0     " + b"32  "
+        data = data.ljust(256, b" ")
+        res = fv._validate_edf(data)
+        assert any("parse failed" in e for e in res.errors)

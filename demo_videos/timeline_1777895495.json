@@ -1,0 +1,260 @@
+[
+  {
+    "t": 0.0,
+    "end": 4.0,
+    "kind": "title",
+    "text": "Cortex multimodal brain-response demo",
+    "region": null
+  },
+  {
+    "t": 4.88,
+    "end": 7.88,
+    "kind": "title",
+    "text": "Cortex WebUI - sample demo_clip_20s",
+    "region": null
+  },
+  {
+    "t": 7.91,
+    "end": 11.91,
+    "kind": "highlight",
+    "text": "Drop demo_clip_20s.mp4 into the upload pane",
+    "region": [
+      80,
+      800,
+      800,
+      1200
+    ]
+  },
+  {
+    "t": 15.54,
+    "end": 19.54,
+    "kind": "highlight",
+    "text": "TRIBE backend submits scan -> Seratonin RTX 5090",
+    "region": [
+      800,
+      200,
+      2400,
+      800
+    ]
+  },
+  {
+    "t": 16.55,
+    "end": 24.55,
+    "kind": "speedup",
+    "text": "TRIBE inference + 4 persona narrations (RTX 5090)",
+    "region": [
+      800,
+      800,
+      3200,
+      1500
+    ]
+  },
+  {
+    "t": 17.05,
+    "end": 19.05,
+    "kind": "highlight",
+    "text": "status: running",
+    "region": [
+      2400,
+      80,
+      3700,
+      200
+    ]
+  },
+  {
+    "t": 379.47,
+    "end": 381.47,
+    "kind": "highlight",
+    "text": "status: narrating",
+    "region": [
+      2400,
+      80,
+      3700,
+      200
+    ]
+  },
+  {
+    "t": 410.35,
+    "end": 412.35,
+    "kind": "highlight",
+    "text": "status: complete",
+    "region": [
+      2400,
+      80,
+      3700,
+      200
+    ]
+  },
+  {
+    "t": 410.35,
+    "end": 415.35,
+    "kind": "highlight",
+    "text": "All four narrations rendered",
+    "region": [
+      2200,
+      200,
+      3800,
+      1500
+    ]
+  },
+  {
+    "t": 416.42,
+    "end": 422.42,
+    "kind": "highlight",
+    "text": "Gallery shows newest scan with 3D brain + persona embeds",
+    "region": [
+      80,
+      200,
+      3800,
+      1500
+    ]
+  },
+  {
+    "t": 420.75,
+    "end": 423.75,
+    "kind": "title",
+    "text": "Posting demo_clip_20s narrations to Discord",
+    "region": null
+  },
+  {
+    "t": 431.54,
+    "end": 438.54,
+    "kind": "highlight",
+    "text": "Discord channel: 4 persona embeds posted by Snowy",
+    "region": [
+      800,
+      200,
+      3200,
+      1500
+    ]
+  },
+  {
+    "t": 441.31,
+    "end": 444.31,
+    "kind": "title",
+    "text": "Cortex WebUI - sample nasa_artemis_15s_silent",
+    "region": null
+  },
+  {
+    "t": 444.06,
+    "end": 448.06,
+    "kind": "highlight",
+    "text": "Drop nasa_artemis_15s_silent.mp4 into the upload pane",
+    "region": [
+      80,
+      800,
+      800,
+      1200
+    ]
+  },
+  {
+    "t": 448.19,
+    "end": 452.19,
+    "kind": "highlight",
+    "text": "TRIBE backend submits scan -> Seratonin RTX 5090",
+    "region": [
+      800,
+      200,
+      2400,
+      800
+    ]
+  },
+  {
+    "t": 448.93,
+    "end": 456.93,
+    "kind": "speedup",
+    "text": "TRIBE inference + 4 persona narrations (RTX 5090)",
+    "region": [
+      800,
+      800,
+      3200,
+      1500
+    ]
+  },
+  {
+    "t": 449.21,
+    "end": 451.21,
+    "kind": "highlight",
+    "text": "status: running",
+    "region": [
+      2400,
+      80,
+      3700,
+      200
+    ]
+  },
+  {
+    "t": 536.84,
+    "end": 538.84,
+    "kind": "highlight",
+    "text": "status: narrating",
+    "region": [
+      2400,
+      80,
+      3700,
+      200
+    ]
+  },
+  {
+    "t": 610.33,
+    "end": 612.33,
+    "kind": "highlight",
+    "text": "status: complete",
+    "region": [
+      2400,
+      80,
+      3700,
+      200
+    ]
+  },
+  {
+    "t": 610.33,
+    "end": 615.33,
+    "kind": "highlight",
+    "text": "All four narrations rendered",
+    "region": [
+      2200,
+      200,
+      3800,
+      1500
+    ]
+  },
+  {
+    "t": 616.46,
+    "end": 622.46,
+    "kind": "highlight",
+    "text": "Gallery shows newest scan with 3D brain + persona embeds",
+    "region": [
+      80,
+      200,
+      3800,
+      1500
+    ]
+  },
+  {
+    "t": 620.84,
+    "end": 623.84,
+    "kind": "title",
+    "text": "Posting nasa_artemis_15s_silent narrations to Discord",
+    "region": null
+  },
+  {
+    "t": 631.51,
+    "end": 638.51,
+    "kind": "highlight",
+    "text": "Discord channel: 4 persona embeds posted by Snowy",
+    "region": [
+      800,
+      200,
+      3200,
+      1500
+    ]
+  },
+  {
+    "t": 636.52,
+    "end": 640.52,
+    "kind": "title",
+    "text": "Demo complete - https://big-apple.scylla-betta.ts.net",
+    "region": null
+  }
+]

@@ -1,0 +1,56 @@
+name = "cortex-payments"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+
+# ---------------------------------------------------------------------------
+# Production environment.  Routes mounted on the redteamkitchen.com zone, so
+# /api/* on the marketing site forwards to this Worker (the Pages site sits
+# at the apex; this Worker takes /api/*).  After `wrangler deploy --env=production`
+# add the route in the dashboard if it doesn't auto-create.
+# ---------------------------------------------------------------------------
+[env.production]
+name = "cortex-payments"
+routes = [
+  { pattern = "redteamkitchen.com/api/*", zone_name = "redteamkitchen.com" },
+  { pattern = "www.redteamkitchen.com/api/*", zone_name = "redteamkitchen.com" },
+]
+
+# Replace <KV_ID_PROD> after running:
+#   wrangler kv:namespace create rtk-customers --env=production
+[[env.production.kv_namespaces]]
+binding = "RTK_CUSTOMERS"
+id = "<KV_ID_PROD>"
+
+# Non-secret config.  All real secrets are set with `wrangler secret put`.
+[env.production.vars]
+PUBLIC_BASE_URL = "https://redteamkitchen.com"
+
+# ---------------------------------------------------------------------------
+# Test/staging environment — uses Stripe test keys, no custom route, runs on
+# *.workers.dev so you can hit it directly during development.
+# ---------------------------------------------------------------------------
+[env.staging]
+name = "cortex-payments-staging"
+workers_dev = true
+
+[[env.staging.kv_namespaces]]
+binding = "RTK_CUSTOMERS"
+id = "<KV_ID_STAGING>"
+
+[env.staging.vars]
+PUBLIC_BASE_URL = "https://cortex-payments-staging.<account>.workers.dev"
+
+# ---------------------------------------------------------------------------
+# Secrets — set these once per environment (NOT committed):
+#
+#   wrangler secret put STRIPE_SECRET_KEY          --env=production
+#   wrangler secret put STRIPE_WEBHOOK_SECRET      --env=production
+#   wrangler secret put STRIPE_PRICE_ID_HOBBYIST   --env=production
+#   wrangler secret put STRIPE_PRICE_ID_BUILDER    --env=production
+#   wrangler secret put STRIPE_PRICE_ID_PRO        --env=production
+#   wrangler secret put TURNSTILE_SECRET_KEY       --env=production
+#
+# Repeat with --env=staging using Stripe test keys.
+# ---------------------------------------------------------------------------

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ascended Base — Private Inference Access — Red Team Kitchen</title>
+<meta name="description" content="Private inference access on Red Team Kitchen's home rig — RTX 5090, 32 GB VRAM. Three tiers: Hobbyist, Builder, Pro.">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="stylesheet" href="/assets/style.css">
+<style>
+  .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; margin: 2rem 0; }
+  .tier { border: 1px solid #e5e5e5; border-radius: 14px; padding: 1.5rem; background: #fff; display: flex; flex-direction: column; }
+  .tier.featured { border-color: #CC0000; box-shadow: 0 0 0 2px rgba(204,0,0,0.08); }
+  .tier h3 { margin: 0 0 0.25rem; }
+  .price { font-size: 2rem; font-weight: 700; margin: 0.5rem 0 0.25rem; }
+  .price small { font-size: 0.9rem; font-weight: 400; color: #666; }
+  .tier ul { padding-left: 1.1rem; margin: 0.5rem 0 1rem; }
+  .tier li { margin: 0.3rem 0; }
+  .tier .pick { margin-top: auto; padding: 0.8rem; font-weight: 600; border-radius: 10px; border: 0; cursor: pointer; background: #111; color: #fff; }
+  .tier.featured .pick { background: #CC0000; }
+  .tier .pick:disabled { background: #999; }
+  .err { color: #CC0000; margin-top: 0.5rem; min-height: 1.2em; font-size: 0.9rem; }
+  .ts-row { margin: 1.5rem 0; display: flex; justify-content: center; }
+</style>
+</head>
+<body>
+
+<nav class="sitenav">
+  <a href="/">Home</a>
+  <a href="/cortex.html">Cortex</a>
+  <a href="/mercury.html">Mercury</a>
+  <a href="/access.html" class="active">Access</a>
+  <a href="/donate.html">Donate</a>
+</nav>
+
+<div class="wrap">
+
+<header>
+  <div class="pills">
+    <span class="pill brand">Ascended Base</span>
+    <span class="pill gold">Private inference access</span>
+  </div>
+  <h1>Run Cortex &amp; Mercury on our home rig.</h1>
+  <p class="tag">A monthly pass to private inference on Red Team Kitchen's RTX 5090 (32 GB GDDR7, Blackwell sm_120). Gemma 4 weights, TRIBE v2, BitNet on the RPi node — all routed through one API key. Cancel any time.</p>
+</header>
+
+<section>
+  <div class="tiers">
+    <div class="tier" data-tier="hobbyist">
+      <h3>Hobbyist</h3>
+      <div class="price">$10<small>/month</small></div>
+      <p><strong>100 inference calls / month</strong></p>
+      <ul>
+        <li>Gemma 4 (4B / 12B)</li>
+        <li>Cortex narration (general level)</li>
+        <li>Mercury memory recall</li>
+        <li>Hard cap at 100 calls</li>
+      </ul>
+      <button class="pick" data-tier="hobbyist">Subscribe — $10/mo</button>
+    </div>
+
+    <div class="tier featured" data-tier="builder">
+      <h3>Builder</h3>
+      <div class="price">$50<small>/month</small></div>
+      <p><strong>1,000 inference calls / month</strong></p>
+      <ul>
+        <li>Everything in Hobbyist</li>
+        <li>Gemma 4 27B + TRIBE v2</li>
+        <li>Cortex narration (all 3 levels)</li>
+        <li>Async batch jobs</li>
+      </ul>
+      <button class="pick" data-tier="builder">Subscribe — $50/mo</button>
+    </div>
+
+    <div class="tier" data-tier="pro">
+      <h3>Pro</h3>
+      <div class="price">$200<small>/month</small></div>
+      <p><strong>Unlimited (fair use)</strong></p>
+      <ul>
+        <li>Everything in Builder</li>
+        <li>Priority queue on the 5090</li>
+        <li>Email support from Soumit</li>
+        <li>~10 RPS soft fair-use ceiling</li>
+      </ul>
+      <button class="pick" data-tier="pro">Subscribe — $200/mo</button>
+    </div>
+  </div>
+
+  <div class="ts-row" id="turnstile-access"></div>
+
+  <div class="err" id="err"></div>
+  <p style="font-size:0.85rem;color:#666">Billed monthly via Stripe. Cancel any time from the customer portal link in your receipt email. Fair use means we don't deliberately rate-limit you, but sustained abuse (saturating the GPU 24/7) gets a polite email.</p>
+</section>
+
+</div>
+
+<script src="https://js.stripe.com/v3/"></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<script src="/app.js"></script>
+<script>
+  RTKPay.initAccess({
+    pickSelector: '.pick',
+    errId: 'err',
+    turnstileId: 'turnstile-access',
+  });
+</script>
+</body>
+</html>

@@ -88,6 +88,19 @@ async def record_end_to_end(clip_path: str, headless: bool = False, max_wait_sec
                 pass
             await asyncio.sleep(2)
 
+        # Hover over the system monitor for visibility before scrubbing
+        print("[record] dwelling on system monitor")
+        try:
+            mon = await page.query_selector(".telemetry")
+            if mon:
+                await mon.scroll_into_view_if_needed()
+                box = await mon.bounding_box()
+                if box:
+                    await page.mouse.move(box["x"]+box["width"]/2, box["y"]+box["height"]/2)
+                    await asyncio.sleep(4)
+        except Exception:
+            pass
+
         print("[record] scrubbing timeline")
         # Walk the timeline a few times for visual interest
         timeline = await page.query_selector("#timeline")

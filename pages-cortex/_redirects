@@ -1,0 +1,14 @@
+# /api/* is handled by the cortex-api Worker bound to
+# cortex.redteamkitchen.com/api/* (see workers/cortex-api/wrangler.toml).
+# These rules are a fallback ONLY if the Worker route is removed --
+# Cloudflare evaluates Worker routes BEFORE Pages _redirects, so the
+# Worker wins as long as it's deployed. Comment out the proxy line if
+# you want to fall through to the Worker exclusively.
+
+# Fallback transparent proxy (disabled by default):
+# /api/healthz  https://inference.redteamkitchen.com/healthz  200
+# /api/tags     https://ollama.redteamkitchen.com/api/tags    200
+# /api/*        https://inference.redteamkitchen.com/v1/:splat 200
+
+# SPA-style 404 -> custom page
+/*  /404.html  404

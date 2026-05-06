@@ -109,6 +109,9 @@ desktop.ini
 .claude/
 CLAUDE.local.md
 
+# --- Wrangler build cache ---
+.wrangler/
+
 # --- Large media (test clips, demo content) ---
 assets/dl_*.mp4
 assets/dl_*.webm
