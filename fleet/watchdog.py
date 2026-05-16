@@ -23,6 +23,23 @@ Optional env:
 """
 from __future__ import annotations
 
+# ---------------------------------------------------------------------------
+# NEUTRALIZED 2026-05-15. This script was the source of the every-~1-minute
+# console-window flash that stole keyboard focus: the `Cortex_FleetWatchdog`
+# scheduled task launches `python.exe D:\cortex\fleet\watchdog.py` and the
+# task has <RestartOnFailure><Interval>PT1M</Interval>, so Task Scheduler
+# relaunched it (flashing a python.exe console) every minute. We can't
+# disable the task without elevation, so the script now exits 0 IMMEDIATELY
+# unless explicitly opted-in via FLEET_WD_ENABLED=1. A clean exit-0 is NOT a
+# failure, so RestartOnFailure never fires again -> no more relaunch, no more
+# flash. Mercury's own services stay up via mercury_watchdog + start-cortex.
+# To re-enable (only from a properly hidden task): set FLEET_WD_ENABLED=1.
+import os as _os
+import sys as _sys
+if _os.environ.get("FLEET_WD_ENABLED") != "1":
+    _sys.exit(0)
+# ---------------------------------------------------------------------------
+
 import json
 import logging
 import os
@@ -108,8 +125,12 @@ def _start_detached(name: str, exe: str | Path, args: list[str], cwd: str | Path
         fh = open(log_path, "ab", buffering=0)
         creationflags = 0
         if sys.platform == "win32":
-            # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-            creationflags = 0x00000008 | 0x00000200
+            # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP.
+            # Was DETACHED_PROCESS (0x08) which STILL flashes a console window
+            # for console-subsystem exes on Windows and steals keyboard focus.
+            # CREATE_NO_WINDOW (0x08000000) is the only flag that actually
+            # suppresses the window. Fixed 2026-05-15 (the every-20s flash).
+            creationflags = 0x08000000 | 0x00000200
         proc = subprocess.Popen(
             [str(exe), *args],
             cwd=str(cwd),
@@ -199,10 +220,29 @@ def _restart_ollama() -> subprocess.Popen | None:
     return _start_detached("ollama", ollama, ["serve"], REPO, log_file=LOG_DIR / "ollama.log")
 
 
+# Architecture moved 2026-05-15: the public Cortex webapp is now FastAPI on
+# :8765 (not vite :5173, not :8773), and we no longer run the separate
+# inference_router on :8766. Monitoring those dead ports caused a restart
+# attempt — and a window flash — every 20s. Keep only what actually runs;
+# everything else is removed so the watchdog stops thrashing.
+def _restart_cortex_8765() -> subprocess.Popen | None:
+    return _start_detached(
+        "cortex8765",
+        MERCURY_EXE.parent / "pythonw.exe",
+        ["-m", "uvicorn", "webapp.server:app", "--host", "0.0.0.0", "--port", "8765"],
+        REPO,
+        env_extra={
+            "PYTHONPATH": str(REPO),
+            "FOR_DISABLE_CONSOLE_CTRL_HANDLER": "1",
+            "MPLBACKEND": "Agg",
+            "KMP_DUPLICATE_LIB_OK": "TRUE",
+        },
+        log_file=LOG_DIR / "cortex_8765.log",
+    )
+
+
 SERVICES: list[Service] = [
-    Service("router",        lambda: _check_http("http://localhost:8766/healthz"),       _restart_router),
-    Service("backend",       lambda: _check_http("http://localhost:8773/api/health"),    _restart_backend),
-    Service("vite",          lambda: _check_http("http://localhost:5173/"),              _restart_vite),
+    Service("cortex_webapp", lambda: _check_http("http://localhost:8765/api/health"),    _restart_cortex_8765),
     Service("ollama_local",  lambda: _check_http("http://localhost:11434/api/tags"),     _restart_ollama),
     # Peer (read-only — we can't restart big-apple processes from here)
     Service("backend_peer",   lambda: _check_http(f"http://{BIGAPPLE_HOST}:8773/api/health"), None, role="bigapple"),

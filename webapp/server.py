@@ -540,6 +540,9 @@ def create_app(
                         capture_output=True,
                         text=True,
                         timeout=2,
+                        # CREATE_NO_WINDOW — without it this telemetry poll
+                        # flashes a conhost console window. See device._NO_WINDOW.
+                        creationflags=_device._NO_WINDOW,
                     ),
                 )
                 line = (out.stdout or "").strip().splitlines()[0]
@@ -812,12 +815,18 @@ def create_app(
             seen_local_ids.add(sid)
             if rec.get("upstream_id"):
                 seen_upstream_ids.add(rec["upstream_id"])
+            # Defensive: dict.get(k, default) only returns `default` when the
+            # key is ABSENT. Image scans persist `top_rois: null` (key present,
+            # value None), so `rec.get("top_rois", [])[:5]` evaluated to
+            # `None[:5]` → TypeError → EVERY /api/scans call 500'd → the public
+            # gallery page rendered empty/broken even though scans completed
+            # fine. `(x or default)` handles both absent AND null. (2026-05-15)
             out.append({
                 "id": sid,
                 "filename": rec.get("filename"),
                 "status": rec.get("status"),
                 "tier": rec.get("tier"),
-                "top_rois": rec.get("top_rois", [])[:5],
+                "top_rois": (rec.get("top_rois") or [])[:5],
                 "peak_t": rec.get("peak_t"),
                 "tr_seconds": rec.get("tr_seconds"),
                 "n_t": rec.get("n_t"),
@@ -825,8 +834,8 @@ def create_app(
                 "seconds_elapsed": rec.get("seconds_elapsed"),
                 "tribe_seconds": rec.get("tribe_seconds"),
                 "narration_seconds": rec.get("narration_seconds"),
-                "narration_timings": rec.get("narration_timings", {}),
-                "narrations": rec.get("narrations", {}),
+                "narration_timings": rec.get("narration_timings") or {},
+                "narrations": rec.get("narrations") or {},
                 "created_at": rec.get("created_at"),
                 "proxied": rec.get("proxied", False),
             })

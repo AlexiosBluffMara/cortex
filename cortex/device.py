@@ -22,9 +22,18 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from typing import Literal
 
 import torch
+
+# CREATE_NO_WINDOW. Every `nvidia-smi` subprocess call MUST pass this on
+# Windows. Without it, nvidia-smi.exe (a console app) allocates a console
+# (conhost.exe) on each invocation — a black window that flashes on screen
+# and steals keyboard focus. The webapp polls free/used VRAM every ~2s, so
+# this flashed ~2x/2s relentlessly. This was THE flashing-window bug
+# (traced 2026-05-15 via process-spawn capture). 0 on non-Windows = no-op.
+_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 DeviceKind = Literal["cuda", "mps", "cpu"]
 
@@ -95,6 +104,7 @@ def free_vram_gb() -> float:
                 ["nvidia-smi", "--query-gpu=memory.free",
                  "--format=csv,nounits,noheader", "--id=0"],
                 capture_output=True, text=True, timeout=2, check=True,
+                creationflags=_NO_WINDOW,
             )
             return float(r.stdout.strip()) / 1024.0
         except Exception:
@@ -122,6 +132,7 @@ def used_vram_gb() -> float:
                 ["nvidia-smi", "--query-gpu=memory.used",
                  "--format=csv,nounits,noheader", "--id=0"],
                 capture_output=True, text=True, timeout=2, check=True,
+                creationflags=_NO_WINDOW,
             )
             return float(r.stdout.strip()) / 1024.0
         except Exception:

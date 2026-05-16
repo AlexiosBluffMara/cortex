@@ -1,5 +1,12 @@
 # up-seratonin.ps1 — start the full Seratonin (Windows / RTX 5090) stack
 # Run from PowerShell or pwsh; requires Python 3.12+ at C:\Users\soumi\cortex\.venv
+#
+# NEUTRALIZED 2026-05-15: this is the `Cortex_StackLaunch` logon task. It
+# spawned the dead-architecture services (router :8766, backend :8773,
+# vite :5173 via npm.cmd) which no longer exist; npm.cmd flashed a cmd.exe
+# window. Live stack is mercury_watchdog + start-cortex (:8765). Exits
+# immediately unless FLEET_WD_ENABLED=1 so the logon task is a clean no-op.
+if ($env:FLEET_WD_ENABLED -ne "1") { exit 0 }
 $ErrorActionPreference = "Stop"
 $Repo  = "D:\cortex"
 $Venv  = "C:\Users\soumi\cortex\.venv\Scripts\python.exe"

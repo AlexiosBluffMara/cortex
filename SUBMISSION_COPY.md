@@ -222,7 +222,7 @@ A clinical fMRI session costs $3,000–$6,000, requires specialized hospital equ
 
 - Code: https://github.com/AlexiosBluffMara/cortex
 - Live demo: https://cortex.redteamkitchen.com
-- License: MIT (code) · CC-BY-NC 4.0 (TRIBE v2 weights) · Gemma Terms of Use (Gemma 4)
+- License: Apache 2.0 (Cortex code & Gemma 4 weights — https://ai.google.dev/gemma/apache_2) · CC-BY-NC 4.0 (TRIBE v2 weights — non-commercial only) · MIT (Mercury fork)
 
 *Gemma is a trademark of Google LLC. Built by Alexios Bluff Mara LLC (dba Red Team Kitchen) / Illinois State University.*
 ```

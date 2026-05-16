@@ -1,0 +1,32 @@
+ARTEMIS — RETURNING HUMANS TO THE MOON
+
+NASA's Artemis campaign is the United States' program to land the first
+woman and the next man on the Moon and to establish a sustained lunar
+presence as a stepping stone toward crewed missions to Mars.
+
+Key elements:
+
+- Space Launch System (SLS): the super-heavy-lift rocket that launches the
+  Orion spacecraft. At liftoff it produces roughly 8.8 million pounds of
+  thrust, more than the Saturn V that carried the Apollo crews.
+
+- Orion spacecraft: the crew vehicle, designed to carry up to four
+  astronauts on missions beyond low Earth orbit, with a reusable crew
+  module and a European-built service module.
+
+- Artemis I (uncrewed) tested the SLS and Orion on a flight around the Moon.
+  Artemis II carries a crew on a lunar flyby. Artemis III aims to land
+  astronauts near the lunar South Pole, a region of scientific interest
+  because of water ice in permanently shadowed craters.
+
+- Gateway: a small space station planned in lunar orbit to support surface
+  expeditions and serve as a staging point for deep-space exploration.
+
+Why it matters: the lunar South Pole's water ice could be processed into
+drinking water, breathable oxygen, and rocket propellant, reducing the
+cost of operating far from Earth. The science returned — on lunar geology,
+the space environment, and human physiology in deep space — informs the
+eventual goal of sending humans to Mars.
+
+(Compiled from publicly available NASA mission descriptions. NASA-produced
+content is generally not subject to copyright in the United States.)
