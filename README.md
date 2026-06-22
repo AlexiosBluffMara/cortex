@@ -7,20 +7,20 @@
 
 > Upload a short video. In about three minutes, 20,484 seats in your personal Brain Cinema light up in real-time 3D — and **four AI film critics** explain what just happened, in their own voices: a curious ISU freshman, a Northwestern neurologist, a WBEZ science reporter, and a Google ML scientist. Pick the voice that sounds like your brain.
 
-## 🟢 Live demo, right now
+## Current status — June 22, 2026
 
-- **Try it:** [seratonin.scylla-betta.ts.net](https://seratonin.scylla-betta.ts.net) — running live on the 5090, exposed via Tailscale Funnel
-- **Gallery of past runs:** [seratonin.scylla-betta.ts.net/gallery.html](https://seratonin.scylla-betta.ts.net/gallery.html)
-- **Meet the four personas:** [seratonin.scylla-betta.ts.net/personas.html](https://seratonin.scylla-betta.ts.net/personas.html)
-- **Marketing site:** [redteamkitchen.com/cortex](https://redteamkitchen.com/cortex)
+- **Local app:** `http://127.0.0.1:8765` on Seratonin, the RTX 5090 desktop.
+- **Local gallery:** `http://127.0.0.1:8765/gallery.html` when the FastAPI app is running.
+- **Public project page:** [redteamkitchen.com/cortex](https://redteamkitchen.com/cortex)
+- **Optional live route:** [cortex.redteamkitchen.com](https://cortex.redteamkitchen.com) only works when Seratonin, the watchdog, and the Cloudflare Tunnel are online.
 
-The demo URL is a real RTX 5090 in Bloomington–Normal, Illinois. Upload anything (video, audio, image, text) and watch a real fMRI-style activation map appear in your browser. No login. No queue.
+The old Tailscale Funnel URLs (`*.scylla-betta.ts.net`) are retired and should not be used in public copy. Cortex can still be shown live from the local PC, but the resilient public version should publish selected gallery videos, thumbnails, scan metadata, and recordings from Cloudflare Pages/R2. Treat the upload app as lab mode, not as an always-on public promise.
 
 ---
 
-Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma-4-good-hackathon) (Health track) and the [Nous Research × Kimi Creative Hackathon](https://nousresearch.com) (Creative track) by **Alexios Bluff Mara LLC (dba Red Team Kitchen)**.
+Currently framed as the **Nous Research × Kimi Hackathon** Cortex artifact by **Alexios Bluff Mara LLC (dba Red Team Kitchen)**. The project also informed later MRI/fMRI research planning: the useful next step is not claiming a clinical brain scan, but using media-to-brain-response prototypes to ask better research questions before real MRI work.
 
-Cortex shares its RTX 5090 with [Mercury](https://github.com/AlexiosBluffMara/mercury) (the agent gateway, same submission). The contract that lets them coexist is documented at [`mercury/docs/MERCURY_CORTEX_CONTRACT.md`](https://github.com/AlexiosBluffMara/mercury/blob/main/docs/MERCURY_CORTEX_CONTRACT.md) — Cortex owns the GPU swap state machine and exposes `GET /api/utilization` on port 8773; Mercury polls it before any Gemma load.
+Cortex shares its RTX 5090 with [Mercury](https://github.com/AlexiosBluffMara/mercury) (the agent gateway archive). The contract that lets them coexist is documented at [`mercury/docs/MERCURY_CORTEX_CONTRACT.md`](https://github.com/AlexiosBluffMara/mercury/blob/main/docs/MERCURY_CORTEX_CONTRACT.md) — Cortex owns the GPU swap state machine and exposes `GET /api/utilization` from the FastAPI app; Mercury can poll it before any Gemma load.
 
 *Gemma is a trademark of Google LLC.*
 
@@ -117,7 +117,7 @@ The direction is unmistakable: brain-response analysis at the cost of electricit
 
 ## The four personas
 
-Every Cortex scan generates **four parallel narrations** from one TRIBE prediction. Same data, four different readers. See [seratonin.scylla-betta.ts.net/personas.html](https://seratonin.scylla-betta.ts.net/personas.html) for the full backgrounds and live samples.
+Every Cortex scan generates **four parallel narrations** from one TRIBE prediction. Same data, four different readers. The live persona page is available at `/personas.html` when the local app is running; public copy should prefer durable screenshots or recordings until the gallery is static-exported.
 
 **Sam** — ISU freshman from Normal, IL. *"ok so basically your eyes are doing all the work here. it's like when you're scrolling through your fyp and everything just hits."*
 
@@ -148,30 +148,27 @@ Every Cortex scan generates **four parallel narrations** from one TRIBE predicti
 
 ---
 
-## Architecture (live, today)
+## Architecture (local, current)
 
 ```
    Browser / phone
-     ↓ https://seratonin.scylla-betta.ts.net  (Tailscale Funnel)
-   Vite dev server  (port 5173)
-     ↓ /api/* proxy
-   FastAPI backend  (port 8773)
+     ↓ http://127.0.0.1:8765  (local)
+     ↓ https://cortex.redteamkitchen.com  (optional Cloudflare Tunnel)
+   FastAPI backend  (port 8765)
      ├─ TRIBE v2     PyTorch on RTX 5090, ~6 GB VRAM
      │                → 20,484-vertex BOLD prediction at 2 Hz
      │
-     └─ 4× narrate   sam · chris · dr_park · priya  (in parallel queue)
+     └─ 4× narrate   student · patient · clinician · ml_scientist
          ↓
-   Inference router  (port 8766)
-     ├─→ Seratonin Ollama  localhost:11434         Gemma 4 E4B/E2B/26B/31B
-     ├─→ Big Apple Ollama  100.93.240.52:11434     M4 Max overflow
-     └─→ OpenRouter free   gemma-4-26b-a4b-it:free Cloud failover, $0/token
+   Ollama / local narration models
+     └─→ localhost:11434
 ```
 
-Two GPUs cooperate via the inference router: the **RTX 5090 (Seratonin)** does TRIBE inference and the bulk of narration; the **M4 Max MacBook (Big Apple)** is round-robin overflow when the 5090 is busy. If both fall over, the router fails over to **OpenRouter's free Gemma-4-26B endpoint** (200 req/day, $0/token) so the demo URL never returns a 502.
+The current working path is local-first and PC-bound. Seratonin runs the FastAPI app, the scan registry, the generated ASCII brain videos, and the RTX 5090 TRIBE path. Cloudflare Tunnel can expose that app to the internet, but it is an availability convenience, not a guarantee.
 
 GPU scheduler state machine: `IDLE → GEMMA_ACTIVE → TRIBE_ACTIVE` — eviction-driven swap with OOM recovery. TRIBE checkpoint is 676 MB on disk, ~5–6 GB VRAM during inference.
 
-Mercury (the Hermes fork) is reachable from three working surfaces today: **terminal** (`mercury` CLI), **Discord** (`@abmsnowy` bot), and **web** (dashboard at `seratonin.scylla-betta.ts.net:8443` over Tailscale tailnet). iMessage, email, and SMS surfaces are roadmap, not shipped.
+The website should not depend on this process being live. Durable Cortex publishing should export scan metadata plus selected videos/thumbnails to Cloudflare Pages/R2, then link to the live app only when the desktop is available.
 
 ---
 
@@ -201,18 +198,19 @@ TRIBE v2 weights must be installed separately (CC-BY-NC 4.0 — see NOTICE). The
 
 ## Hackathon context
 
-Cortex is a dual submission:
+Cortex is now archived publicly under the **Nous Research × Kimi Hackathon** banner:
 
-- **Gemma 4 Good (Kaggle)** — Health & Sciences track. Deadline May 18, 2026. Demonstrates Gemma 4 running locally via Ollama + Unsloth fine-tuning for neuroscience interpretation.
-- **Nous Research × Kimi Creative Hackathon** — Creative track. Demonstrates Mercury (Hermes fork) dispatching Kimi K2.6 to build the 3D viewer, with Snowy The Bot live on Discord.
+- **Nous Research × Kimi Creative Hackathon** — Creative track. Demonstrates Mercury/Hermes dispatching Kimi K2.6 to build the early 3D viewer and supporting artifacts.
+- **Follow-on research direction** — Cortex inspired more careful MRI/fMRI work planning, but it is not itself a clinical imaging tool.
 
 ---
 
 ## Links
 
-- Live demo: [https://cortex.redteamkitchen.com](https://cortex.redteamkitchen.com)
+- Project page: [https://redteamkitchen.com/cortex](https://redteamkitchen.com/cortex)
+- Optional live route, PC required: [https://cortex.redteamkitchen.com](https://cortex.redteamkitchen.com)
 - GitHub: [https://github.com/AlexiosBluffMara/cortex](https://github.com/AlexiosBluffMara/cortex)
-- Mercury (Hermes fork): [https://github.com/AlexiosBluffMara/mercury](https://github.com/AlexiosBluffMara/mercury)
+- Mercury archive: [https://github.com/AlexiosBluffMara/mercury](https://github.com/AlexiosBluffMara/mercury)
 
 ---
 
