@@ -49,8 +49,14 @@
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:1.2rem}
   .scan-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column;transition:transform 0.15s,border-color 0.15s}
   .scan-card:hover{border-color:var(--accent);transform:translateY(-2px)}
-  .scan-card .video{aspect-ratio:16/9;background:#000 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><text x='50' y='55' text-anchor='middle' fill='%23222' font-size='40'>⌬</text></svg>") center/120px no-repeat;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
-  .scan-card .video video{width:100%;height:100%;object-fit:cover}
+  .scan-card .video{aspect-ratio:16/9;background:#050509;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+  .scan-card .video canvas,.scan-card .video img{width:100%;height:100%;object-fit:cover;display:block}
+  .scan-card .video canvas{background:#050509}
+  .scan-card .video.source-image img{object-fit:contain;background:#050509}
+  .media-badge{position:absolute;left:0.7rem;bottom:0.7rem;padding:0.25rem 0.55rem;border-radius:999px;background:rgba(10,11,14,0.78);border:1px solid rgba(255,255,255,0.14);color:#e8eaf0;font-size:0.68rem;font-family:"JetBrains Mono",monospace;text-transform:uppercase;letter-spacing:0.04em}
+  .media-status{position:absolute;right:0.7rem;bottom:0.7rem;max-width:58%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0.25rem 0.55rem;border-radius:999px;background:rgba(10,11,14,0.7);border:1px solid rgba(255,255,255,0.12);color:var(--muted);font-size:0.68rem;font-family:"JetBrains Mono",monospace}
+  .media-fallback{display:flex;flex-direction:column;align-items:center;gap:0.35rem;padding:1rem;text-align:center;color:var(--muted);font-size:0.86rem}
+  .media-fallback strong{color:var(--text);font-size:0.95rem}
   .scan-card .body{padding:1rem 1.1rem;flex:1;display:flex;flex-direction:column;gap:0.7rem}
   .scan-card .filename{font-family:"JetBrains Mono",monospace;font-size:0.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .scan-card .roi-pills{display:flex;flex-wrap:wrap;gap:0.3rem}
@@ -158,6 +164,20 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 }
 
+function renderMedia(s) {
+  const sourceUrl = s.source_media_url || "";
+  const sourceKind = s.source_media_kind || "";
+  const dataAttrs = [
+    `data-source-url="${escapeHtml(sourceUrl)}"`,
+    `data-source-kind="${escapeHtml(sourceKind)}"`,
+    `data-scan-id="${escapeHtml(s.id)}"`,
+    `data-peak-frame="${escapeHtml(s.peak_t ?? "")}"`,
+    `data-has-bold-vertex="${s.has_bold_vertex ? "true" : "false"}"`,
+  ].join(" ");
+  const badge = s.has_bold_vertex ? "per-vertex brain" : "regional brain";
+  return `<div class="video brain-preview-wrap" ${dataAttrs}><canvas class="brain-preview" data-brain-preview data-scan-id="${escapeHtml(s.id)}"></canvas><span class="media-badge">${badge}</span><span class="media-status">loading brain</span></div>`;
+}
+
 function renderCard(s) {
   const rois = (s.top_rois || []).slice(0, 3);
   const pills = rois.map(r => `<span class="pill ${classifyRoi(r)}">${escapeHtml(shortRoi(r))}</span>`).join("");
@@ -170,12 +190,11 @@ function renderCard(s) {
   const tr = s.tr_seconds || 0.5;
   const peakLabel = s.peak_t != null ? `peak t=${(s.peak_t * tr).toFixed(1)}s` : "";
   const elapsed = s.seconds_elapsed ? `${Math.round(s.seconds_elapsed)}s` : "";
-  const meta = [peakLabel, elapsed].filter(Boolean).join(" · ");
-  // Try to embed the ascii video for this scan if it exists
-  const videoUrl = `/api/scan/${s.id}/ascii-video`;
+  const mediaLabel = s.has_bold_vertex ? "per-vertex brain" : "regional brain";
+  const meta = [peakLabel, elapsed, mediaLabel].filter(Boolean).join(" · ");
   return `
     <article class="scan-card" data-id="${s.id}">
-      <div class="video"><video src="${videoUrl}" autoplay loop muted playsinline></video></div>
+      ${renderMedia(s)}
       <div class="body">
         <div class="filename">${escapeHtml(s.filename || s.id)} · ${meta}</div>
         <div class="roi-pills">${pills || '<span class="pill">no rois</span>'}</div>
@@ -191,12 +210,17 @@ async function load() {
     if (!r.ok) throw new Error("api/scans " + r.status);
     const data = await r.json();
     const scans = (data.scans || []).filter(s => s.status === "complete" && Object.keys(s.narrations||{}).length > 0);
+    scans.sort((a, b) =>
+      Number(Boolean(b.has_bold_vertex)) - Number(Boolean(a.has_bold_vertex)) ||
+      ((b.created_at || 0) - (a.created_at || 0))
+    );
     const grid = document.getElementById("grid");
     if (!scans.length) {
       grid.innerHTML = '<div class="empty">No completed public scans yet. <a href="/">Submit one →</a></div>';
       return;
     }
     grid.innerHTML = scans.map(renderCard).join("");
+    window.dispatchEvent(new CustomEvent("cortex:gallery-rendered", { detail: { scans } }));
     document.getElementById("stat-count").textContent = scans.length;
     const allRois = new Set();
     scans.forEach(s => (s.top_rois||[]).forEach(r => allRois.add(r)));
@@ -210,6 +234,7 @@ async function load() {
 load();
 setInterval(load, 30000);  // refresh every 30s
 </script>
+<script type="module" src="/assets/gallery-brain.js?v=20260622"></script>
 
 </body>
 </html>

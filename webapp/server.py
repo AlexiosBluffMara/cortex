@@ -22,6 +22,7 @@ Run locally::
 from __future__ import annotations
 
 import asyncio
+import mimetypes
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -788,6 +789,42 @@ def create_app(
             raise HTTPException(status_code=404, detail=f"Scan not found: {scan_id}")
         return await _hydrate_proxied(record)
 
+    def _scan_media_summary(scan_id: str) -> dict[str, Any]:
+        """Describe gallery media without forcing clients to probe 404s."""
+        ascii_path = Path("D:/cortex/scans/ascii") / f"{scan_id}_ascii.mp4"
+        bold_vertex_path = Path("D:/cortex/scans") / f"{scan_id}.npy"
+        source_path: Path | None = None
+        for ext in sorted(ALLOWED_EXTS):
+            candidate = UPLOAD_DIR / f"{scan_id}{ext}"
+            if candidate.exists():
+                source_path = candidate
+                break
+
+        source_kind = None
+        if source_path is not None:
+            ext = source_path.suffix.lower()
+            if ext in ALLOWED_IMAGE:
+                source_kind = "image"
+            elif ext in ALLOWED_VIDEO:
+                source_kind = "video"
+            elif ext in ALLOWED_AUDIO:
+                source_kind = "audio"
+            elif ext in ALLOWED_TEXT:
+                source_kind = "text"
+            elif ext in ALLOWED_DOCUMENT:
+                source_kind = "document"
+
+        has_ascii_video = ascii_path.exists()
+        has_bold_vertex = bold_vertex_path.exists()
+        return {
+            "has_bold_vertex": has_bold_vertex,
+            "bold_vertex_url": f"/api/scan/{scan_id}/bold-vertex" if has_bold_vertex else None,
+            "has_ascii_video": has_ascii_video,
+            "ascii_video_url": f"/api/scan/{scan_id}/ascii-video" if has_ascii_video else None,
+            "source_media_url": f"/api/scan/{scan_id}/source-media" if source_path else None,
+            "source_media_kind": source_kind,
+        }
+
     @app.get("/api/scans")
     async def list_scans(limit: int = 50, status: str = "complete") -> dict[str, Any]:
         """List recent scans (for the public gallery).
@@ -815,6 +852,7 @@ def create_app(
             seen_local_ids.add(sid)
             if rec.get("upstream_id"):
                 seen_upstream_ids.add(rec["upstream_id"])
+            media = _scan_media_summary(sid)
             # Defensive: dict.get(k, default) only returns `default` when the
             # key is ABSENT. Image scans persist `top_rois: null` (key present,
             # value None), so `rec.get("top_rois", [])[:5]` evaluated to
@@ -838,6 +876,7 @@ def create_app(
                 "narrations": rec.get("narrations") or {},
                 "created_at": rec.get("created_at"),
                 "proxied": rec.get("proxied", False),
+                **media,
             })
 
         # 2. If a TRIBE proxy is configured, merge upstream's scans too — so the
@@ -853,6 +892,9 @@ def create_app(
                         uid = u.get("id")
                         if not uid or uid in seen_upstream_ids:
                             continue
+                        has_ascii_video = u.get("has_ascii_video")
+                        if has_ascii_video is None:
+                            has_ascii_video = True
                         # Synthesize a local-style record pointing to upstream;
                         # the gallery's <video src=/api/scan/{id}/...> will
                         # proxy to upstream via _proxy_media because this entry
@@ -862,12 +904,25 @@ def create_app(
                             "id": uid,                 # surface upstream id
                             "proxied": True,
                             "_upstream_only": True,
+                            "has_bold_vertex": bool(u.get("has_bold_vertex", has_ascii_video)),
+                            "bold_vertex_url": u.get("bold_vertex_url") or f"/api/scan/{uid}/bold-vertex",
+                            "has_ascii_video": bool(has_ascii_video),
+                            "ascii_video_url": u.get("ascii_video_url") or f"/api/scan/{uid}/ascii-video",
+                            "source_media_url": u.get("source_media_url"),
+                            "source_media_kind": u.get("source_media_kind"),
                         })
             except Exception as exc:
                 log.debug("[webapp] upstream /api/scans merge failed: %s", exc)
 
-        # Most recent first
-        out.sort(key=lambda r: r.get("created_at") or 0, reverse=True)
+        # Real per-vertex brain previews first, then newest first. Scans without
+        # persisted vertices still render through the regional BOLD fallback.
+        out.sort(
+            key=lambda r: (
+                1 if r.get("has_bold_vertex") else 0,
+                r.get("created_at") or 0,
+            ),
+            reverse=True,
+        )
         return {"count": len(out), "scans": out[:limit]}
 
     # -----------------------------------------------------------------------
@@ -1130,6 +1185,40 @@ def create_app(
                 status_code=202,
             )
         raise HTTPException(status_code=404, detail="ascii-video not available for this scan")
+
+    @app.get("/api/scan/{scan_id}/source-media")
+    async def source_media_endpoint(scan_id: str) -> FileResponse:
+        """Serve the original uploaded media for gallery fallbacks."""
+        for ext in sorted(ALLOWED_EXTS):
+            source_path = UPLOAD_DIR / f"{scan_id}{ext}"
+            if source_path.exists():
+                media_type = mimetypes.guess_type(source_path.name)[0] or "application/octet-stream"
+                return FileResponse(
+                    str(source_path),
+                    media_type=media_type,
+                    headers={"Cache-Control": "public, max-age=86400", "X-Scan-Id": scan_id},
+                )
+        raise HTTPException(status_code=404, detail="source media not available for this scan")
+
+    @app.get("/api/gallery/test-image")
+    async def gallery_test_image_endpoint() -> FileResponse:
+        """Serve a stable image for no-video gallery cards."""
+        candidates = [
+            Path("D:/cortex/data/artemis_inbox/artemis_02_moon_over_sls.jpg"),
+            Path("D:/cortex/data/artemis_inbox/artemis_03_full_moon_pad39b.jpg"),
+            UPLOAD_DIR / "f023653e664f.jpg",
+            UPLOAD_DIR / "29485ea42ce9.jpg",
+            Path("D:/cortex/website/assets/placeholder.png"),
+        ]
+        for image_path in candidates:
+            if image_path.exists():
+                media_type = mimetypes.guess_type(image_path.name)[0] or "image/jpeg"
+                return FileResponse(
+                    str(image_path),
+                    media_type=media_type,
+                    headers={"Cache-Control": "public, max-age=86400"},
+                )
+        raise HTTPException(status_code=404, detail="gallery test image not available")
 
     @app.get("/api/scan/{scan_id}/bold-vertex")
     async def bold_vertex(scan_id: str, n_t: int = 100) -> Response:
