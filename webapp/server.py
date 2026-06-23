@@ -120,6 +120,7 @@ OPENROUTER_FREE_LIMITS = {
     "account_note": (
         "Free models are request-limited, not token-bucket-limited. Purchasing at least $10 in credits "
         "raises the daily free-model cap; a $100 balance does not raise it beyond the documented 1000/day cap. "
+        "If Cortex stays on :free models or openrouter/free, successful requests should not consume the credit balance. "
         "Keep the balance positive because negative balances can trigger 402 responses even for free models."
     ),
     "source": "https://openrouter.ai/docs/api/reference/limits",
@@ -1248,8 +1249,8 @@ def create_app(
             "openrouter_free_limits": OPENROUTER_FREE_LIMITS,
             "funding_guidance": {
                 "minimum_to_unlock_1000_free_requests_per_day": 10,
-                "current_user_reported_credit_usd": 15,
-                "recommendation": "Keep at least $10 purchased and keep balance positive. With about $15 funded, use free models first and reserve paid models for rate-limit or quality fallback.",
+                "current_user_reported_credit_usd": 100,
+                "recommendation": "With a $100 funded account, keep Cortex on free models first. That preserves credits while unlocking the documented 1000 free-model requests/day tier; reserve paid models for rate-limit or quality fallback.",
             },
             "models": [
                 {**m, "estimated_narration_cost_usd": round(_estimate_catalog_item_cost(m), 6)}

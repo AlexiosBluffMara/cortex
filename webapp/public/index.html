@@ -1889,7 +1889,9 @@
             color: var(--text);
             font-size: 13px;
             line-height: 1.25;
+            overflow-wrap: anywhere;
         }
+        .economics-card.wide { grid-column: 1 / -1; }
         .economics-note {
             color: var(--muted);
             font-size: 11px;
@@ -2338,6 +2340,14 @@
                                     <span>Requests / scan</span>
                                     <strong id="or-requests-per-scan">4 persona calls</strong>
                                 </div>
+                                <div class="economics-card wide">
+                                    <span>Best free path</span>
+                                    <strong id="or-free-roster">Gemma free, openrouter/free, Nemotron Omni</strong>
+                                </div>
+                                <div class="economics-card wide">
+                                    <span>Performance posture</span>
+                                    <strong id="or-performance-posture">Free first; paid only for fallback</strong>
+                                </div>
                             </div>
                             <p class="economics-note" id="or-free-note">Loading OpenRouter limits…</p>
                             <div class="economics-table-wrap">
@@ -2348,8 +2358,8 @@
                                             <th>Input / 1M</th>
                                             <th>Output / 1M</th>
                                             <th>Tokens / $1</th>
-                                            <th>4 narrations</th>
-                                            <th>Scans / $1</th>
+                                            <th>Est. text scan</th>
+                                            <th>Text scans / $1</th>
                                         </tr>
                                     </thead>
                                     <tbody id="or-paid-body">
@@ -2589,7 +2599,15 @@
                             }
                             const sel = document.getElementById('narration-model-select');
                             if (sel) {
-                                sel.value = btn.dataset.model;
+                                const modelId = btn.dataset.model;
+                                const selectedModel = models.find(m => m.id === modelId);
+                                if (!Array.from(sel.options).some(opt => opt.value === modelId)) {
+                                    const opt = document.createElement('option');
+                                    opt.value = modelId;
+                                    opt.textContent = selectedModel ? displayLabel(selectedModel) : modelId;
+                                    sel.appendChild(opt);
+                                }
+                                sel.value = modelId;
                                 updateEstimate();
                             }
                         });
@@ -2653,16 +2671,28 @@
                     const freeModels = document.getElementById('or-free-models');
                     const fundedEffect = document.getElementById('or-funded-effect');
                     const perScan = document.getElementById('or-requests-per-scan');
+                    const freeRoster = document.getElementById('or-free-roster');
+                    const performance = document.getElementById('or-performance-posture');
                     const note = document.getElementById('or-free-note');
                     if (quotaSummary) quotaSummary.textContent = `${daily}/day · ${rpm}/min`;
                     if (freeRequests) freeRequests.textContent = `${starterDaily}/day before $10; ${daily}/day after`;
                     if (freeScans) freeScans.textContent = `${textScansPerDay}/day, ${textScansPerMinute}/min`;
                     if (mediaScans) mediaScans.textContent = `${mediaScansPerDay}/day, ${mediaScansPerMinute}/min`;
                     if (freeModels) freeModels.textContent = freeModelCount ? `${freeModelCount} live free options` : 'live list unavailable';
-                    if (fundedEffect) fundedEffect.textContent = '$100 does not raise the free cap beyond 1000/day';
+                    if (fundedEffect) fundedEffect.textContent = '$100 preserves credits; free cap stays 1000/day';
                     if (perScan) perScan.textContent = `${textRequestsPerScan} text calls, ${mediaRequestsPerScan} media calls`;
+                    if (freeRoster) {
+                        const roster = models
+                            .filter(m => modelGroup(m) === 'free')
+                            .slice(0, 5)
+                            .map(m => m.label || m.id.replace(/^openrouter:/, ''));
+                        freeRoster.textContent = roster.length ? roster.join(', ') : 'Gemma free, openrouter/free, Nemotron Omni';
+                    }
+                    if (performance) {
+                        performance.textContent = 'Good for demos and routine narration; variable under provider load, so paid fallbacks stay locked until funded access.';
+                    }
                     if (note) {
-                        note.textContent = `No-spend mode uses only :free models or openrouter/free, so successful free runs should stay at $0 while the account balance remains positive. With less than $10 purchased, the public cap is ${starterDaily} free requests/day, or about ${starterTextScans} text scans and ${starterMediaScans} media scans. With at least $10 purchased, including a $100 funded account, the cap is ${daily} free requests/day: about ${textScansPerDay} text scans or ${mediaScansPerDay} image/audio/video scans because media scans may add one source-description request. Free quality is good for demos but less predictable than paid routing: popular endpoints can throttle, fail, or return no content during peak demand, and failed attempts may still count against the daily quota. Cortex defaults to Gemma 4 free for multimodal narration, uses Nemotron Omni for broad audio/video fallback, can use openrouter/free for automatic free routing, and keeps text-only free models as backup readers.`;
+                        note.textContent = `No-spend mode uses only :free models or openrouter/free, so successful free runs should stay at $0 while the account balance remains positive. With less than $10 purchased, the public cap is ${starterDaily} free requests/day, or about ${starterTextScans} text scans and ${starterMediaScans} media scans. With at least $10 purchased, including a $100 funded account, the cap is ${daily} free requests/day: about ${textScansPerDay} text scans or ${mediaScansPerDay} image/audio/video scans because media scans may add one source-description request. Free quality is good for demos and routine narration, but it is less predictable than paid routing: popular endpoints can throttle, fail, or return no content during peak demand, and failed attempts may still count against the daily quota. Cortex defaults to Gemma 4 free for multimodal narration, can use openrouter/free for automatic free routing, and keeps Nemotron Omni plus text-only free models as backup readers.`;
                     }
 
                     const paid = models
@@ -2711,10 +2741,13 @@
                     }
                     updateEstimate();
                 }
-                document.addEventListener('DOMContentLoaded', function() {
+                function initModelControls() {
                     const sel = document.getElementById('narration-model-select');
                     if (sel) {
                         sel.addEventListener('change', updateEstimate);
+                        populateSelect(DEFAULT_MODEL);
+                        renderEconomics(null);
+                        updateEstimate();
                         loadCatalog();
                     }
                     document.querySelectorAll('[data-model-filter]').forEach(btn => {
@@ -2759,8 +2792,13 @@
                         });
                     });
                     syncComputeLock();
-                });
-                if (document.readyState !== 'loading') loadCatalog();
+                    updateEstimate();
+                }
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initModelControls, { once: true });
+                } else {
+                    initModelControls();
+                }
             })();
             </script>
 

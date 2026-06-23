@@ -197,6 +197,8 @@ class TestControlPlane:
         assert body["openrouter_free_limits"]["persona_requests_per_scan"] == 4
         assert body["openrouter_free_limits"]["media_context_requests_per_scan"] == 1
         assert body["estimated_tokens_per_scan"]["media_context_completion"] == 260
+        assert body["funding_guidance"]["current_user_reported_credit_usd"] == 100
+        assert "$100 funded account" in body["funding_guidance"]["recommendation"]
         model_ids = {m["id"] for m in body["models"]}
         assert "openrouter:google/gemma-4-26b-a4b-it:free" in model_ids
         assert "local:gemma4:e4b" in model_ids
@@ -654,6 +656,9 @@ class TestSubmitScan:
         assert 'id="voice-record-btn"' in html
         assert 'id="paid-access-code"' in html
         assert 'name="compute-target"' in html
+        assert 'id="openrouter-economics"' in html
+        assert 'id="or-free-roster"' in html
+        assert "Text scans / $1" in html
         assert "navigator.mediaDevices.getUserMedia" in js
         assert "new MediaRecorder" in js
         assert 'fd.append("compute_target"' in js
