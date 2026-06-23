@@ -92,7 +92,7 @@ panel semantics.
 | `http://127.0.0.1:8765` | No | `webapp/server.py` | Local lab app and canonical live development target. |
 
 Public copy should say: live scans require Seratonin's RTX 5090 or a configured
-cloud TRIBE worker. Retired laptop routes are not supported.
+cloud TRIBE worker.
 
 ## Compute Modes
 
@@ -199,4 +199,4 @@ The latest verified slice proves:
 - completed cloud TRIBE results receive four persona narrations in the main app;
 - the result panel uses ROI bars, a 3D BOLD ribbon, and a ranked network summary
   instead of the old polar placeholder;
-- retired laptop routing strings are absent from the current tree.
+- stale peer-routing strings are absent from the current tree.
