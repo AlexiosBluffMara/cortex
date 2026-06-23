@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import mimetypes
 import shutil
 import subprocess
@@ -105,8 +106,17 @@ OPENROUTER_MODEL_CACHE_TTL_S = int(_os.environ.get("OPENROUTER_MODEL_CACHE_TTL_S
 CORTEX_PAID_ACCESS_CODE = _os.environ.get("CORTEX_PAID_ACCESS_CODE", "boileruphammerdown")
 CORTEX_CLOUD_TRIBE_ENDPOINT = (_os.environ.get("CORTEX_CLOUD_TRIBE_ENDPOINT", "") or "").rstrip("/")
 CORTEX_CLOUD_TRIBE_PROVIDER = _os.environ.get("CORTEX_CLOUD_TRIBE_PROVIDER", "huggingface-zero-gpu")
+CORTEX_CLOUD_TRIBE_MODE = _os.environ.get("CORTEX_CLOUD_TRIBE_MODE", "fastapi").strip().lower()
 CORTEX_CLOUD_TRIBE_TOKEN = _os.environ.get("CORTEX_CLOUD_TRIBE_TOKEN", "").strip()
+CORTEX_CLOUD_TRIBE_HF_TOKEN = _os.environ.get("CORTEX_CLOUD_TRIBE_HF_TOKEN", "").strip()
 CLOUD_COMPUTE_TARGETS = {"cloud_auto", "cloud_hf", "cloud_modal", "cloud_runpod"}
+CLOUD_GRADIO_CACHE_DIR = Path(
+    _os.environ.get(
+        "CORTEX_CLOUD_TRIBE_CACHE_DIR",
+        str(Path(__file__).resolve().parent.parent / "scans"),
+    )
+)
+CLOUD_GRADIO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 OPENROUTER_FREE_LIMITS = {
     "requests_per_minute": 20,
@@ -206,6 +216,88 @@ def _cloud_tribe_not_configured(compute_target: str) -> JSONResponse:
         },
         status_code=503,
     )
+
+
+def _cloud_tribe_mode() -> str:
+    if CORTEX_CLOUD_TRIBE_MODE in {"gradio", "space", "zerogpu", "zero-gpu"}:
+        return "gradio"
+    return "fastapi"
+
+
+def _gradio_file_path(value: Any) -> Path:
+    """Extract a local downloaded file path from a gradio_client file output."""
+    if isinstance(value, str):
+        return Path(value)
+    if isinstance(value, dict):
+        for key in ("path", "name"):
+            candidate = value.get(key)
+            if candidate:
+                return Path(str(candidate))
+    path_attr = getattr(value, "path", None) or getattr(value, "name", None)
+    if path_attr:
+        return Path(str(path_attr))
+    raise RuntimeError(f"Gradio scan returned an unsupported file output: {type(value).__name__}")
+
+
+def _scan_bold_path(scan_id: str) -> Path:
+    candidates = [
+        CLOUD_GRADIO_CACHE_DIR / f"{scan_id}.npy",
+        Path(__file__).resolve().parent.parent / "scans" / f"{scan_id}.npy",
+        Path("D:/cortex/scans") / f"{scan_id}.npy",
+    ]
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+def _parse_gradio_scan_result(result: Any) -> tuple[dict[str, Any], Path]:
+    if not isinstance(result, (list, tuple)) or len(result) < 2:
+        raise RuntimeError(f"Gradio scan returned an unsupported result: {type(result).__name__}")
+    scan_json, bold_file = result[0], result[1]
+    if isinstance(scan_json, dict):
+        record = dict(scan_json)
+    else:
+        record = json.loads(str(scan_json))
+    return record, _gradio_file_path(bold_file)
+
+
+async def _call_gradio_tribe_scan(
+    endpoint: str,
+    media_path: Path,
+    *,
+    tier: int,
+    narration_model: str,
+) -> tuple[dict[str, Any], Path]:
+    """Call a Hugging Face Gradio Space and return its scan record + BOLD file."""
+    loop = asyncio.get_running_loop()
+
+    def _run() -> tuple[dict[str, Any], Path]:
+        try:
+            from gradio_client import Client, handle_file  # type: ignore[import-not-found]
+        except ImportError as exc:  # pragma: no cover - exercised through error message
+            raise RuntimeError(
+                "CORTEX_CLOUD_TRIBE_MODE=gradio requires the optional gradio_client package."
+            ) from exc
+
+        kwargs: dict[str, Any] = {}
+        if CORTEX_CLOUD_TRIBE_HF_TOKEN:
+            kwargs["hf_token"] = CORTEX_CLOUD_TRIBE_HF_TOKEN
+        client = Client(endpoint, **kwargs)
+        result = client.predict(
+            handle_file(str(media_path)),
+            int(tier),
+            narration_model,
+            api_name="/scan",
+        )
+        return _parse_gradio_scan_result(result)
+
+    return await loop.run_in_executor(None, _run)
 
 NARRATION_MODEL_CATALOG = [
     {
@@ -1703,6 +1795,7 @@ def create_app(
             },
             "cloud_tribe_endpoint": cloud_endpoint or None,
             "cloud_tribe_provider": CORTEX_CLOUD_TRIBE_PROVIDER,
+            "cloud_tribe_mode": _cloud_tribe_mode(),
         }
 
     # Expose the closure on the app so the lifespan loop can call it
@@ -1824,6 +1917,113 @@ def create_app(
     # Scan submission
     # -----------------------------------------------------------------------
 
+    async def _run_gradio_cloud_scan_background(
+        scan_id: str,
+        media_path: Path,
+        *,
+        tier: int,
+        source: str,
+        narration_model: str,
+        compute_target: str,
+        analysis_mode: str,
+        media_context: str,
+    ) -> None:
+        await app.state.registry.update(scan_id, status="running", cloud_mode="gradio")
+        try:
+            upstream, bold_path = await _call_gradio_tribe_scan(
+                CORTEX_CLOUD_TRIBE_ENDPOINT,
+                media_path,
+                tier=tier,
+                narration_model=narration_model,
+            )
+            if not bold_path.exists():
+                raise RuntimeError(f"Gradio BOLD output was not downloaded: {bold_path}")
+
+            local_bold = CLOUD_GRADIO_CACHE_DIR / f"{scan_id}.npy"
+            if bold_path.resolve() != local_bold.resolve():
+                shutil.copyfile(bold_path, local_bold)
+
+            n_t = upstream.get("n_t")
+            if n_t is None:
+                try:
+                    import numpy as _np
+                    n_t = int(_np.load(local_bold, mmap_mode="r").shape[0])
+                except Exception:
+                    n_t = None
+
+            update = {
+                "status": "complete",
+                "cloud_mode": "gradio",
+                "upstream_base": CORTEX_CLOUD_TRIBE_ENDPOINT,
+                "upstream_mode": "gradio",
+                "upstream_id": upstream.get("scan_id") or upstream.get("id"),
+                "analysis_mode": upstream.get("analysis_mode") or analysis_mode,
+                "compute_target": compute_target,
+                "source": source,
+                "top_rois": upstream.get("top_rois") or [],
+                "peak_t": upstream.get("peak_t"),
+                "tr_seconds": upstream.get("tr_seconds", 0.5),
+                "n_t": n_t,
+                "seconds_elapsed": upstream.get("seconds_elapsed"),
+                "tribe_seconds": upstream.get("tribe_seconds"),
+                "has_bold_vertex": True,
+                "bold_vertex_url": f"/api/scan/{scan_id}/bold-vertex",
+                "source_media_url": f"/api/scan/{scan_id}/source-media",
+                "media_context": media_context,
+                "source_media_kind": (
+                    "image" if media_path.suffix.lower() in ALLOWED_IMAGE else
+                    "video" if media_path.suffix.lower() in ALLOWED_VIDEO else
+                    "audio" if media_path.suffix.lower() in ALLOWED_AUDIO else
+                    "text" if media_path.suffix.lower() in ALLOWED_TEXT else
+                    "document"
+                ),
+                "narration_status": "running",
+            }
+            await app.state.registry.update(scan_id, **update)
+            record = await app.state.registry.get(scan_id) or {}
+            merged = {**record, **update}
+
+            try:
+                narration_update = await _narrate_completed_proxy_record(merged, app.state.queue)
+                await app.state.registry.update(
+                    scan_id,
+                    **narration_update,
+                    narration_status="complete",
+                )
+                await app.state.hub.broadcast({
+                    "type": "scan_narrations_ready",
+                    "scan_id": scan_id,
+                    "narrations": narration_update["narrations"],
+                })
+            except Exception as exc:  # noqa: BLE001
+                log.warning("[webapp] gradio cloud narration failed for %s: %s", scan_id, exc)
+                await app.state.registry.update(
+                    scan_id,
+                    narration_status="failed",
+                    narration_error=str(exc)[:240],
+                )
+
+            await app.state.hub.broadcast({
+                "type": "scan_complete",
+                "scan_id": scan_id,
+                "proxied": False,
+                "cloud_mode": "gradio",
+            })
+        except Exception as exc:  # noqa: BLE001
+            log.error("[webapp] Gradio cloud TRIBE scan failed (%s): %s", scan_id, exc)
+            await app.state.registry.update(
+                scan_id,
+                status="failed",
+                error={"message": str(exc)[:500], "type": exc.__class__.__name__},
+                narration_status="failed",
+            )
+            await app.state.hub.broadcast({
+                "type": "scan_failed",
+                "scan_id": scan_id,
+                "cloud_mode": "gradio",
+                "message": str(exc)[:240],
+            })
+
     @app.post("/api/scan")
     async def submit_scan(
         file: UploadFile = File(...),
@@ -1894,6 +2094,60 @@ def create_app(
         # funded cloud worker, POST the file there and store a reference.
         # ────────────────────────────────────────────────────────────────────
         if selected_proxy_url and ext in CLOUD_TRIBE_PROXY_EXTS:
+            if _cloud_tribe_mode() == "gradio":
+                await app.state.registry.put(
+                    scan_id,
+                    {
+                        "id": scan_id,
+                        "status": "queued",
+                        "filename": file.filename,
+                        "tier": tier,
+                        "source": source,
+                        "narration_model": narration_model,
+                        "compute_target": compute_target,
+                        "paid_access": paid_access,
+                        "size_mb": round(size / (1024 * 1024), 2),
+                        "proxied": False,
+                        "cloud_mode": "gradio",
+                        "upstream_base": selected_proxy_url,
+                        "analysis_mode": analysis_mode,
+                        "media_context": media_context,
+                    },
+                )
+                asyncio.create_task(
+                    _run_gradio_cloud_scan_background(
+                        scan_id,
+                        target,
+                        tier=tier,
+                        source=source,
+                        narration_model=narration_model,
+                        compute_target=compute_target,
+                        analysis_mode=analysis_mode,
+                        media_context=media_context,
+                    )
+                )
+                await app.state.hub.broadcast(
+                    {
+                        "type": "scan_queued",
+                        "scan_id": scan_id,
+                        "filename": file.filename,
+                        "cloud_mode": "gradio",
+                    }
+                )
+                return JSONResponse(
+                    {
+                        "ok": True,
+                        "scan_id": scan_id,
+                        "status": "queued",
+                        "proxied": False,
+                        "cloud_mode": "gradio",
+                        "analysis_mode": analysis_mode,
+                        "compute_target": compute_target,
+                        "media_context": media_context,
+                    },
+                    status_code=202,
+                )
+
             log.info("[webapp] proxying TRIBE scan %s (%s) → %s", scan_id, ext, selected_proxy_url)
             try:
                 import httpx as _httpx
@@ -2103,7 +2357,7 @@ def create_app(
     def _scan_media_summary(scan_id: str) -> dict[str, Any]:
         """Describe gallery media without forcing clients to probe 404s."""
         ascii_path = Path("D:/cortex/scans/ascii") / f"{scan_id}_ascii.mp4"
-        bold_vertex_path = Path("D:/cortex/scans") / f"{scan_id}.npy"
+        bold_vertex_path = _scan_bold_path(scan_id)
         source_path: Path | None = None
         for ext in sorted(ALLOWED_EXTS):
             candidate = UPLOAD_DIR / f"{scan_id}{ext}"
@@ -2276,8 +2530,16 @@ def create_app(
                 "max_duration_seconds_practical": 120,
                 "accepted_types": ["video", "audio", "image", "pdf", "text"],
             },
+            "cloud_tribe": {
+                "configured": bool(CORTEX_CLOUD_TRIBE_ENDPOINT),
+                "provider": CORTEX_CLOUD_TRIBE_PROVIDER,
+                "mode": _cloud_tribe_mode(),
+                "endpoint": CORTEX_CLOUD_TRIBE_ENDPOINT or None,
+                "fastapi_contract": "POST /api/scan, GET /api/scan/{id}, GET /bold-vertex",
+                "gradio_contract": "Gradio api_name=/scan returning scan JSON plus a BOLD .npy file",
+            },
             "prod_readiness_notes": [
-                "ScanRegistry is in-memory: restart loses all records. Add Redis/Firestore TTL for prod.",
+                "ScanRegistry is SQLite-backed locally; add Firestore/Cloudflare D1/R2 replication for multi-host prod.",
                 "GPU scheduler supports one active model at a time; parallel requests queue.",
                 "TRIBE v2 is group-averaged (25 subjects): not a personal diagnostic tool.",
                 "Max practical video: ~2 min at 2Hz = 240 timepoints × 20484 verts × 4B = ~20 MB/scan.",
@@ -2408,7 +2670,7 @@ def create_app(
                     media_type="video/mp4",
                     headers={"Cache-Control": "public, max-age=86400", "X-Scan-Id": scan_id},
                 )
-        npy = Path("D:/cortex/scans") / f"{scan_id}.npy"
+        npy = _scan_bold_path(scan_id)
         if npy.exists():
             return Response(
                 content=b'{"status":"generating"}',
@@ -2437,7 +2699,7 @@ def create_app(
                 headers={"Cache-Control": "public, max-age=86400", "X-Scan-Id": scan_id},
             )
         # Check if source .npy exists; if so, trigger generation
-        npy = Path("D:/cortex/scans") / f"{scan_id}.npy"
+        npy = _scan_bold_path(scan_id)
         if npy.exists():
             return Response(
                 content=b'{"status":"generating"}',
@@ -2499,8 +2761,7 @@ def create_app(
         proxied = await _proxy_media(scan_id, f"/bold-vertex?n_t={n_t}")
         if proxied is not None:
             return proxied
-        scans_dir = Path("D:/cortex/scans")
-        npy = scans_dir / f"{scan_id}.npy"
+        npy = _scan_bold_path(scan_id)
         if not npy.exists():
             raise HTTPException(status_code=404, detail=f"per-vertex preds not on disk for {scan_id}")
         try:
@@ -2623,6 +2884,60 @@ def create_app(
         target.write_text(clean_text[:4000], encoding="utf-8")
         media_context = _media_metadata_context(target)
         if _compute_target_requires_paid_access(compute_target):
+            if _cloud_tribe_mode() == "gradio":
+                await app.state.registry.put(
+                    scan_id,
+                    {
+                        "id": scan_id,
+                        "status": "queued",
+                        "filename": "<text stimulus>",
+                        "tier": tier,
+                        "source": source,
+                        "narration_model": narration_model,
+                        "compute_target": compute_target,
+                        "paid_access": paid_access,
+                        "text": clean_text[:1000],
+                        "proxied": False,
+                        "cloud_mode": "gradio",
+                        "upstream_base": CORTEX_CLOUD_TRIBE_ENDPOINT,
+                        "analysis_mode": "tribe_text",
+                        "media_context": media_context,
+                    },
+                )
+                asyncio.create_task(
+                    _run_gradio_cloud_scan_background(
+                        scan_id,
+                        target,
+                        tier=tier,
+                        source=source,
+                        narration_model=narration_model,
+                        compute_target=compute_target,
+                        analysis_mode="tribe_text",
+                        media_context=media_context,
+                    )
+                )
+                await app.state.hub.broadcast(
+                    {
+                        "type": "scan_queued",
+                        "scan_id": scan_id,
+                        "filename": "<text stimulus>",
+                        "cloud_mode": "gradio",
+                    }
+                )
+                return JSONResponse(
+                    {
+                        "ok": True,
+                        "scan_id": scan_id,
+                        "status": "queued",
+                        "proxied": False,
+                        "cloud_mode": "gradio",
+                        "analysis_mode": "tribe_text",
+                        "compute_target": compute_target,
+                        "media_context": media_context,
+                    },
+                    status_code=202,
+                )
+
             try:
                 import httpx as _httpx
                 async with _httpx.AsyncClient(timeout=30.0) as client:

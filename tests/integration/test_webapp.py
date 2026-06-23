@@ -628,6 +628,81 @@ class TestSubmitScan:
             assert set(detail["narrations"]) == {"student", "patient", "clinician", "ml_scientist"}
             assert "Purdue-colored launch gantry" in detail["media_context"]
 
+    def test_cloud_gpu_with_gradio_mode_caches_bold_locally(self, client, tmp_path, monkeypatch):
+        import numpy as np
+
+        from webapp import server as server_mod
+
+        cache_dir = tmp_path / "main-scans"
+        cache_dir.mkdir()
+        space_bold = tmp_path / "space-bold.npy"
+        np.save(space_bold, np.zeros((6, 20484), dtype=np.float32))
+
+        async def _fake_gradio_call(endpoint, media_path, *, tier, narration_model):
+            assert endpoint == "https://example-cortex-space.hf.space"
+            assert media_path.exists()
+            assert tier == 4
+            assert narration_model.startswith("openrouter:")
+            return (
+                {
+                    "ok": True,
+                    "scan_id": "space123",
+                    "status": "complete",
+                    "analysis_mode": "tribe_video",
+                    "top_rois": ["RH-Vis 4", "LH-Vis 3"],
+                    "peak_t": 3,
+                    "seconds_elapsed": 1.2,
+                    "tribe_seconds": 1.2,
+                    "n_t": 6,
+                    "tr_seconds": 0.5,
+                },
+                space_bold,
+            )
+
+        monkeypatch.setattr(server_mod, "CORTEX_CLOUD_TRIBE_ENDPOINT", "https://example-cortex-space.hf.space")
+        monkeypatch.setattr(server_mod, "CORTEX_CLOUD_TRIBE_MODE", "gradio")
+        monkeypatch.setattr(server_mod, "CLOUD_GRADIO_CACHE_DIR", cache_dir)
+        monkeypatch.setattr(server_mod, "_call_gradio_tribe_scan", _fake_gradio_call)
+
+        files = {"file": ("clip.mp4", io.BytesIO(b"gradio video bytes"), "video/mp4")}
+        resp = client.post(
+            "/api/scan",
+            files=files,
+            data={
+                "tier": "4",
+                "compute_target": "cloud_hf",
+                "paid_access_code": "boileruphammerdown",
+            },
+        )
+        assert resp.status_code == 202
+        body = resp.json()
+        assert body["cloud_mode"] == "gradio"
+        assert body["proxied"] is False
+
+        detail = {}
+        for _ in range(30):
+            detail = client.get(f"/api/scan/{body['scan_id']}").json()
+            if detail.get("status") == "complete" and detail.get("narration_status") == "complete":
+                break
+            time.sleep(0.05)
+
+        assert detail["status"] == "complete"
+        assert detail["cloud_mode"] == "gradio"
+        assert detail["upstream_id"] == "space123"
+        assert detail["has_bold_vertex"] is True
+        assert detail["top_rois"] == ["RH-Vis 4", "LH-Vis 3"]
+        assert detail["narration"] == "narration text"
+
+        bold = client.get(f"/api/scan/{body['scan_id']}/bold-vertex?n_t=4")
+        assert bold.status_code == 200
+        assert bold.headers["X-N-T"] == "4"
+        assert bold.headers["X-N-Vert"] == "20484"
+        assert len(bold.content) == 4 * 20484 * 4
+
+        source = client.get(f"/api/scan/{body['scan_id']}/source-media")
+        assert source.status_code == 200
+        assert source.content == b"gradio video bytes"
+
     def test_rejects_oversized_upload(self, client):
         # 51MB exceeds the 50MB cap
         big = b"\x00" * (51 * 1024 * 1024)

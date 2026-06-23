@@ -10,6 +10,7 @@ The main webapp can proxy to this worker by setting:
 ```powershell
 $env:CORTEX_CLOUD_TRIBE_ENDPOINT = "https://your-worker.example"
 $env:CORTEX_CLOUD_TRIBE_PROVIDER = "huggingface-zero-gpu" # or modal/runpod
+$env:CORTEX_CLOUD_TRIBE_MODE = "fastapi"
 $env:CORTEX_CLOUD_TRIBE_TOKEN = "shared-worker-secret"
 ```
 
@@ -93,8 +94,10 @@ include the same TRIBE dependencies and weights as the local Seratonin path.
 
 - **Hugging Face ZeroGPU:** official docs say ZeroGPU is Gradio-only and uses
   `@spaces.GPU`. Use this FastAPI worker as the contract target for Docker
-  Spaces or paid Endpoints; use `cloud/huggingface_space` for no-cost ZeroGPU
-  experiments.
+  Spaces or paid Endpoints. For a ZeroGPU Gradio Space, deploy
+  `cloud/huggingface_space` and set the main webapp to
+  `CORTEX_CLOUD_TRIBE_MODE=gradio`; Cortex will call the Gradio `scan` API and
+  cache the returned BOLD file locally.
 - **Modal:** wrap this app in an ASGI web endpoint or call the same processing
   function from a Modal GPU function. Good first paid serverless candidate.
 - **RunPod Serverless:** containerize this worker and expose the same HTTP

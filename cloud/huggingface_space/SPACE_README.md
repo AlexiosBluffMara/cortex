@@ -13,7 +13,10 @@ hardware: zerogpu
 
 This Space is the no-cost/low-cost experiment path for Cortex TRIBE inference.
 ZeroGPU is Gradio-only, so this Space exposes a Gradio `scan` function rather
-than the FastAPI worker contract used by Docker Spaces, Modal, and RunPod.
+than the FastAPI worker contract used by Docker Spaces, Modal, and RunPod. The
+main Cortex webapp can still call this Space by setting
+`CORTEX_CLOUD_TRIBE_MODE=gradio`; it will run the Gradio job in the background,
+cache the returned BOLD `.npy`, and serve the normal Cortex viewer endpoints.
 
 Set `CORTEX_WORKER_MODE=fake` for a deployment smoke test. Set
 `CORTEX_WORKER_MODE=real` only after the Space image contains the TRIBE
@@ -41,6 +44,13 @@ python -m cloud.tribe_worker.verify --endpoint "$CORTEX_CLOUD_TRIBE_ENDPOINT" --
 ```
 
 ZeroGPU Spaces expose the Gradio `scan` function rather than the FastAPI
-contract, so use the included UI/API there as a no-cost experiment path. Use a
-Docker Space, Modal, RunPod, or another ASGI-capable GPU host when Cortex needs
-`CORTEX_CLOUD_TRIBE_ENDPOINT` directly.
+contract. For Cortex webapp integration, configure:
+
+```bash
+export CORTEX_CLOUD_TRIBE_ENDPOINT="https://your-space.hf.space"
+export CORTEX_CLOUD_TRIBE_MODE="gradio"
+export CORTEX_CLOUD_TRIBE_PROVIDER="huggingface-zerogpu"
+```
+
+Use a Docker Space, Modal, RunPod, or another ASGI-capable GPU host when Cortex
+needs the faster direct FastAPI worker contract.
