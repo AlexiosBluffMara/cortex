@@ -29,6 +29,49 @@ const ttFunc        = document.getElementById("tt-func");
 const ttZ           = document.getElementById("tt-z");
 const DEFAULT_NARRATION_MODEL = "openrouter:google/gemma-4-26b-a4b-it:free";
 
+function setupWorkflowNav() {
+    const scroller = document.querySelector(".intake-scroll");
+    const links = Array.from(document.querySelectorAll(".workflow-jump a[href^='#']"));
+    const sections = links
+        .map(link => document.querySelector(link.getAttribute("href")))
+        .filter(Boolean);
+    if (!scroller || !links.length || !sections.length) return;
+
+    function setActive(id) {
+        for (const link of links) {
+            const active = link.getAttribute("href") === `#${id}`;
+            if (active) link.setAttribute("aria-current", "step");
+            else link.removeAttribute("aria-current");
+        }
+    }
+
+    links.forEach(link => {
+        link.addEventListener("click", event => {
+            const target = document.querySelector(link.getAttribute("href"));
+            if (!target) return;
+            event.preventDefault();
+            target.scrollIntoView({ behavior: "smooth", block: "start" });
+            setActive(target.id);
+            history.replaceState(null, "", link.getAttribute("href"));
+        });
+    });
+
+    const observer = new IntersectionObserver(entries => {
+        const visible = entries
+            .filter(entry => entry.isIntersecting)
+            .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible?.target?.id) setActive(visible.target.id);
+    }, {
+        root: scroller,
+        threshold: [0.28, 0.45, 0.62],
+        rootMargin: "-18% 0px -55% 0px",
+    });
+    sections.forEach(section => observer.observe(section));
+    setActive(sections[0].id);
+}
+
+setupWorkflowNav();
+
 // ---------------------------------------------------------------------------
 // Device detection
 // ---------------------------------------------------------------------------

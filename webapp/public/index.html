@@ -750,7 +750,8 @@
 
             .intake-scroll {
                 padding: 12px 18px calc(18px + env(safe-area-inset-bottom, 0px));
-                gap: 12px;
+                gap: 16px;
+                scroll-padding-top: 58px;
             }
             .intake-hero {
                 display: none;
@@ -760,17 +761,29 @@
                 line-height: 1.62;
             }
             .workflow-jump {
-                grid-template-columns: repeat(4, minmax(0, 1fr));
-                gap: 4px;
-                padding: 6px 0;
+                display: flex;
+                gap: 8px;
+                overflow-x: auto;
+                padding: 8px 0 10px;
+                margin: 0 -2px 2px;
+                scroll-snap-type: x mandatory;
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+            }
+            .workflow-jump::-webkit-scrollbar {
+                display: none;
             }
             .workflow-jump a {
-                padding: 8px 2px;
-                font-size: 10.5px;
+                flex: 0 0 calc(50% - 8px);
+                min-height: 42px;
+                padding: 10px 6px;
+                font-size: 11px;
+                scroll-snap-align: start;
             }
             .workflow-step {
-                padding: 14px;
-                gap: 10px;
+                padding: 16px;
+                gap: 14px;
+                scroll-margin-top: 62px;
             }
             #input-step .step-copy {
                 display: none;
@@ -789,6 +802,13 @@
                 min-height: 42px;
                 -webkit-tap-highlight-color: transparent;
                 touch-action: manipulation;
+            }
+            .model-filters {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .model-card-list {
+                max-height: 248px;
+                gap: 8px;
             }
 
             /* Mode panels: flex-column, fill remaining height */
@@ -1372,8 +1392,9 @@
             padding: 18px;
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 22px;
             scroll-padding-top: 76px;
+            scroll-snap-type: y proximity;
             scrollbar-width: thin;
             scrollbar-color: rgba(204,0,0,0.75) transparent;
         }
@@ -1398,11 +1419,12 @@
         .workflow-jump {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 6px;
+            gap: 8px;
             position: sticky;
             top: 0;
             z-index: 12;
-            padding: 8px 0;
+            padding: 10px 0;
+            margin-bottom: 2px;
             background: linear-gradient(180deg, rgba(7,8,12,0.96), rgba(7,8,12,0.82));
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
@@ -1414,22 +1436,47 @@
             border: 1px solid var(--border);
             background: rgba(255,255,255,0.035);
             border-radius: 8px;
-            padding: 8px 4px;
+            padding: 10px 4px;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-size: 11px;
             font-weight: 700;
+            position: relative;
+            transition: background .16s, border-color .16s, color .16s;
         }
         .workflow-jump a:hover { border-color: var(--accent); color: #fff; }
+        .workflow-jump a[aria-current="step"] {
+            color: #fff;
+            border-color: rgba(246,169,23,0.72);
+            background: rgba(246,169,23,0.12);
+        }
+        .workflow-jump a[aria-current="step"]::after {
+            content: "";
+            position: absolute;
+            left: 12px;
+            right: 12px;
+            bottom: 5px;
+            height: 2px;
+            border-radius: 2px;
+            background: var(--isu-yellow);
+        }
         .workflow-step {
             border: 1px solid var(--border);
             background: rgba(20,21,28,0.82);
             border-radius: 8px;
-            padding: 16px;
+            padding: 20px;
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            gap: 18px;
             scroll-margin-top: 76px;
+            scroll-snap-align: start;
         }
-        #input-step { border-color: rgba(246,169,23,0.28); }
+        #input-step {
+            border-color: rgba(246,169,23,0.35);
+            box-shadow: inset 0 0 0 1px rgba(246,169,23,0.08);
+        }
         .workflow-step h2 {
             font-size: 16px;
             line-height: 1.25;
@@ -1522,15 +1569,77 @@
             font: inherit;
             font-size: 12px;
         }
+        .model-toolbar {
+            display: grid;
+            gap: 10px;
+        }
+        .model-toolbar-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .model-toolbar-title {
+            color: var(--text);
+            font-size: 12px;
+            font-weight: 800;
+        }
+        .model-count {
+            color: var(--muted);
+            font-family: "JetBrains Mono", monospace;
+            font-size: 10px;
+            white-space: nowrap;
+        }
+        .model-filters {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 6px;
+        }
+        .model-filter {
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.035);
+            color: var(--muted);
+            border-radius: 8px;
+            padding: 8px 4px;
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        .model-filter.active {
+            color: #fff;
+            border-color: rgba(246,169,23,0.72);
+            background: rgba(246,169,23,0.12);
+        }
+        .model-search {
+            display: grid;
+            gap: 5px;
+        }
+        .model-search span {
+            color: var(--muted);
+            font-size: 10px;
+            font-family: "JetBrains Mono", monospace;
+            text-transform: uppercase;
+        }
+        .model-search input {
+            width: 100%;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.035);
+            color: var(--text);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font: inherit;
+            font-size: 12px;
+        }
         .model-card-list {
             display: grid;
             grid-template-columns: 1fr;
-            gap: 8px;
-            max-height: 196px;
+            gap: 10px;
+            max-height: 286px;
             overflow-y: auto;
-            padding-right: 2px;
+            padding-right: 4px;
             scrollbar-width: thin;
             scrollbar-color: rgba(204,0,0,0.65) transparent;
+            scroll-snap-type: y proximity;
         }
         .model-card-list::-webkit-scrollbar { width: 7px; }
         .model-card-list::-webkit-scrollbar-track { background: transparent; }
@@ -1544,12 +1653,30 @@
             border-radius: 8px;
             padding: 9px 10px;
             display: grid;
-            gap: 4px;
+            gap: 6px;
             cursor: pointer;
+            scroll-snap-align: start;
         }
         .model-card:hover,
-        .model-card.active { border-color: var(--accent); background: rgba(204,0,0,0.13); }
+        .model-card.active {
+            border-color: var(--accent);
+            background: rgba(204,0,0,0.13);
+            box-shadow: inset 3px 0 0 var(--accent);
+        }
         .model-card strong { font-size: 12px; line-height: 1.25; }
+        .model-card .model-card-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .model-card .model-chip {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 2px 6px;
+            color: var(--muted);
+            font-size: 9px;
+            font-family: "JetBrains Mono", monospace;
+        }
         .model-card span,
         .model-card small {
             color: var(--muted);
@@ -1557,6 +1684,7 @@
             line-height: 1.35;
         }
         .cost-estimate,
+        .openrouter-economics,
         .readiness-grid {
             border: 1px solid var(--border);
             border-radius: 8px;
@@ -1584,6 +1712,91 @@
             font-size: 11px;
         }
         .cost-estimate .total strong { color: var(--isu-yellow); }
+        .openrouter-economics summary {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            color: var(--text);
+            font-weight: 800;
+            font-size: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        .openrouter-economics summary strong {
+            color: var(--isu-yellow);
+            font-family: "JetBrains Mono", monospace;
+            font-size: 10px;
+            text-align: right;
+        }
+        .economics-body {
+            display: grid;
+            gap: 12px;
+            padding: 12px;
+        }
+        .economics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .economics-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.03);
+            padding: 10px;
+            display: grid;
+            gap: 5px;
+        }
+        .economics-card span {
+            color: var(--muted);
+            font-size: 10px;
+            font-family: "JetBrains Mono", monospace;
+            text-transform: uppercase;
+        }
+        .economics-card strong {
+            color: var(--text);
+            font-size: 13px;
+            line-height: 1.25;
+        }
+        .economics-note {
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.5;
+        }
+        .economics-table-wrap {
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .economics-table {
+            width: 100%;
+            min-width: 520px;
+            border-collapse: collapse;
+            font-size: 10px;
+        }
+        .economics-table th,
+        .economics-table td {
+            border-bottom: 1px solid var(--border);
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .economics-table th {
+            color: var(--muted);
+            font-family: "JetBrains Mono", monospace;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+        .economics-table td {
+            color: var(--text);
+        }
+        .economics-table tr:last-child td { border-bottom: 0; }
+        .economics-source a {
+            color: var(--isu-yellow);
+            text-decoration: none;
+        }
+        .economics-source a:hover { text-decoration: underline; }
         .status-line {
             color: var(--muted);
             font-size: 11px;
@@ -1617,6 +1830,49 @@
         }
         @media (max-width: 1100px) {
             .workflow-jump { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 768px) {
+            .intake-scroll {
+                gap: 16px;
+                scroll-padding-top: 58px;
+            }
+            .workflow-jump {
+                display: flex;
+                grid-template-columns: none;
+                gap: 8px;
+                overflow-x: auto;
+                padding: 8px 0 10px;
+                margin: 0 -2px 2px;
+                min-height: 62px;
+                flex: 0 0 62px;
+                align-items: stretch;
+                scroll-snap-type: x mandatory;
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+            }
+            .workflow-jump::-webkit-scrollbar { display: none; }
+            .workflow-jump a {
+                flex: 0 0 calc(50% - 8px);
+                min-height: 42px;
+                padding: 10px 6px;
+                font-size: 11px;
+                scroll-snap-align: start;
+            }
+            .workflow-step {
+                padding: 16px;
+                gap: 14px;
+                scroll-margin-top: 62px;
+            }
+            .model-filters {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .model-card-list {
+                max-height: 248px;
+                gap: 8px;
+            }
+            .economics-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 
@@ -1890,6 +2146,22 @@
                     <select id="narration-model-select" class="model-select">
                         <option value="openrouter:google/gemma-4-26b-a4b-it:free" selected>Gemma 4 26B A4B · OpenRouter free</option>
                     </select>
+                    <div class="model-toolbar">
+                        <div class="model-toolbar-row">
+                            <span class="model-toolbar-title">OpenRouter catalog</span>
+                            <span id="model-count" class="model-count">loading</span>
+                        </div>
+                        <div class="model-filters" role="tablist" aria-label="Model price group">
+                            <button type="button" class="model-filter active" data-model-filter="all">All</button>
+                            <button type="button" class="model-filter" data-model-filter="free">Free</button>
+                            <button type="button" class="model-filter" data-model-filter="paid">Paid</button>
+                            <button type="button" class="model-filter" data-model-filter="local">Local</button>
+                        </div>
+                        <label class="model-search">
+                            <span>Search</span>
+                            <input id="model-search" type="search" autocomplete="off" spellcheck="false" placeholder="Gemma, Hermes, Kimi, multimodal..." />
+                        </label>
+                    </div>
                     <div id="model-card-list" class="model-card-list"></div>
                     <div id="cost-estimate" class="cost-estimate">
                         <div><span>Model</span><strong id="ce-model">Gemma 4 26B A4B · free</strong></div>
@@ -1897,6 +2169,54 @@
                         <div><span>Local TRIBE estimate</span><strong>$0.00086</strong></div>
                         <div class="total"><span>Total / scan</span><strong id="ce-total">$0.00086</strong></div>
                     </div>
+                    <details class="openrouter-economics" id="openrouter-economics">
+                        <summary>
+                            <span>OpenRouter quota and cost math</span>
+                            <strong id="or-quota-summary">loading</strong>
+                        </summary>
+                        <div class="economics-body">
+                            <div class="economics-grid">
+                                <div class="economics-card">
+                                    <span>Free request cap</span>
+                                    <strong id="or-free-requests">—</strong>
+                                </div>
+                                <div class="economics-card">
+                                    <span>Cortex scans/day</span>
+                                    <strong id="or-free-scans">—</strong>
+                                </div>
+                                <div class="economics-card">
+                                    <span>$100 balance</span>
+                                    <strong id="or-funded-effect">—</strong>
+                                </div>
+                                <div class="economics-card">
+                                    <span>Requests / scan</span>
+                                    <strong id="or-requests-per-scan">4 persona calls</strong>
+                                </div>
+                            </div>
+                            <p class="economics-note" id="or-free-note">Loading OpenRouter limits…</p>
+                            <div class="economics-table-wrap">
+                                <table class="economics-table" id="or-paid-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Paid fallback</th>
+                                            <th>Input / 1M</th>
+                                            <th>Output / 1M</th>
+                                            <th>Cortex scan</th>
+                                            <th>Scans / $1</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="or-paid-body">
+                                        <tr><td colspan="5">Loading live model pricing…</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p class="economics-note economics-source">
+                                Sources: <a href="https://openrouter.ai/docs/api/reference/limits" target="_blank" rel="noreferrer">OpenRouter limits</a>,
+                                <a href="https://openrouter.ai/docs/api/api-reference/models/get-models" target="_blank" rel="noreferrer">Models API</a>,
+                                <a href="https://openrouter.ai/docs/cookbook/administration/usage-accounting" target="_blank" rel="noreferrer">usage accounting</a>.
+                            </p>
+                        </div>
+                    </details>
                     <p id="openrouter-status-line" class="status-line">Checking OpenRouter…</p>
                 </section>
 
@@ -1975,10 +2295,26 @@
                     { id: 'local:gemma4:e4b', label: 'Gemma 4 E4B local', provider: 'Ollama', group: 'Local fallback', prompt_price: 0, completion_price: 0, notes: 'Use only if OpenRouter is unavailable; consumes local VRAM.' },
                 ];
                 let models = FALLBACK_MODELS;
+                let modelFilter = 'all';
+                let modelQuery = '';
                 function fmt(v) {
                     if (v === 0) return '$0.00000';
                     if (v < 0.001) return '$' + v.toFixed(5);
                     return '$' + v.toFixed(4);
+                }
+                function fmtMoney(v, digits = 4) {
+                    const n = Number(v || 0);
+                    if (!Number.isFinite(n)) return '$0';
+                    if (n === 0) return '$0';
+                    if (n < 0.001) return '$' + n.toFixed(6);
+                    return '$' + n.toFixed(digits);
+                }
+                function fmtCompact(n) {
+                    const v = Number(n || 0);
+                    if (!Number.isFinite(v)) return '—';
+                    if (v >= 1000000) return (v / 1000000).toFixed(v >= 10000000 ? 0 : 1) + 'M';
+                    if (v >= 1000) return (v / 1000).toFixed(v >= 10000 ? 0 : 1) + 'K';
+                    return String(Math.floor(v));
                 }
                 function modelCost(m) {
                     if (m.estimated_narration_cost_usd != null) return Number(m.estimated_narration_cost_usd);
@@ -1990,16 +2326,57 @@
                     const group = m.group ? ` · ${m.group}` : '';
                     return `${m.label || m.id}${provider}${group}`;
                 }
+                function modelGroup(m) {
+                    const raw = `${m.group || ''} ${m.id || ''}`.toLowerCase();
+                    if (raw.includes('local')) return 'local';
+                    if (raw.includes('paid')) return 'paid';
+                    if (raw.includes('free')) return 'free';
+                    return Number(m.prompt_price || 0) || Number(m.completion_price || 0) ? 'paid' : 'free';
+                }
+                function filteredModels() {
+                    const q = modelQuery.trim().toLowerCase();
+                    return models.filter(m => {
+                        const group = modelGroup(m);
+                        if (modelFilter !== 'all' && group !== modelFilter) return false;
+                        if (!q) return true;
+                        const haystack = [
+                            m.id,
+                            m.label,
+                            m.provider,
+                            m.group,
+                            (m.modalities || []).join(' '),
+                            m.notes,
+                        ].join(' ').toLowerCase();
+                        return haystack.includes(q);
+                    });
+                }
+                function syncModelChrome(shown) {
+                    const count = document.getElementById('model-count');
+                    if (count) count.textContent = `${shown.length}/${models.length}`;
+                    document.querySelectorAll('[data-model-filter]').forEach(btn => {
+                        const active = btn.dataset.modelFilter === modelFilter;
+                        btn.classList.toggle('active', active);
+                        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+                    });
+                }
                 function renderCards(selectedId) {
                     const mount = document.getElementById('model-card-list');
                     if (!mount) return;
-                    mount.innerHTML = models.slice(0, 6).map(m => {
+                    const shown = filteredModels();
+                    syncModelChrome(shown);
+                    if (!shown.length) {
+                        mount.innerHTML = '<div class="status-line">No matching models in this catalog view.</div>';
+                        return;
+                    }
+                    mount.innerHTML = shown.map(m => {
                         const active = m.id === selectedId ? ' active' : '';
                         const cost = modelCost(m);
-                        const modes = (m.modalities || []).slice(0, 3).join('/');
-                        return `<button type="button" class="model-card${active}" data-model="${m.id}">
+                        const modes = (m.modalities || []).slice(0, 4);
+                        const chips = [modelGroup(m), ...modes].filter(Boolean).map(x => `<span class="model-chip">${x}</span>`).join('');
+                        return `<button type="button" class="model-card${active}" data-model="${m.id}"${active ? ' aria-current="true"' : ''}>
                             <strong>${displayLabel(m)}</strong>
-                            <span>${cost ? fmt(cost) : '$0.00000'} narration · ${modes || m.provider || ''}</span>
+                            <span>${cost ? fmt(cost) : '$0.00000'} narration</span>
+                            <div class="model-card-meta">${chips}</div>
                             <small>${m.notes || ''}</small>
                         </button>`;
                     }).join('');
@@ -2037,6 +2414,60 @@
                     window._selectedNarrationLabel = displayLabel(selected);
                     renderCards(val);
                 }
+                function renderEconomics(data) {
+                    const limits = data?.openrouter_free_limits || {
+                        requests_per_minute: 20,
+                        daily_without_10_credits: 50,
+                        daily_with_10_credits: 1000,
+                        credits_required_for_1000_per_day: 10,
+                    };
+                    const est = data?.estimated_tokens_per_scan || TOKEN_ASSUMPTION;
+                    const requestsPerScan = 4;
+                    const daily = Number(limits.daily_with_10_credits || 1000);
+                    const rpm = Number(limits.requests_per_minute || 20);
+                    const scansPerDay = Math.floor(daily / requestsPerScan);
+                    const scansPerMinute = Math.floor(rpm / requestsPerScan);
+
+                    const quotaSummary = document.getElementById('or-quota-summary');
+                    const freeRequests = document.getElementById('or-free-requests');
+                    const freeScans = document.getElementById('or-free-scans');
+                    const fundedEffect = document.getElementById('or-funded-effect');
+                    const perScan = document.getElementById('or-requests-per-scan');
+                    const note = document.getElementById('or-free-note');
+                    if (quotaSummary) quotaSummary.textContent = `${daily}/day · ${rpm}/min`;
+                    if (freeRequests) freeRequests.textContent = `${daily} free requests/day, ${rpm}/min`;
+                    if (freeScans) freeScans.textContent = `about ${scansPerDay}/day, ${scansPerMinute}/min`;
+                    if (fundedEffect) fundedEffect.textContent = '$100 keeps the same 1000/day free tier';
+                    if (perScan) perScan.textContent = `${requestsPerScan} calls · ${fmtCompact((est.prompt || 0) + (est.completion || 0))} tokens est.`;
+                    if (note) {
+                        note.textContent = 'Using only free OpenRouter models should not burn credits while the account stays positive, but the cap does not rise above 1000 free-model requests/day just because the balance is $100. Popular free endpoints can throttle or fail during peak demand; failed attempts may still count against the daily free quota. Cortex uses four persona narrations, so each scan spends four OpenRouter requests. For quality, Gemma 4 free is the default multimodal narrator, Nemotron Omni is the broadest free multimodal fallback, openrouter/free can auto-pick a free compatible model, and text-only free models are best kept as backups for already-summarized TRIBE outputs.';
+                    }
+
+                    const paid = models
+                        .filter(m => modelGroup(m) === 'paid')
+                        .map(m => ({ ...m, _cost: modelCost(m) }))
+                        .filter(m => m._cost > 0)
+                        .sort((a, b) => a._cost - b._cost)
+                        .slice(0, 8);
+                    const body = document.getElementById('or-paid-body');
+                    if (!body) return;
+                    if (!paid.length) {
+                        body.innerHTML = '<tr><td colspan="5">No paid fallback pricing is available in this catalog response.</td></tr>';
+                        return;
+                    }
+                    body.innerHTML = paid.map(m => {
+                        const promptPerM = Number(m.prompt_price || 0) * 1000000;
+                        const completionPerM = Number(m.completion_price || 0) * 1000000;
+                        const scansPerDollar = m._cost > 0 ? (1 / m._cost) : null;
+                        return `<tr>
+                            <td>${displayLabel(m)}</td>
+                            <td>${fmtMoney(promptPerM, 3)}</td>
+                            <td>${fmtMoney(completionPerM, 3)}</td>
+                            <td>${fmtMoney(m._cost, 6)}</td>
+                            <td>${scansPerDollar ? fmtCompact(scansPerDollar) : '—'}</td>
+                        </tr>`;
+                    }).join('');
+                }
                 async function loadCatalog() {
                     try {
                         const r = await fetch('/api/narration-models', { cache: 'no-store' });
@@ -2044,11 +2475,14 @@
                             const data = await r.json();
                             models = data.models && data.models.length ? data.models : FALLBACK_MODELS;
                             populateSelect(data.default_model || DEFAULT_MODEL);
+                            renderEconomics(data);
                         } else {
                             populateSelect(DEFAULT_MODEL);
+                            renderEconomics(null);
                         }
                     } catch (_) {
                         populateSelect(DEFAULT_MODEL);
+                        renderEconomics(null);
                     }
                     updateEstimate();
                 }
@@ -2057,6 +2491,19 @@
                     if (sel) {
                         sel.addEventListener('change', updateEstimate);
                         loadCatalog();
+                    }
+                    document.querySelectorAll('[data-model-filter]').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            modelFilter = btn.dataset.modelFilter || 'all';
+                            updateEstimate();
+                        });
+                    });
+                    const search = document.getElementById('model-search');
+                    if (search) {
+                        search.addEventListener('input', () => {
+                            modelQuery = search.value || '';
+                            updateEstimate();
+                        });
                     }
                 });
                 if (document.readyState !== 'loading') loadCatalog();
@@ -2275,7 +2722,7 @@
 
     <!-- D3 v7 (UMD) for the data panel charts -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script type="module" src="/main.js?v=20260623-three-mobile-brain"></script>
+    <script type="module" src="/main.js?v=20260623-workflow-catalog"></script>
     <script type="module" src="/charts.js"></script>
 
     <!-- ── Robinhood-Legend-style draggable panels (gridstack) ─────────────── -->
