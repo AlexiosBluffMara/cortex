@@ -28,6 +28,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 try:
@@ -944,6 +945,126 @@ def _apply_cloud_narration_fallbacks(
     return replaced
 
 
+def _result_facade_from_record(record: dict[str, Any]) -> SimpleNamespace:
+    """Build the tiny result shape narration fallbacks need from a stored scan."""
+    n_t = record.get("n_t")
+    preds = SimpleNamespace(shape=(int(n_t), 20484)) if n_t else None
+    return SimpleNamespace(
+        top_rois=record.get("top_rois") or [],
+        peak_t=record.get("peak_t"),
+        seconds_elapsed=record.get("seconds_elapsed"),
+        preds=preds,
+    )
+
+
+def _cloud_proxy_brain_context(record: dict[str, Any], media_context: str) -> str:
+    """Summarize cloud-worker TRIBE output for the persona narration prompt."""
+    lines = [
+        media_context or "Source media metadata: unavailable.",
+        "",
+        "TRIBE v2 BOLD response summary:",
+        "- execution_path: main Cortex app -> funded cloud TRIBE worker -> main Cortex narration",
+        f"- compute_target: {record.get('compute_target') or 'cloud'}",
+        f"- analysis_mode: {record.get('analysis_mode') or 'tribe_video'}",
+        f"- worker_provider: {CORTEX_CLOUD_TRIBE_PROVIDER}",
+        f"- has_per_vertex_bold: {bool(record.get('has_bold_vertex'))}",
+        "- surface: fsaverage5",
+        "- vertices: 20484",
+        "- tr_seconds: 0.5",
+    ]
+    top_rois = record.get("top_rois") or []
+    if top_rois:
+        lines.append(f"- top_rois: {top_rois[:8]}")
+    top_z = record.get("top_roi_z") or record.get("top_z")
+    if top_z:
+        lines.append(f"- top_roi_z: {top_z}")
+    peak_t = record.get("peak_t")
+    if peak_t is not None:
+        try:
+            lines.append(f"- peak_t: {int(peak_t)} ({float(peak_t) * 0.5:.1f} seconds after stimulus start)")
+        except (TypeError, ValueError):
+            lines.append(f"- peak_t: {peak_t}")
+    if record.get("n_t") is not None:
+        lines.append(f"- timepoints: {record.get('n_t')}")
+    if record.get("seconds_elapsed") is not None:
+        lines.append(f"- worker_seconds_elapsed: {record.get('seconds_elapsed')}")
+    if record.get("tribe_seconds") is not None:
+        lines.append(f"- tribe_seconds: {record.get('tribe_seconds')}")
+    lines.append(
+        "Interpret the BOLD data as group-averaged predicted cortical activity, "
+        "not a patient-specific diagnosis. If source media semantics are only metadata, "
+        "be explicit about that limitation."
+    )
+    return "\n".join(lines)
+
+
+async def _narrate_completed_proxy_record(
+    record: dict[str, Any],
+    queue: "RequestQueue",
+) -> dict[str, Any]:
+    """Generate persona narrations for cloud-worker TRIBE results.
+
+    The cloud worker intentionally focuses on BOLD inference. This app owns the
+    OpenRouter/local narration policy, so completed proxied scans are narrated
+    here after hydration.
+    """
+    tier = int(record.get("tier") or 1)
+    tier = max(0, min(6, tier))
+    narration_model = record.get("narration_model") or f"openrouter:{OPENROUTER_DEFAULT_MODEL}"
+    label = record.get("filename") or record.get("id") or "cloud scan"
+    media_context = (
+        record.get("media_context")
+        or (
+            "Input modality: text\n"
+            f"Extracted content: {str(record.get('text') or '')[:1000]}"
+            if record.get("text")
+            else ""
+        )
+        or f"Source media metadata: file={label}; modality={record.get('source_media_kind') or 'stimulus'}; detailed probe unavailable."
+    )
+    brain_context = _cloud_proxy_brain_context(record, media_context)
+    user_prompt = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_context)
+
+    async def _one_narr(pid: str, tier_n: int, sys_prompt: str) -> tuple[str, str, float]:
+        t0 = time.time()
+        try:
+            text = await _narrate_with_model(
+                model=narration_model,
+                prompt=user_prompt,
+                system=sys_prompt,
+                tier=tier_n,
+                num_predict=_tiers._TIER_NUM_PREDICT[tier_n],
+                temperature=_tiers._TIER_TEMPERATURE[tier_n],
+                queue=queue,
+                source=f"{record.get('source') or 'webui'}-cloud-narration",
+            )
+        except Exception as exc:  # noqa: BLE001
+            prefix = narration_model.split(":", 1)[0].title() or "Cloud"
+            text = f"{prefix} narration unavailable ({exc.__class__.__name__}). {str(exc)[:240]}"
+        return pid, text, round(time.time() - t0, 2)
+
+    narr_t0 = time.time()
+    narr_results = await asyncio.gather(*[
+        _one_narr(pid, t, sp) for pid, (t, sp) in _prompts.PERSONA_CONFIGS.items()
+    ])
+    narrations = {pid: text for pid, text, _dt in narr_results}
+    narration_timings = {pid: dt for pid, _text, dt in narr_results}
+    narrations = _apply_cloud_narration_fallbacks(
+        narrations,
+        label=label,
+        media_context=media_context,
+        result=_result_facade_from_record(record),
+        narration_model=narration_model,
+    )
+    return {
+        "narrations": narrations,
+        "narration": narrations.get("student", ""),
+        "narration_seconds": round(time.time() - narr_t0, 2),
+        "narration_timings": narration_timings,
+        "media_context": media_context,
+    }
+
+
 def _media_metadata_context(media_path: Path) -> str:
     """Cheap, local media summary used when multimodal cloud description is unavailable."""
     suffix = media_path.suffix.lower()
@@ -1643,6 +1764,8 @@ def create_app(
             )
             return JSONResponse(err.to_dict(), status_code=413)
 
+        media_context = _media_metadata_context(target)
+
         # ────────────────────────────────────────────────────────────────────
         # Cloud TRIBE proxy: if this file needs TRIBE and the user selected a
         # funded cloud worker, POST the file there and store a reference.
@@ -1692,6 +1815,7 @@ def create_app(
                         "size_mb": round(size / (1024 * 1024), 2),
                         "proxied": True,
                         "analysis_mode": analysis_mode,
+                        "media_context": media_context,
                     },
                 )
                 target.unlink(missing_ok=True)  # local copy not needed; upstream owns the file
@@ -1707,6 +1831,7 @@ def create_app(
                         "proxied": True,
                         "analysis_mode": analysis_mode,
                         "compute_target": compute_target,
+                        "media_context": media_context,
                     },
                     status_code=202,
                 )
@@ -1741,6 +1866,7 @@ def create_app(
                 "paid_access": paid_access,
                 "size_mb": round(size / (1024 * 1024), 2),
                 "analysis_mode": analysis_mode,
+                "media_context": media_context,
             },
         )
 
@@ -1806,10 +1932,39 @@ def create_app(
                     "status", "top_rois", "peak_t", "tr_seconds", "n_t",
                     "seconds_elapsed", "narrations", "narration", "error",
                     "has_bold_vertex", "bold_vertex_url", "source_media_url",
-                    "tribe_seconds",
+                    "tribe_seconds", "narration_seconds", "narration_timings",
+                    "media_context", "source_media_kind", "analysis_mode",
+                    "top_roi_z", "top_z", "thumbnail_url",
                 ):
                     if k in u and u[k] is not None:
                         merged[k] = u[k]
+                merged["id"] = rec.get("id")
+                if merged.get("status") == "complete" and not (merged.get("narrations") or {}):
+                    if merged.get("narration_status") != "running":
+                        running_update = {**merged, "narration_status": "running"}
+                        await app.state.registry.update(rec["id"], **running_update)
+                        try:
+                            narration_update = await _narrate_completed_proxy_record(merged, app.state.queue)
+                            merged.update(narration_update)
+                            merged["narration_status"] = "complete"
+                            await app.state.registry.update(rec["id"], **narration_update, narration_status="complete")
+                            await app.state.hub.broadcast({
+                                "type": "scan_narrations_ready",
+                                "scan_id": rec["id"],
+                                "narrations": narration_update["narrations"],
+                            })
+                        except Exception as exc:  # noqa: BLE001
+                            log.warning("[webapp] proxied narration failed for %s: %s", rec.get("id"), exc)
+                            merged["narration_status"] = "failed"
+                            await app.state.registry.update(
+                                rec["id"],
+                                narration_status="failed",
+                                narration_error=str(exc)[:240],
+                            )
+                    else:
+                        await app.state.registry.update(rec["id"], **merged)
+                else:
+                    await app.state.registry.update(rec["id"], **merged)
                 return merged
         except Exception as exc:
             log.debug("[webapp] proxy hydrate failed for %s: %s", rec.get("id"), exc)
@@ -1903,6 +2058,9 @@ def create_app(
                 "narration_seconds": rec.get("narration_seconds"),
                 "narration_timings": rec.get("narration_timings") or {},
                 "narrations": rec.get("narrations") or {},
+                "media_context": rec.get("media_context"),
+                "analysis_mode": rec.get("analysis_mode"),
+                "compute_target": rec.get("compute_target"),
                 "created_at": rec.get("created_at"),
                 "proxied": rec.get("proxied", False),
                 **media,
@@ -2340,6 +2498,7 @@ def create_app(
         scan_id = uuid.uuid4().hex[:12]
         target = UPLOAD_DIR / f"{scan_id}.txt"
         target.write_text(clean_text[:4000], encoding="utf-8")
+        media_context = _media_metadata_context(target)
         if _compute_target_requires_paid_access(compute_target):
             try:
                 import httpx as _httpx
@@ -2380,6 +2539,7 @@ def create_app(
                         "text": clean_text[:1000],
                         "proxied": True,
                         "analysis_mode": "tribe_text",
+                        "media_context": media_context,
                     },
                 )
                 target.unlink(missing_ok=True)
@@ -2394,6 +2554,7 @@ def create_app(
                         "proxied": True,
                         "analysis_mode": "tribe_text",
                         "compute_target": compute_target,
+                        "media_context": media_context,
                     },
                     status_code=202,
                 )
@@ -2424,6 +2585,7 @@ def create_app(
                 "paid_access": paid_access,
                 "text": clean_text[:1000],
                 "analysis_mode": "tribe_text",
+                "media_context": media_context,
             },
         )
         asyncio.create_task(

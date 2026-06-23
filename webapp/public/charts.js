@@ -1,10 +1,10 @@
 /* charts.js — data-panel renderers that complement the 3D brain.
  *
  * Three views, hot-swappable via the tab strip:
- *   1. Top-10 ROIs           D3 horizontal bar chart (mean |z| per region)
- *   2. 3D BOLD ribbon        Three.js — one ribbon per Yeo-7 network, time runs into the screen,
- *                            ribbon height = mean |z| at that timepoint
- *   3. Yeo-7 polar wheel     D3 radial bar chart with one spoke per network
+ *   1. Top-10 ROIs        D3 horizontal bar chart (mean |z| per region)
+ *   2. 3D BOLD ribbon     Three.js — one ribbon per Yeo-7 network, time runs into the screen,
+ *                         ribbon height = mean |z| at that timepoint
+ *   3. Network summary    D3 ranked bars for the strongest Yeo-7 networks
  *
  * Reads from window.lastScanResult and window.tribeBoldData (set by main.js
  * after a scan completes). Re-renders on the `cortex:scan-complete` event.
@@ -290,7 +290,7 @@ function renderBoldRibbon() {
 // 3. Yeo-7 network summary (D3) — ranked contribution bars
 // ─────────────────────────────────────────────────────────────────────────────
 function renderNetworkSummary() {
-  const mount = document.getElementById("chart-polar");
+  const mount = document.getElementById("chart-networks");
   if (!mount || typeof d3 === "undefined") return;
   mount.innerHTML = "";
 
@@ -381,7 +381,7 @@ function activateTab(name) {
   // Render the now-visible chart (no-op if data not present)
   if (name === "rois")   renderRoiBars();
   if (name === "ribbon") renderBoldRibbon();
-  if (name === "polar")  renderNetworkSummary();
+  if (name === "networks") renderNetworkSummary();
 }
 
 document.querySelectorAll(".data-tab").forEach(btn => {
@@ -389,8 +389,8 @@ document.querySelectorAll(".data-tab").forEach(btn => {
 });
 
 window.cortexCharts = {
-  renderAll() { renderRoiBars(); renderBoldRibbon(); renderPolarWheel(); },
-  renderRoiBars, renderBoldRibbon, renderPolarWheel, activateTab,
+  renderAll() { renderRoiBars(); renderBoldRibbon(); renderNetworkSummary(); },
+  renderRoiBars, renderBoldRibbon, renderNetworkSummary, activateTab,
 };
 
 // Re-render on scan completion

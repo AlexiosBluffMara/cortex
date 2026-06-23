@@ -829,16 +829,92 @@ function computeTargetLabel(target) {
     return "local TRIBE v2 · Seratonin RTX 5090";
 }
 
+function fmtSeconds(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return null;
+    return `${n.toFixed(n >= 10 ? 0 : 1)}s`;
+}
+
+function setEvidenceText(id, text, title = null) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    if (title || text) el.title = title || text;
+}
+
+function executionLabel(result = {}) {
+    const status = result.status || (st.scanId ? "queued" : "not submitted");
+    const target = result.compute_target || selectedComputeTarget();
+    const route = result.proxied || String(target).startsWith("cloud_")
+        ? "cloud worker"
+        : "local GPU";
+    if (status === "complete") {
+        const pieces = ["complete", route];
+        const tribe = fmtSeconds(result.tribe_seconds);
+        const narr = fmtSeconds(result.narration_seconds);
+        if (tribe) pieces.push(`TRIBE ${tribe}`);
+        if (narr) pieces.push(`narration ${narr}`);
+        return pieces.join(" · ");
+    }
+    if (status === "failed") return `failed · ${route}`;
+    return `${status} · ${route}`;
+}
+
+function boldEvidenceLabel(result = {}) {
+    const nT = Number(result.n_t || st.boldVertex?.n_t || st.boldTrace?.n_t || 0);
+    if (result.has_bold_vertex || st.boldVertex) {
+        return nT ? `20,484 vertices · ${nT} TRs` : "20,484-vertex trace";
+    }
+    const roiCount = (result.top_rois || []).length;
+    if (roiCount) return `${roiCount} top ROIs · full trace pending`;
+    if (result.status === "complete") return "complete · BOLD trace unavailable";
+    return "waiting for TRIBE output";
+}
+
+function sourceContextLabel(result = {}) {
+    const ctx = String(result.media_context || "");
+    if (!ctx) {
+        if (result.analysis_mode?.includes("bridge")) return "bridged stimulus · metadata pending";
+        return "metadata pending";
+    }
+    if (ctx.includes("OpenRouter multimodal source description (")) {
+        return "OpenRouter source description";
+    }
+    if (ctx.includes("skipped because media exceeds")) {
+        return "metadata only · media too large";
+    }
+    if (ctx.includes("unavailable")) {
+        return "metadata only · source model unavailable";
+    }
+    return "metadata captured";
+}
+
 function updateAnalysisContext(result = {}) {
     const stimulus = document.getElementById("analysis-stimulus");
     const compute = document.getElementById("analysis-compute");
     const narrator = document.getElementById("analysis-narrator");
-    if (stimulus) stimulus.textContent = analysisModeLabel(result.analysis_mode, result.filename || st.lastFilename);
-    if (compute) compute.textContent = computeTargetLabel(result.compute_target || selectedComputeTarget());
-    if (narrator) narrator.textContent = selectedNarrationLabel();
+    const stimulusText = analysisModeLabel(result.analysis_mode, result.filename || st.lastFilename);
+    if (stimulus) {
+        stimulus.textContent = stimulusText;
+        stimulus.title = result.filename || stimulusText;
+    }
+    if (compute) {
+        const computeText = computeTargetLabel(result.compute_target || selectedComputeTarget());
+        compute.textContent = computeText;
+        compute.title = computeText;
+    }
+    if (narrator) {
+        const narratorText = selectedNarrationLabel();
+        narrator.textContent = narratorText;
+        narrator.title = narratorText;
+    }
+    setEvidenceText("analysis-execution", executionLabel(result));
+    setEvidenceText("analysis-bold", boldEvidenceLabel(result));
+    setEvidenceText("analysis-source", sourceContextLabel(result), result.media_context || null);
 }
 
 function renderNarration(result) {
+    result = { ...(st.scanResult || {}), ...(result || {}) };
     st.scanResult = result;
     // Publish to window for the data-panel charts (charts.js reads these)
     window.lastScanResult = result;
@@ -977,6 +1053,44 @@ tierInput.addEventListener("input", () => setTierPill(+tierInput.value));
 // ---------------------------------------------------------------------------
 // Data loaders
 // ---------------------------------------------------------------------------
+function publishBoldDataFromVertex() {
+    if (!st.boldVertex || !st.vertexLabels || !st.regionNetwork.length) return false;
+    const { n_t: nT, n_vert: nV, data } = st.boldVertex;
+    const nRegions = st.regionNetwork.length;
+    if (!nT || !nV || !nRegions) return false;
+
+    const counts = new Int32Array(nRegions);
+    for (let vi = 0; vi < Math.min(nV, st.vertexLabels.length); vi++) {
+        const ri = st.vertexLabels[vi] - 1;
+        if (ri >= 0 && ri < nRegions) counts[ri]++;
+    }
+
+    const trace = new Float32Array(nT * nRegions);
+    for (let t = 0; t < nT; t++) {
+        const rowOff = t * nV;
+        const sums = new Float32Array(nRegions);
+        for (let vi = 0; vi < Math.min(nV, st.vertexLabels.length); vi++) {
+            const ri = st.vertexLabels[vi] - 1;
+            if (ri >= 0 && ri < nRegions) sums[ri] += data[rowOff + vi];
+        }
+        const outOff = t * nRegions;
+        for (let ri = 0; ri < nRegions; ri++) {
+            trace[outOff + ri] = counts[ri] ? sums[ri] / counts[ri] : 0;
+        }
+    }
+
+    window.tribeBoldData = {
+        n_t: nT,
+        n_regions: nRegions,
+        trace,
+        networks: st.regionNetwork.slice(),
+        region_ids: st.regionNames.slice(),
+        source: "vertex-aggregate",
+    };
+    window.dispatchEvent(new CustomEvent("cortex:scan-complete", { detail: { fromBold: true, source: "vertex" } }));
+    return true;
+}
+
 async function loadBoldForScan(scanId) {
     // Prefer the real per-vertex (T x 20484) trace if the scan has it on disk.
     // Falls back to the 50-region simulate endpoint when the .npy is missing.
@@ -1007,6 +1121,8 @@ async function loadBoldForScan(scanId) {
                 paintVertexFrame(f0);
                 drawColormapLegend();
                 appendEvent(`BOLD: ${nT} TRs × ${nV} vertices (per-vertex), opened at t=${f0}`, "complete");
+                publishBoldDataFromVertex();
+                updateAnalysisContext({ ...(st.scanResult || {}), has_bold_vertex: true, n_t: nT });
                 return;
             }
             appendEvent("per-vertex shape mismatch — falling back", "warning");
@@ -1044,6 +1160,7 @@ async function loadBoldForScan(scanId) {
             });
             window.tribeBoldData = { n_t: trace.n_t, n_regions: trace.n_regions, trace: flat, networks };
             window.dispatchEvent(new CustomEvent("cortex:scan-complete", { detail: { fromBold: true } }));
+            updateAnalysisContext({ ...(st.scanResult || {}), n_t: trace.n_t });
         }
     } catch (err) {
         appendEvent(`BOLD load failed: ${err.message}`, "failed");

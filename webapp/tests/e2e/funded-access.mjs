@@ -71,6 +71,8 @@ async function run() {
   });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
   page.setDefaultTimeout(20000);
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message || String(error)));
 
   await page.goto(`${BASE_URL}/?fundedE2E=${Date.now()}`, { waitUntil: "domcontentloaded" });
   await installScanRecorder(page);
@@ -127,6 +129,28 @@ async function run() {
   assert(entry(submission, "narration_model")?.value === paidModel, "funded upload should submit selected paid model");
   assert(entry(submission, "compute_target")?.value === "cloud_hf", "funded upload should submit cloud_hf target");
   assert(entry(submission, "paid_access_code")?.value === PAID_CODE, "funded upload should submit access code");
+
+  await page.waitForFunction(() => typeof window.cortexCharts?.renderNetworkSummary === "function");
+  await page.evaluate(() => {
+    window.lastScanResult = {
+      top_rois: [
+        "7Networks_RH_Vis_4",
+        "7Networks_LH_Vis_15",
+        "7Networks_RH_Default_2",
+        "7Networks_LH_SomMot_3",
+      ],
+      top_roi_z: [4.5, 3.9, 2.1, 1.6],
+      peak_t: 11,
+      n_t: 64,
+    };
+    window.cortexCharts.activateTab("networks");
+  });
+  await page.locator("#chart-networks svg").waitFor({ state: "attached" });
+  const networkSvg = await page.locator("#chart-networks svg").count();
+  assert(networkSvg > 0, "network summary should attach an svg");
+  const networkBars = await page.locator("#chart-networks .network-bar").count();
+  assert(networkBars > 0, "network summary should render ranked bars");
+  assert(pageErrors.length === 0, `page should not throw JS errors: ${pageErrors.join(" | ")}`);
 
   await browser.close();
   console.log(JSON.stringify({

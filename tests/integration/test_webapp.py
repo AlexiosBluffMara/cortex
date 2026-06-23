@@ -542,6 +542,11 @@ class TestSubmitScan:
             assert detail["status"] == "complete"
             assert detail["upstream_base"] == worker_url
             assert detail["has_bold_vertex"] is True
+            assert detail["narration_status"] == "complete"
+            assert set(detail["narrations"]) == {"student", "patient", "clinician", "ml_scientist"}
+            assert detail["narration"] == "narration text"
+            assert detail["narration_timings"]
+            assert "modality=video" in detail["media_context"] or "modality: video" in detail["media_context"]
 
             bold = client.get(f"/api/scan/{body['scan_id']}/bold-vertex?n_t=8")
             assert bold.status_code == 200
@@ -581,6 +586,9 @@ class TestSubmitScan:
             assert detail["status"] == "complete"
             assert detail["compute_target"] == "cloud_hf"
             assert detail["has_bold_vertex"] is True
+            assert detail["narration_status"] == "complete"
+            assert set(detail["narrations"]) == {"student", "patient", "clinician", "ml_scientist"}
+            assert "Purdue-colored launch gantry" in detail["media_context"]
 
     def test_rejects_oversized_upload(self, client):
         # 51MB exceeds the 50MB cap
@@ -854,3 +862,19 @@ class TestStatic:
         assert "TRIBE v2" in body
         assert "OpenRouter" in body
         assert "Show the brain what someone sees, hears, or reads." in body
+
+    def test_result_panel_uses_network_summary_not_polar_placeholder(self):
+        html = Path("webapp/public/index.html").read_text(encoding="utf-8")
+        js = Path("webapp/public/charts.js").read_text(encoding="utf-8")
+        main_js = Path("webapp/public/main.js").read_text(encoding="utf-8")
+
+        assert "renderPolarWheel" not in js
+        assert "chart-polar" not in html
+        assert "pane-polar" not in html
+        assert 'data-tab="networks"' in html
+        assert 'id="chart-networks"' in html
+        assert "renderNetworkSummary" in js
+        assert "analysis-execution" in html
+        assert "analysis-bold" in html
+        assert "analysis-source" in html
+        assert "publishBoldDataFromVertex" in main_js
