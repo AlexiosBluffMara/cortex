@@ -353,17 +353,25 @@ class GPUScheduler:
                 await loop.run_in_executor(None, self._load_tribe_sync)
                 self._notify_state(GPUState.TRIBE_ACTIVE)
 
-    async def run_brain_scan(self, media_path: str, priority: int = 0) -> Any:
+    async def run_brain_scan(
+        self,
+        media_path: str,
+        priority: int = 0,
+        keep_tribe_loaded: bool = False,
+    ) -> Any:
         """
-        Full brain scan: swap to TRIBE → inference → swap back to Gemma.
+        Full brain scan: swap to TRIBE → inference → optionally swap back to Gemma.
 
         This is the primary entry point for brain scans. It handles the full
-        GPU lifecycle: unload Gemma, load TRIBE, run inference, unload TRIBE,
-        reload Gemma.
+        GPU lifecycle. When narration is handled by OpenRouter or another
+        cloud model, callers can keep TRIBE resident so the RTX 5090 stays
+        available for the next brain-response scan instead of warming local
+        Gemma unnecessarily.
 
         Args:
             media_path: Path to preprocessed video/audio/text file
             priority: Request priority (0=highest). Used for queue ordering.
+            keep_tribe_loaded: Leave TRIBE in VRAM after inference.
 
         Returns:
             InferenceResult from cortex.pipeline
@@ -408,8 +416,11 @@ class GPUScheduler:
                 raise
             raise
 
-        # Swap back to Gemma for narration
-        await self.ensure_gemma()
+        # Swap back only when local Gemma narration is actually needed. The
+        # OpenRouter-first web UI keeps TRIBE resident to avoid wasting VRAM
+        # and to make the warm/readiness button truthful.
+        if not keep_tribe_loaded:
+            await self.ensure_gemma()
         return result
 
     async def run_gemma_generate(

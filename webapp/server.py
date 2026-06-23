@@ -657,6 +657,9 @@ def _estimate_narration_cost(model_id: str, prompt_tokens: int = 4800, completio
     return _estimate_catalog_item_cost(item, prompt_tokens, completion_tokens)
 
 
+def _narration_uses_cloud_model(model_id: str) -> bool:
+    return model_id.split(":", 1)[0] in {"openrouter", "gemini"}
+
 
 def _media_metadata_context(media_path: Path) -> str:
     """Cheap, local media summary used when multimodal cloud description is unavailable."""
@@ -2148,6 +2151,10 @@ def create_app(
         async def demo_alias() -> FileResponse:
             return _public_file("index.html")
 
+        @app.get("/favicon.ico")
+        async def favicon_ico() -> Response:
+            return Response(status_code=204, headers={"Cache-Control": "public, max-age=86400"})
+
         # Mount the entire public dir at /static/* for asset references like
         # /static/main.js, /static/style.css, /static/atlas.json, etc.
         # Also mount at /assets/* (legacy) for the Vite-style asset path.
@@ -2731,7 +2738,10 @@ async def _run_scan_background(
         await _emit("running")
         result = await queue.submit(
             request_type=RequestType.BRAIN_SCAN,
-            payload={"media_path": media_path},
+            payload={
+                "media_path": media_path,
+                "keep_tribe_loaded": _narration_uses_cloud_model(narration_model),
+            },
             priority=0 if source == "webui" else 5,
             source=source,
         )

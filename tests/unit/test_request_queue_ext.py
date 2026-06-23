@@ -225,7 +225,22 @@ class TestExecute:
         result = await q._execute(req)
         assert result == {"rois": []}
         idle_scheduler.run_brain_scan.assert_awaited_once_with(
-            "/tmp/clip.mp4", priority=0
+            "/tmp/clip.mp4", priority=0, keep_tribe_loaded=False
+        )
+
+    @pytest.mark.asyncio
+    async def test_execute_brain_scan_can_keep_tribe_loaded(self, idle_scheduler):
+        q = RequestQueue(scheduler=idle_scheduler)
+        req = PendingRequest(
+            priority=0,
+            request_type=RequestType.BRAIN_SCAN,
+            payload={"media_path": "/tmp/clip.mp4", "keep_tribe_loaded": True},
+            future=asyncio.get_event_loop().create_future(),
+        )
+        result = await q._execute(req)
+        assert result == {"rois": []}
+        idle_scheduler.run_brain_scan.assert_awaited_once_with(
+            "/tmp/clip.mp4", priority=0, keep_tribe_loaded=True
         )
 
     @pytest.mark.asyncio

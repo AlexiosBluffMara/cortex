@@ -284,6 +284,13 @@ class TestControlPlane:
         assert "thunder and neon lights" in context
         assert "TRIBE v2 received through its text events path" in context
 
+    def test_cloud_narration_keeps_gpu_on_tribe(self):
+        from webapp import server as server_mod
+
+        assert server_mod._narration_uses_cloud_model("openrouter:google/gemma-4-26b-a4b-it:free")
+        assert server_mod._narration_uses_cloud_model("gemini:gemini-2.5-flash")
+        assert not server_mod._narration_uses_cloud_model("local:gemma4:e4b")
+
 
 # ---------------------------------------------------------------------------
 # Scan submission

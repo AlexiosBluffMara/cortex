@@ -56,8 +56,27 @@ class TestRequestQueueSubmit:
             source="webui",
         )
         assert result == {"top_rois": [1, 2, 3]}
-        fake_scheduler.run_brain_scan.assert_awaited_once_with("/tmp/foo.mp4", priority=0)
+        fake_scheduler.run_brain_scan.assert_awaited_once_with(
+            "/tmp/foo.mp4",
+            priority=0,
+            keep_tribe_loaded=False,
+        )
         assert q._completed_count == 1
+
+    @pytest.mark.asyncio
+    async def test_submit_brain_scan_can_keep_tribe_loaded(self, fake_scheduler):
+        q = RequestQueue(scheduler=fake_scheduler)
+        await q.submit(
+            request_type=RequestType.BRAIN_SCAN,
+            payload={"media_path": "/tmp/foo.mp4", "keep_tribe_loaded": True},
+            priority=0,
+            source="webui",
+        )
+        fake_scheduler.run_brain_scan.assert_awaited_once_with(
+            "/tmp/foo.mp4",
+            priority=0,
+            keep_tribe_loaded=True,
+        )
 
     @pytest.mark.asyncio
     async def test_submit_gemma_chat_when_idle(self, fake_scheduler):

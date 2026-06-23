@@ -14,6 +14,8 @@ Seratonin.
 - GPU work: TRIBE v2 on the local RTX 5090
 - Cloud narration: OpenRouter chat completions
 - Model selector: live OpenRouter `/api/v1/models` free-model catalog, cached for 30 minutes
+- GPU residency: scans using OpenRouter/Gemini narration keep TRIBE loaded after
+  inference; local Gemma narration is the only path that warms Gemma again.
 
 The public site at `redteamkitchen.com` is Cloudflare Pages and should remain
 useful when Seratonin is offline. The Cortex tunnel is lab mode.
@@ -104,4 +106,3 @@ Ready state:
 4. `POST /api/tribe/warm` returns `status: tribe_ready`.
 5. `GET /gallery.html` shows brain canvases, not placeholder videos.
 6. Upload, typed text, and video-with-audio paths submit through the main UI.
-

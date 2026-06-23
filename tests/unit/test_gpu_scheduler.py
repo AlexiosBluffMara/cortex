@@ -160,6 +160,28 @@ class TestStatusLine:
         assert "Swaps" in line
 
 
+class TestRunBrainScanLifecycle:
+    @pytest.mark.asyncio
+    async def test_run_brain_scan_swaps_back_to_gemma_by_default(
+        self, scheduler, mock_pipeline, mock_nvidia_smi
+    ):
+        mock_nvidia_smi(free_mb=28000, used_mb=4000)
+        result = await scheduler.run_brain_scan("/tmp/x.mp4")
+        assert result is mock_pipeline.run_inference.return_value
+        assert scheduler.state is GPUState.GEMMA_ACTIVE
+        scheduler._mm.warm_fast_model.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_run_brain_scan_can_keep_tribe_loaded(
+        self, scheduler, mock_pipeline, mock_nvidia_smi
+    ):
+        mock_nvidia_smi(free_mb=28000, used_mb=4000)
+        result = await scheduler.run_brain_scan("/tmp/x.txt", keep_tribe_loaded=True)
+        assert result is mock_pipeline.run_inference.return_value
+        assert scheduler.state is GPUState.TRIBE_ACTIVE
+        scheduler._mm.warm_fast_model.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # OOM fallback
 # ---------------------------------------------------------------------------

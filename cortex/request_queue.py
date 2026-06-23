@@ -208,7 +208,7 @@ class RequestQueue:
                     if not request.future.done():
                         request.future.set_exception(exc)
                     self._failed_count += 1
-                    log.error("[queue] Request %s failed: %s", request.id, exc)
+                    log.exception("[queue] Request %s failed: %s", request.id, exc)
                 finally:
                     self._active_request = None
         finally:
@@ -223,6 +223,7 @@ class RequestQueue:
             return await self._scheduler.run_brain_scan(
                 payload["media_path"],
                 priority=request.priority,
+                keep_tribe_loaded=bool(payload.get("keep_tribe_loaded")),
             )
 
         elif rt == RequestType.GEMMA_CHAT:
