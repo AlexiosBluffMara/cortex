@@ -138,7 +138,7 @@ Every Cortex scan generates **four parallel narrations** from one TRIBE predicti
 | Gemma 4 E4B | Google's local language model (fast tier) | 194 tok/s on RTX 5090, multimodal |
 | Gemma 4 26B | Google's MoE model (standard tier) | 132 tok/s, mixture-of-experts |
 | Gemma 4 31B | Google's dense model (expert tier) | 51 tok/s, highest quality |
-| Mercury (Hermes fork) | AI agent orchestrating everything | Snowy The Bot, live on Discord |
+| Mercury / Hermes | AI agent context and reusable skills | Use Hermes directly; Mercury preserves the sprint archive |
 | Three.js viewer | Interactive 3D brain in the browser | Per-vertex BOLD animation, time scrubber, click-to-inspect |
 | Hardware (local) | RTX 5090, 64 GB RAM, Windows 11 | MSRP ~$1,999, street ~$2,500–3,000 |
 | Cloud backup | Google Cloud Run, L4 GPU | ~$0.70/hr; ~$0 at scale-to-zero |

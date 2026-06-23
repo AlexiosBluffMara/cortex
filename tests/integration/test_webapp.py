@@ -652,11 +652,15 @@ class TestSubmitScan:
     def test_frontend_exposes_camera_voice_and_funded_controls(self):
         html = Path("webapp/public/index.html").read_text(encoding="utf-8")
         js = Path("webapp/public/main.js").read_text(encoding="utf-8")
+        marketing_headers = Path("website/_headers").read_text(encoding="utf-8")
+        cortex_headers = Path("pages-cortex/_headers").read_text(encoding="utf-8")
 
         assert 'id="camera-open-btn"' in html
         assert 'id="voice-record-btn"' in html
         assert 'id="paid-access-code"' in html
         assert 'name="compute-target"' in html
+        assert 'data-model-filter="local"' not in html
+        assert "Free models first" in html
         assert 'id="openrouter-economics"' in html
         assert 'id="or-free-roster"' in html
         assert "Text scans / $1" in html
@@ -664,6 +668,8 @@ class TestSubmitScan:
         assert "new MediaRecorder" in js
         assert 'fd.append("compute_target"' in js
         assert 'fd.append("paid_access_code"' in js
+        assert "microphone=(self), camera=(self)" in marketing_headers
+        assert "microphone=(self), camera=(self)" in cortex_headers
 
 
 # ---------------------------------------------------------------------------

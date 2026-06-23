@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mercury — Red Team Kitchen</title>
-<meta name="description" content="Mercury is a personal AI agent that lives on a single computer you own. One brain, one memory, three working surfaces today — terminal, Discord bot, and a phone-friendly web dashboard over Tailscale.">
+<meta name="description" content="Mercury is a Gemma 4 Good personal AI experiment: one brain, one memory, terminal, Discord, and web surfaces, with the lesson that Hermes should be used directly instead of maintained as a widening fork.">
 
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -40,15 +40,16 @@
 <header>
   <div class="pills">
     <span class="pill gold">Project · Mercury</span>
-    <span class="pill brand">Hermes Agent fork</span>
+    <span class="pill brand">Gemma 4 Good · Digital Equity</span>
     <span class="pill">v0.2.0 · MIT</span>
   </div>
   <h1>One brain. <em>Three doors.</em><br><span class="gold">Your hardware.</span></h1>
   <p class="tag">
-    Mercury is a personal AI agent that <strong>lives on a computer you own</strong>.
-    Today it's reachable through three working doors — your terminal, a Discord
-    bot (<code>@abmsnowy</code>), and a phone-friendly web dashboard accessible
-    over Tailscale. Same agent, same memory, every door. Nothing leaves the building.
+    Mercury is a personal AI agent experiment that <strong>lives on a computer you own</strong>.
+    The shipped proof reached three working doors — terminal, Discord
+    bot (<code>@abmsnowy</code>), and a phone-friendly web dashboard. The main
+    engineering conclusion is now clear: keep the local-first Gemma/Hermes
+    idea, but use Hermes directly instead of maintaining a widening custom fork.
   </p>
   <div class="ctas">
     <a class="cta primary" href="https://github.com/AlexiosBluffMara/mercury">View source on GitHub</a>
@@ -66,14 +67,16 @@
     by default the same RTX 5090 desktop that runs Cortex. The desk has
     three working doors today: <strong>terminal</strong> (the
     <code>mercury</code> CLI), <strong>Discord</strong> (the <code>@abmsnowy</code>
-    bot), and <strong>web</strong> (a phone-friendly dashboard exposed over
-    Tailscale at <code>redteamkitchen.com:8443</code>). Walk through
+    bot), and <strong>web</strong> (a phone-friendly dashboard for the local
+    network). Walk through
     any door, and you're talking to the same person with the same memory. The
     brain is <strong style="color: var(--isu-gold);">Gemma 4 E4B</strong>
     running locally on Ollama at ~194 tokens per second; the body is
     <strong style="color: var(--isu-gold);">Hermes Agent</strong>, an
-    open-source framework from Nous Research. iMessage, email, and SMS surfaces
-    are <em>roadmap</em>, not shipped — call them out as they actually are.
+    open-source framework from Nous Research. We proved enough to stop widening
+    our own fork: the better current path is direct Hermes plus reusable skills.
+    iMessage, email, and SMS surfaces are <em>roadmap</em>, not shipped — call
+    them out as they actually are.
   </p>
 
   <div class="pull">
@@ -85,7 +88,7 @@
   <h2>Where to go next</h2>
   <div class="panel gold">
     <ul>
-      <li><strong style="color: var(--text);">Source:</strong> <a href="https://github.com/AlexiosBluffMara/mercury">github.com/AlexiosBluffMara/mercury</a> — MIT, fork of <a href="https://github.com/NousResearch/hermes-agent">NousResearch/hermes-agent</a>.</li>
+      <li><strong style="color: var(--text);">Source:</strong> <a href="https://github.com/AlexiosBluffMara/mercury">github.com/AlexiosBluffMara/mercury</a> — MIT archive of the experiment, pointing back to <a href="https://github.com/NousResearch/hermes-agent">NousResearch/hermes-agent</a> as the runtime to use directly.</li>
       <li><strong style="color: var(--text);">Casual / Business / Founder framings:</strong> <a href="/explain.html">/explain</a> — three registers, same products.</li>
       <li><strong style="color: var(--text);">Why local:</strong> An RTX 5090 runs about $2,500–3,000 street price; equivalent cloud capacity is roughly $0.70/hour, or ~$504/month at 24/7. Break-even in five months even before per-token fees.</li>
       <li><strong style="color: var(--text);">No public hosted version.</strong> Mercury is local-first by design. To chat with it, clone, install, and bring your own hardware.</li>
@@ -106,7 +109,7 @@
 </div>
 
 <footer>
-  <p>Mercury is a fork of <a href="https://github.com/NousResearch/hermes-agent">NousResearch/hermes-agent</a>. Adapted by Red Team Kitchen / Alexios Bluff Mara LLC. Gemma is a trademark of Google LLC. Brand accent colors reference Illinois State University's published values; ISU logos and wordmarks are not used.</p>
+  <p>Mercury is an experiment built from <a href="https://github.com/NousResearch/hermes-agent">NousResearch/hermes-agent</a>. Red Team Kitchen's current recommendation is to use Hermes directly and carry forward only the reusable skills/surfaces. Gemma is a trademark of Google LLC. Brand accent colors reference Illinois State University's published values; ISU logos and wordmarks are not used.</p>
 </footer>
 
 </div>

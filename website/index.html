@@ -14,13 +14,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/style.css">
-<script>
-  // If someone hits cortex.redteamkitchen.com (old subdomain alias), send them
-  // straight to the live demo.
-  if (location.hostname === 'cortex.redteamkitchen.com') {
-    location.replace('https://redteamkitchen.com' + location.pathname + location.search);
-  }
-</script>
 </head>
 <body>
 
@@ -61,13 +54,13 @@
     operating in collaboration with Illinois State University. Two flagship
     projects, both running live right now: <strong>Cortex</strong>, a multimodal
     brain-response analysis system on Meta's TRIBE v2 + Google's Gemma 4, and
-    <strong>Mercury</strong>, a personal AI agent reachable from terminal,
-    Discord bot, and a phone-friendly web dashboard.
+    <strong>Mercury</strong>, a personal AI agent archive built around
+    terminal, Discord bot, and a phone-friendly web dashboard.
   </p>
   <div class="ctas">
-    <a class="cta primary" href="https://redteamkitchen.com">See Cortex live demo →</a>
-    <a class="cta ghost" href="https://redteamkitchen.com/gallery.html">Gallery</a>
-    <a class="cta ghost" href="https://redteamkitchen.com/personas.html">The 4 personas</a>
+    <a class="cta primary" href="https://cortex.redteamkitchen.com">See Cortex live demo →</a>
+    <a class="cta ghost" href="https://cortex.redteamkitchen.com/gallery.html">Gallery</a>
+    <a class="cta ghost" href="https://cortex.redteamkitchen.com/personas.html">The 4 personas</a>
     <a class="cta ghost" href="https://github.com/AlexiosBluffMara">GitHub</a>
   </div>
 </header>
@@ -172,30 +165,31 @@
 
 <!-- ═════════════════════ Hackathons ═════════════════════ -->
 <section>
-  <h2>Active hackathon submissions</h2>
+  <h2>Hackathon artifacts</h2>
   <p>
-    Both projects are competing in May 2026 hackathons. Submissions are live and
-    publicly reproducible.
+    Both projects came out of the May 2026 hackathon sprint. The public site now
+    keeps the banners straight and links back to the source repos.
   </p>
   <div class="projects">
     <a class="project cardinal" href="/cortex.html">
-      <div class="tag">Kaggle · Gemma 4 Good — Health &amp; Sciences track</div>
-      <div class="name">Cortex: accessible brain imaging with a $2,600 GPU.</div>
+      <div class="tag">Nous Research × Kimi — Creative track</div>
+      <div class="name">Cortex: a Kimi-built 3D brain viewer for TRIBE responses.</div>
       <div class="blurb">
-        Clinical fMRI costs $5,000/scan and requires a radiologist. Cortex runs
-        the same predictive model for &lt;$0.01 and narrates the result in plain
-        language. Built on Meta TRIBE v2 + Google Gemma 4, Apache-2.0.
+        Kimi K2.6 helped build the early Three.js brain viewer and scan
+        gallery around Meta TRIBE v2 predictions. The project is not a clinical
+        scan; it became the prototype that now informs more careful MRI/fMRI
+        research planning.
       </div>
       <div class="more">View submission →</div>
     </a>
     <a class="project gold" href="/mercury.html">
-      <div class="tag">Nous Research × Kimi — Creative track</div>
-      <div class="name">Mercury: a personal AI agent built from a Hermes-fork brain.</div>
+      <div class="tag">Kaggle · Gemma 4 Good — Digital Equity track</div>
+      <div class="name">Mercury: local-first personal AI, archived as a Hermes lesson.</div>
       <div class="blurb">
         One model instance running on the local 5090, reachable from terminal,
-        Discord bot, and a phone-friendly web dashboard over Tailscale. Hermes-fork
-        brain on local Ollama (Gemma 4) with OpenRouter free-tier as cloud overflow.
-        MIT license.
+        Discord bot, and a phone-friendly web dashboard. The result: use Hermes
+        directly instead of maintaining a widening fork, and keep the Mercury
+        repo as the record of what worked, what did not, and what to upstream.
       </div>
       <div class="more">View submission →</div>
     </a>

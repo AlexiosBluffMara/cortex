@@ -79,22 +79,21 @@ custom domain provisioning is automatic.
    - `https://redteamkitchen.com/research` → research.html
    - `https://redteamkitchen.com/contact` → contact.html
 
-## Conflict to watch: `cortex.redteamkitchen.com` on Firebase
+## Cortex subdomain architecture
 
-The repo already serves `cortex.redteamkitchen.com` from Firebase Hosting
-(see `D:\cortex\firebase.json`). That hostname is a **different**
-DNS record (`cortex.` subdomain, not the apex), so adding the apex to
-Cloudflare Pages will not collide on its own.
+`redteamkitchen.com` is the durable marketing/gallery surface on Cloudflare
+Pages. `cortex.redteamkitchen.com` is the live Cortex app surface and should be
+Cloudflare-controlled too, either as its own Pages project with a Worker route
+on `/api/*` or as a Cloudflare Tunnel route to Seratonin while the PC is online.
 
-What to verify after the Pages deploy:
+What to verify after a Pages deploy:
 
 - `dig redteamkitchen.com`        → Cloudflare Pages IPs
 - `dig www.redteamkitchen.com`    → Cloudflare Pages IPs
-- `dig cortex.redteamkitchen.com` → still resolves to Firebase Hosting (untouched)
+- `dig cortex.redteamkitchen.com` → Cloudflare-owned Pages/Tunnel target, not a retired Firebase/Tailscale route
 
-If Cloudflare offers to take over `cortex.redteamkitchen.com` during
-custom-domain setup, **decline** — that subdomain belongs to the Firebase
-deployment of the live demo and must keep its existing CNAME / A record.
+If Seratonin is offline, the marketing site and exported gallery should still
+load. New live scans require Seratonin or a configured cloud TRIBE worker.
 
 ## Replacing the screenshot placeholder
 

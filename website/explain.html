@@ -108,16 +108,15 @@
       Mercury is an AI assistant that lives on Soumit's <em>own</em> RTX 5090 in
       Chicago, Illinois — not in some data center in Virginia. You can talk to
       it three ways today: through a terminal, through a Discord bot called
-      <code>@abmsnowy</code>, or through a phone-friendly web page (over a
-      private VPN). Same agent, same memory, every door.
+      <code>@abmsnowy</code>, or through a phone-friendly web page on the
+      local network. Same agent, same memory, every door.
     </p>
     <p>
       The point is: nothing leaves the building. Your messages don't get sent
       to OpenAI or Google or Anthropic. The model that answers you is Gemma 4,
-      running locally on the same desktop that runs Cortex. If the local
-      machine is busy, the request quietly hops to a MacBook on the same VPN.
-      If both die, it falls back to OpenRouter's free tier — still no per-token
-      bill.
+      running locally on the same desktop that runs Cortex. If local inference
+      is unavailable, the healthy fallback is OpenRouter's free tier first,
+      with paid models explicitly gated so the credit pool is never burned by accident.
     </p>
     <div class="pull-q">"It's like having a private assistant who only works for you, on a computer you can unplug."</div>
   </div>
@@ -146,7 +145,7 @@
       <li><strong>Narration layer:</strong> Google Gemma 4 (E4B/26B/31B) via local Ollama, four parallel persona prompts</li>
       <li><strong>Latency:</strong> ~3 minutes from upload to four complete narrations on a single RTX 5090</li>
       <li><strong>Throughput model:</strong> queue-backed serial processing; multi-GPU overflow via inference router</li>
-      <li><strong>Deployment posture:</strong> local-first; Tailscale Funnel for public access; no per-token cloud cost</li>
+      <li><strong>Deployment posture:</strong> local-first; Cloudflare Tunnel/worker for public access when Seratonin is online; no per-token cloud cost in free mode</li>
     </ul>
     <p>
       Use cases under exploration: research-grade fMRI explainer for
@@ -160,13 +159,12 @@
     <h3>Mercury (the business framing)</h3>
     <div class="brief">Local-first agentic AI runtime</div>
     <p>
-      Mercury is a fork of NousResearch's Hermes Agent framework, configured
-      for single-tenant deployment on consumer GPU hardware. It exposes one
-      agent instance through three transport surfaces with shared session
-      state and memory backed to a local SQLite database.
+      Mercury is the local-first experiment built around NousResearch's Hermes
+      Agent framework. The result is not "maintain a permanent fork"; it is
+      "use Hermes directly, and keep Mercury's reusable skills and surfaces."
     </p>
     <ul>
-      <li><strong>Active surfaces:</strong> CLI (<code>mercury</code> command), Discord bot (<code>@abmsnowy</code>), web dashboard at <code>:9119</code> over Tailscale</li>
+      <li><strong>Active surfaces:</strong> CLI (<code>mercury</code> command), Discord bot (<code>@abmsnowy</code>), local web dashboard</li>
       <li><strong>Roadmap surfaces (not shipped):</strong> iMessage, email, SMS</li>
       <li><strong>Inference backend:</strong> Ollama (local Gemma 4), with OpenRouter free tier as failover</li>
       <li><strong>Tool layer:</strong> 65+ built-in tools plus MCP servers (Playwright, Notion, Cloudflare, filesystem, Workspace)</li>
@@ -200,8 +198,8 @@
     </p>
     <p><strong>Why this matters as a small business:</strong></p>
     <ul>
-      <li><strong>Zero-marginal-cost demos.</strong> Send a live URL to anyone, anywhere, today. They don't need an account, a credit card, or a Tailscale invite. The 5090 absorbs the load.</li>
-      <li><strong>Hackathon credibility.</strong> Built for the <em>Gemma 4 Good Hackathon</em> (Health &amp; Sciences track) and the <em>Nous Research × Kimi Creative Hackathon</em>. Both submissions live on the same GitHub.</li>
+      <li><strong>Zero-marginal-cost demos.</strong> Send a live URL when Seratonin is online. They don't need an account or a credit card; the 5090 absorbs the load.</li>
+      <li><strong>Hackathon credibility.</strong> Cortex is now framed under the <em>Nous Research × Kimi Creative Hackathon</em>; Mercury is framed under <em>Gemma 4 Good</em>. Both source repos are public on GitHub.</li>
       <li><strong>Education-sector path.</strong> ISU undergrads in cognitive science / psych / neuro can use a free public demo to understand fMRI without paying for scanner time. Same for high-school AP Psych teachers.</li>
       <li><strong>Adjacent revenue:</strong> on-prem deploys for hospital-affiliated training programs that can't send patient stimuli to a cloud LLM.</li>
     </ul>
@@ -223,7 +221,7 @@
       <li><strong>The break-even math is brutal.</strong> A 5090 costs ~$2,800 street. An equivalent 24/7 cloud GPU is ~$0.70/hr = $504/month. Five-month payback before per-token fees. After month five, the marginal cost is electricity.</li>
       <li><strong>Privacy as architecture, not a promise.</strong> Regulated industries (legal, medical, family offices) cannot put client data into a third-party LLM endpoint. Mercury's pitch is: the model lives on a box you own, in a building you own.</li>
       <li><strong>Single-operator economics.</strong> Soumit (one person, one LLC) ships a live demo, runs Discord support, handles billing — total operating overhead is a domain registration and a Cloudflare account.</li>
-      <li><strong>Productizable as an appliance.</strong> "Mercury Box" — a pre-installed mini-PC + Tailscale config + Discord setup wizard, sold to small firms that want a private AI without paying a SaaS forever.</li>
+      <li><strong>Productizable as an appliance.</strong> "Mercury Box" — a pre-installed mini-PC + direct Hermes setup + Discord wizard, sold to small firms that want a private AI without paying a SaaS forever.</li>
     </ul>
     <div class="pull-q">"You buy the hardware once. You own the agent forever. The only recurring cost is electricity."</div>
   </div>
@@ -236,8 +234,8 @@
     Mercury is the <strong>orchestrator</strong>; Cortex is the
     <strong>specialty tool</strong>. From inside Mercury (in any of its three
     surfaces) you can hand a media file to Cortex and get the brain analysis +
-    four narrations back as a structured response. Same RTX 5090, same Tailscale
-    network, same Ollama inference pool. From a small-business standpoint that
+    four narrations back as a structured response. Same RTX 5090, same local
+    inference pool, same explicitly gated cloud fallback. From a small-business standpoint that
     means one piece of hardware monetizes two distinct demos and powers any
     future agent skill that wants to call into a brain-scan endpoint.
   </p>

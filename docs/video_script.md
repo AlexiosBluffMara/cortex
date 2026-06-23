@@ -122,7 +122,7 @@ Generate via YouTube auto-captions, then **review and correct** before publishin
 - **Format:** 1920×1080, 30 fps, MP4 / H.264 / AAC.
 - **Title:** `Cortex — Multimodal Brain-Response Analysis with Gemma 4 + TRIBE v2`
 - **Description (first 150 chars matter):**
-  > Cortex turns any short clip into a 3D cortical activation map plus a Gemma-narrated explanation, running locally on one RTX 5090. Built for the Gemma 4 Good Hackathon.
+  > Cortex turns any short clip into a 3D cortical activation map plus a persona-narrated explanation, running locally on one RTX 5090. The Three.js viewer sprint is the Nous Research × Kimi artifact.
 - **Tags:** `gemma 4`, `gemma 4 good hackathon`, `tribe v2`, `fmri`, `neuroscience`, `unsloth`, `ollama`, `local-first`, `rtx 5090`.
 
 ---

@@ -251,7 +251,7 @@ async function pollScans() {
 
 async function pollWatchdog() {
   // Best-effort fetch from Seratonin's watchdog port. Cross-origin so we use
-  // the public Tailscale Funnel hostname; falls silent if not reachable.
+  // the public Cortex hostname; falls silent if Seratonin is not reachable.
   const candidates = [
     "http://localhost:8780/status",
     "http://100.98.19.87:8780/status",

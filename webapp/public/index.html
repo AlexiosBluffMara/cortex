@@ -1593,7 +1593,7 @@
         }
         .model-filters {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 6px;
         }
         .model-filter {
@@ -2276,13 +2276,12 @@
                     </select>
                     <div class="model-toolbar">
                         <div class="model-toolbar-row">
-                            <span class="model-toolbar-title">Free OpenRouter catalog</span>
+                            <span class="model-toolbar-title">Free models first · funded locked</span>
                             <span id="model-count" class="model-count">loading</span>
                         </div>
                         <div class="model-filters" role="tablist" aria-label="Model price group">
                             <button type="button" class="model-filter active" data-model-filter="free">Free</button>
                             <button type="button" class="model-filter" data-model-filter="paid">Funded</button>
-                            <button type="button" class="model-filter" data-model-filter="local">Local</button>
                         </div>
                         <label class="model-search">
                             <span>Search</span>
@@ -2526,9 +2525,18 @@
                 }
                 window._cortexPaidAccessCode = paidAccessCode;
                 window._selectedComputeTarget = 'local';
+                function publicCatalogModels() {
+                    return models.filter(m => modelGroup(m) !== 'local');
+                }
+                function selectableModels() {
+                    return models.filter(m => {
+                        const group = modelGroup(m);
+                        return group === 'free' || (paidAccessUnlocked && group === 'paid');
+                    });
+                }
                 function filteredModels() {
                     const q = modelQuery.trim().toLowerCase();
-                    return models.filter(m => {
+                    return publicCatalogModels().filter(m => {
                         const group = modelGroup(m);
                         if (modelFilter !== 'all' && group !== modelFilter) return false;
                         if (!q) return true;
@@ -2545,7 +2553,7 @@
                 }
                 function syncModelChrome(shown) {
                     const count = document.getElementById('model-count');
-                    if (count) count.textContent = `${shown.length}/${models.length}`;
+                    if (count) count.textContent = `${shown.length}/${publicCatalogModels().length}`;
                     document.querySelectorAll('[data-model-filter]').forEach(btn => {
                         const active = btn.dataset.modelFilter === modelFilter;
                         btn.classList.toggle('active', active);
@@ -2605,7 +2613,12 @@
                 function populateSelect(defaultModel) {
                     const sel = document.getElementById('narration-model-select');
                     if (!sel) return;
-                    sel.innerHTML = models.map(m => {
+                    const options = selectableModels();
+                    const chosen = models.find(m => m.id === defaultModel);
+                    if (chosen && modelGroup(chosen) !== 'local' && !options.some(m => m.id === chosen.id)) {
+                        options.unshift(chosen);
+                    }
+                    sel.innerHTML = options.map(m => {
                         const selected = m.id === defaultModel ? ' selected' : '';
                         return `<option value="${m.id}"${selected}>${displayLabel(m)}</option>`;
                     }).join('');

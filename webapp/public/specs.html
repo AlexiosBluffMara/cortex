@@ -98,14 +98,14 @@
       <dt>RAM</dt>      <dd>64 GB DDR5-4800 · 2× 32 GB</dd>
       <dt>Mobo</dt>     <dd>MSI X870E-P PRO · AM5 · WiFi 7</dd>
       <dt>OS</dt>       <dd>Windows 11 Pro · WSL2 Ubuntu 24.04 · CUDA 12.8</dd>
-      <dt>Network</dt>  <dd>Tailscale (<code>seratonin</code>) · Funnel exposed publicly</dd>
+      <dt>Network</dt>  <dd>Cloudflare Tunnel / local LAN when enabled</dd>
       <dt>Role</dt>     <dd>FastAPI backend (<code>:8773</code>) + inference router (<code>:8766</code>) + Vite frontend (<code>:5173</code>) + Mercury web (<code>:9119</code>)</dd>
     </dl>
     <div class="role-box">
       <strong>What it does for the demo:</strong> hosts the public URL you're looking at right now.
       Runs TRIBE v2 (~6 GB VRAM) for cortical-surface BOLD prediction, then runs Gemma 4 E4B locally
-      via Ollama for the four parallel persona narrations. Tailscale Funnel makes the Vite dev
-      server reachable from any phone browser without authentication.
+      via Ollama for the four parallel persona narrations. Cloudflare Tunnel is the current
+      public access path when the PC is online; local LAN remains the development path.
     </div>
   </article>
 
@@ -120,14 +120,13 @@
     <dl class="specs">
       <dt>Chip</dt>     <dd>Apple Silicon (Mac mini class)</dd>
       <dt>OS</dt>       <dd>macOS Sequoia 15.x · Ollama on Metal</dd>
-      <dt>Network</dt>  <dd>Tailscale (<code>miniapple</code>)</dd>
+      <dt>Network</dt>  <dd>Local/private research node</dd>
       <dt>Location</dt> <dd>Near ISU campus, Normal IL — used for in-person research meetings with collaborators (Mangolika Bhattacharya, Sally Xie, Rosangela Follmann)</dd>
       <dt>Role</dt>     <dd>Tertiary node. Available as a third Ollama backend if both Chicago machines are saturated.</dd>
     </dl>
     <div class="role-box">
       <strong>Why it exists:</strong> live demo + collaboration sessions at ISU don't have to round-trip
-      to Chicago. The whole inference router design assumes any Tailscale node can be added or removed
-      from the load-balancer pool with zero config change.
+      to Chicago. It is not part of the public inference pool unless explicitly promoted.
     </div>
   </article>
 
@@ -141,8 +140,8 @@
     </div>
     <dl class="specs">
       <dt>Hardware</dt> <dd>Raspberry Pi 5 · 8 GB · ARM Cortex-A76 (4 cores @ 2.4 GHz)</dd>
-      <dt>Plan</dt>     <dd>AdGuard Home + Tailscale subnet router for Ascended Base. <em>No</em> LLM inference (the Pi is too small for anything bigger than BitNet, which we deprioritized).</dd>
-      <dt>Status</dt>   <dd>SD card prep + AdGuard + Tailscale install scripts written. Hardware not yet flashed and connected.</dd>
+      <dt>Plan</dt>     <dd>AdGuard Home + local network utilities for Ascended Base. <em>No</em> LLM inference (the Pi is too small for anything bigger than BitNet, which we deprioritized).</dd>
+      <dt>Status</dt>   <dd>SD card prep + service install scripts written. Hardware not yet flashed and connected.</dd>
     </dl>
     <div class="role-box">
       <strong>Honest status:</strong> this is on the to-do list, not in production. Listed here so the

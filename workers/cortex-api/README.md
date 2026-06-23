@@ -23,10 +23,11 @@ Requires a Cloudflare API token with **Workers Scripts:Edit** and
 **Workers Routes:Edit** on the redteamkitchen.com zone. The current
 read-only token will fail with 403 on `wrangler deploy`.
 
-## DNS swap (Phase 1 cutover)
+## DNS shape
 
-Currently `cortex.redteamkitchen.com` is a CNAME to `ghs.googlehosted.com`
-(Cloud Run cortex-relay). After the Pages project is created and the custom
-domain attached, the record becomes a CNAME to `cortex-site.pages.dev`,
-proxied=true. The Worker route on `/api/*` then takes precedence over Pages
-asset routing.
+`cortex.redteamkitchen.com` should be Cloudflare-owned. The static shell can be
+served from the `cortex-site` Pages project, while this Worker owns `/api/*`.
+The Worker then relays to the live local inference route only while Seratonin is
+online. If that local route is down, the static shell should still load and the
+UI should report that live scans require the PC or a configured cloud TRIBE
+worker.

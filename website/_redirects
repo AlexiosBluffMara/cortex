@@ -6,5 +6,6 @@
 # at /cortex without any redirect rule here. The old .html rewrites were creating
 # 308-loop conflicts with CF Pages' built-in Clean URLs behavior.
 
-# Point /demo to the live Tailscale-fronted Cortex instance on Seratonin.
-/demo     https://redteamkitchen.com     302
+# Point /demo to the Cloudflare-fronted Cortex app. It is live only while
+# Seratonin and its tunnel/API path are online.
+/demo     https://cortex.redteamkitchen.com     302
