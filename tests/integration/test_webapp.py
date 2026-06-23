@@ -291,6 +291,46 @@ class TestControlPlane:
         assert server_mod._narration_uses_cloud_model("gemini:gemini-2.5-flash")
         assert not server_mod._narration_uses_cloud_model("local:gemma4:e4b")
 
+    def test_cloud_error_narrations_get_useful_tribe_fallback(self):
+        from webapp import server as server_mod
+
+        fake_result = MagicMock()
+        fake_result.top_rois = ["7Networks_LH_Vis_1", "7Networks_RH_SomMot_2"]
+        fake_result.peak_t = 8
+        fake_result.seconds_elapsed = 11.2
+        fake_result.preds.shape = (12, 20484)
+        narrations = {
+            "student": "OpenRouter narration unavailable (401). User not found.",
+            "patient": "OpenRouter narration unavailable (401). User not found.",
+            "clinician": "OpenRouter narration unavailable (401). User not found.",
+            "ml_scientist": "OpenRouter narration unavailable (401). User not found.",
+        }
+        replaced = server_mod._apply_cloud_narration_fallbacks(
+            narrations,
+            label="demo.mp4",
+            media_context="Source media metadata:\n- modality: video\n- audio: present",
+            result=fake_result,
+            narration_model="openrouter:google/gemma-4-26b-a4b-it:free",
+        )
+
+        assert replaced["student"] != narrations["student"]
+        assert "tribe" in replaced["student"]
+        assert "OpenRouter rejected" in replaced["patient"]
+        assert "fsaverage5" in replaced["clinician"]
+        assert "20,484-vertex" in replaced["ml_scientist"]
+        assert len(set(replaced.values())) == 4
+
+    def test_cloud_error_fallback_does_not_touch_local_model_narration(self):
+        from webapp import server as server_mod
+
+        narrations = {"student": "OpenRouter narration unavailable (401). User not found."}
+        assert server_mod._apply_cloud_narration_fallbacks(
+            narrations,
+            label="demo",
+            media_context="Input modality: text",
+            narration_model="local:gemma4:e4b",
+        ) == narrations
+
 
 # ---------------------------------------------------------------------------
 # Scan submission

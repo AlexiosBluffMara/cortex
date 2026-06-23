@@ -661,6 +661,143 @@ def _narration_uses_cloud_model(model_id: str) -> bool:
     return model_id.split(":", 1)[0] in {"openrouter", "gemini"}
 
 
+def _narration_is_cloud_error(text: str) -> bool:
+    lower = str(text or "").lower()
+    return (
+        "openrouter narration unavailable" in lower
+        or "openrouter narration is selected" in lower
+        or "gemini" in lower and ("unavailable" in lower or "api key" in lower)
+    )
+
+
+def _media_modality_from_context(media_context: str) -> str:
+    for line in str(media_context or "").splitlines():
+        cleaned = line.strip().lower()
+        if cleaned.startswith("- modality:"):
+            return cleaned.split(":", 1)[1].strip() or "stimulus"
+        if cleaned.startswith("input modality:"):
+            return cleaned.split(":", 1)[1].strip() or "stimulus"
+    return "stimulus"
+
+
+def _scan_facts_for_fallback(
+    label: str,
+    media_context: str,
+    result: Any | None = None,
+) -> dict[str, Any]:
+    top_rois = list(getattr(result, "top_rois", None) or [])
+    peak_t = getattr(result, "peak_t", None)
+    seconds_elapsed = getattr(result, "seconds_elapsed", None)
+    preds = getattr(result, "preds", None)
+    n_t = int(preds.shape[0]) if getattr(preds, "shape", None) else None
+    return {
+        "label": label,
+        "modality": _media_modality_from_context(media_context),
+        "top": top_rois[:3],
+        "top_text": ", ".join(str(r) for r in top_rois[:3]) if top_rois else "the predicted cortical response",
+        "peak_s": round(float(peak_t) * 0.5, 1) if peak_t is not None else None,
+        "elapsed_s": round(float(seconds_elapsed), 1) if seconds_elapsed is not None else None,
+        "n_t": n_t,
+        "has_tribe": result is not None,
+    }
+
+
+def _fallback_persona_narration(
+    persona_id: str,
+    label: str,
+    media_context: str,
+    result: Any | None,
+    cloud_error: str,
+) -> str:
+    facts = _scan_facts_for_fallback(label, media_context, result)
+    peak = f" around t={facts['peak_s']}s" if facts["peak_s"] is not None else ""
+    top = facts["top_text"]
+    modality = facts["modality"]
+    key_note = "OpenRouter rejected the configured key, so this is a local TRIBE fallback summary rather than cloud LLM narration."
+
+    if persona_id == "student":
+        if facts["has_tribe"]:
+            return (
+                f"{modality} input made it through the brain model, which is the important part. "
+                f"the cloud narrator could not sign in, but TRIBE still predicted activity in {top}{peak}. "
+                "so the glowing brain is real output from the RTX 5090 path; the missing piece is just the OpenRouter key."
+            ).lower()
+        return (
+            f"{modality} input loaded, but the cloud narrator could not sign in. "
+            "this card is showing the honest fallback until the OpenRouter key is replaced."
+        ).lower()
+
+    if persona_id == "patient":
+        if facts["has_tribe"]:
+            return (
+                f"When someone experiences this {modality} stimulus, the local TRIBE model still produced a brain-response prediction. "
+                f"In plain terms, the strongest signals are in areas summarized as {top}{peak}. "
+                "This is a research model of an average brain response, not an MRI of your own brain and not a diagnosis. "
+                f"{key_note}"
+            )
+        return (
+            f"When someone views this {modality} stimulus, Cortex can still describe the expected kind of brain activity, "
+            f"but cloud narration is unavailable right now. {key_note}"
+        )
+
+    if persona_id == "clinician":
+        if facts["has_tribe"]:
+            return (
+                f"The present {modality} recording completed local TRIBE v2 inference on fsaverage5. "
+                f"Dominant predicted regions/networks include {top}{peak}; the surface viewer should be interpreted as a group-averaged cortical prediction. "
+                "No patient-specific imaging or diagnostic inference is implied. "
+                f"{key_note}"
+            )
+        return (
+            f"The {modality} stimulus did not run a TRIBE inference pass in this pathway; this is an expected-response preview only. "
+            "No patient-specific imaging or diagnostic inference is implied. "
+            f"{key_note}"
+        )
+
+    if persona_id == "ml_scientist":
+        if facts["has_tribe"]:
+            n_t = f"{facts['n_t']} time steps" if facts["n_t"] else "a short time series"
+            return (
+                f"The key systems result is that TRIBE v2 completed locally and emitted {n_t} over the 20,484-vertex fsaverage5 surface. "
+                f"Cloud narration failed at auth, so the GPU correctly stayed resident on TRIBE instead of swapping into local Gemma. "
+                f"Top summary features: {top}{peak}. "
+                "Replace the OpenRouter key and the same scan path will use the selected free model for persona text."
+            )
+        return (
+            "Cloud narration failed at auth before a model-generated interpretation was available. "
+            "The UI is intentionally preserving the GPU for TRIBE and surfacing this fallback instead of silently loading local Gemma."
+        )
+
+    return f"{key_note} Raw cloud error: {cloud_error}"
+
+
+def _apply_cloud_narration_fallbacks(
+    narrations: dict[str, str],
+    *,
+    label: str,
+    media_context: str,
+    result: Any | None = None,
+    narration_model: str = "",
+) -> dict[str, str]:
+    if not _narration_uses_cloud_model(narration_model):
+        return narrations
+    if not any(_narration_is_cloud_error(text) for text in narrations.values()):
+        return narrations
+    replaced: dict[str, str] = {}
+    for persona_id, text in narrations.items():
+        if _narration_is_cloud_error(text):
+            replaced[persona_id] = _fallback_persona_narration(
+                persona_id,
+                label,
+                media_context,
+                result,
+                text,
+            )
+        else:
+            replaced[persona_id] = text
+    return replaced
+
+
 def _media_metadata_context(media_path: Path) -> str:
     """Cheap, local media summary used when multimodal cloud description is unavailable."""
     suffix = media_path.suffix.lower()
@@ -2424,6 +2561,13 @@ async def _run_image_scan_background(
             _one(pid, t, sp) for pid, (t, sp) in _prompts.PERSONA_CONFIGS.items()
         ])
         narrations: dict[str, str] = dict(results)
+        narrations = _apply_cloud_narration_fallbacks(
+            narrations,
+            label=label,
+            media_context=f"Input modality: image\n{visual_context}",
+            result=None,
+            narration_model=narration_model,
+        )
 
         await registry.update(scan_id, status="complete", narration=narrations.get("student", ""), narrations=narrations, top_rois=None, peak_t=None)
         await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
@@ -2485,6 +2629,13 @@ async def _run_document_scan_background(
             _one(pid, t, sp) for pid, (t, sp) in _prompts.PERSONA_CONFIGS.items()
         ])
         narrations: dict[str, str] = dict(results)
+        narrations = _apply_cloud_narration_fallbacks(
+            narrations,
+            label=label,
+            media_context=f"Input modality: document\nExtracted content: {text[:800]}",
+            result=None,
+            narration_model=narration_model,
+        )
 
         await registry.update(scan_id, status="complete", narration=narrations.get("student", ""), narrations=narrations, top_rois=None, peak_t=None)
         await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
@@ -2811,6 +2962,13 @@ async def _run_scan_background(
             narrations[pid] = text
             narration_timings[pid] = dt
         narration_seconds = round(time.time() - narr_t0, 2)
+        narrations = _apply_cloud_narration_fallbacks(
+            narrations,
+            label=label,
+            media_context=media_ctx,
+            result=result,
+            narration_model=narration_model,
+        )
 
         preds = getattr(result, "preds", None)
         await registry.update(
@@ -2901,6 +3059,13 @@ async def _run_text_scan_background(
             _one(pid, t, sp) for pid, (t, sp) in _prompts.PERSONA_CONFIGS.items()
         ])
         narrations: dict[str, str] = dict(results)
+        narrations = _apply_cloud_narration_fallbacks(
+            narrations,
+            label="text stimulus",
+            media_context=f"Input modality: text\nContent: {text[:800]}",
+            result=None,
+            narration_model=narration_model,
+        )
 
         await registry.update(
             scan_id,
