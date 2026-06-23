@@ -12,13 +12,17 @@ Seratonin.
 - App: `D:\cortex\webapp\server.py`
 - UI assets: `D:\cortex\webapp\public`
 - GPU work: TRIBE v2 on the local RTX 5090
+- Optional cloud GPU: `CORTEX_CLOUD_TRIBE_ENDPOINT` using
+  `cloud/tribe_worker/app.py`
 - Cloud narration: OpenRouter chat completions
 - Model selector: live OpenRouter `/api/v1/models` free-model catalog, cached for 30 minutes
 - GPU residency: scans using OpenRouter/Gemini narration keep TRIBE loaded after
   inference; local Gemma narration is the only path that warms Gemma again.
 
 The public site at `redteamkitchen.com` is Cloudflare Pages and should remain
-useful when Seratonin is offline. The Cortex tunnel is lab mode.
+useful when Seratonin is offline. The Cortex tunnel is lab mode. If Seratonin is
+not available for a live demo, configure a cloud TRIBE worker and use the funded
+cloud compute target instead of promising the local PC will be online.
 
 ## Start Or Restart Cortex
 
@@ -98,11 +102,50 @@ Ready state:
 }
 ```
 
+## Cloud TRIBE Worker
+
+Set these on the main FastAPI process before starting Cortex:
+
+```powershell
+$env:CORTEX_CLOUD_TRIBE_ENDPOINT = "https://your-worker.example"
+$env:CORTEX_CLOUD_TRIBE_PROVIDER = "modal" # or huggingface, runpod, etc.
+$env:CORTEX_CLOUD_TRIBE_TOKEN = "shared-worker-secret"
+```
+
+Set the matching secret on the worker as `CORTEX_WORKER_TOKEN`. For a real GPU
+worker, also set:
+
+```text
+CORTEX_WORKER_MODE=real
+```
+
+Before allowing funded cloud scans, verify:
+
+```powershell
+Invoke-RestMethod "$env:CORTEX_CLOUD_TRIBE_ENDPOINT/api/tribe/readiness" |
+  ConvertTo-Json -Depth 6
+```
+
+Required state:
+
+```json
+{
+  "contract_ready": true,
+  "real_mode_ready": true
+}
+```
+
+In fake mode, `contract_ready=true` is enough for smoke tests only. It proves the
+HTTP shape works, not that TRIBE weights and CUDA are available.
+
 ## Pre-Demo Checklist
 
 1. `https://cortex.redteamkitchen.com/api/health` returns `ok: true`.
 2. `GET /api/narration-models` returns `catalog_source: openrouter_live`.
 3. `GET /api/openrouter/status` returns `status: ready`.
 4. `POST /api/tribe/warm` returns `status: tribe_ready`.
-5. `GET /gallery.html` shows brain canvases, not placeholder videos.
-6. Upload, typed text, and video-with-audio paths submit through the main UI.
+5. If using cloud compute, `GET /api/compute-options` shows
+   `endpoint_configured: true` and worker readiness passes.
+6. `GET /gallery.html` shows brain canvases, not placeholder videos.
+7. Upload, typed text, camera capture, and voice recording paths submit through
+   the main UI.

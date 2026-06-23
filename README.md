@@ -141,7 +141,7 @@ Every Cortex scan generates **four parallel narrations** from one TRIBE predicti
 | Mercury / Hermes | AI agent context and reusable skills | Use Hermes directly; Mercury preserves the sprint archive |
 | Three.js viewer | Interactive 3D brain in the browser | Per-vertex BOLD animation, time scrubber, click-to-inspect |
 | Hardware (local) | RTX 5090, 64 GB RAM, Windows 11 | MSRP ~$1,999, street ~$2,500–3,000 |
-| Cloud backup | Google Cloud Run, L4 GPU | ~$0.70/hr; ~$0 at scale-to-zero |
+| Cloud backup | Optional TRIBE worker on Hugging Face / Modal / RunPod style GPU hosts | Explicit funded path; local RTX 5090 remains default |
 
 **VRAM note**: TRIBE v2 uses ~22.4 GB and Gemma 4 E4B uses ~10 GB. They cannot coexist on 32 GB. A GPU scheduler swaps them sequentially — one loads while the other unloads. This takes about 10 seconds.
 
@@ -149,27 +149,34 @@ Every Cortex scan generates **four parallel narrations** from one TRIBE predicti
 
 ---
 
-## Architecture (local, current)
+## Architecture (current)
 
-```
-   Browser / phone
-     ↓ http://127.0.0.1:8765  (local)
-     ↓ https://cortex.redteamkitchen.com  (optional Cloudflare Tunnel)
-   FastAPI backend  (port 8765)
-     ├─ TRIBE v2     PyTorch on RTX 5090, ~6 GB VRAM
-     │                → 20,484-vertex BOLD prediction at 2 Hz
-     │
-     └─ 4× narrate   student · patient · clinician · ml_scientist
-         ↓
-   Ollama / local narration models
-     └─→ localhost:11434
+```text
+   Git repo
+     ├─ website/        → redteamkitchen.com on Cloudflare Pages
+     ├─ pages-cortex/   → cortex.redteamkitchen.com static shell
+     ├─ webapp/         → live local FastAPI + Three.js app on Seratonin
+     └─ cloud/          → optional funded TRIBE worker contracts
+
+   Live scan path
+     Browser
+       ↓
+     FastAPI backend (:8765)
+       ├─ compute_target=local → TRIBE v2 on Seratonin RTX 5090
+       └─ compute_target=cloud_* → CORTEX_CLOUD_TRIBE_ENDPOINT
+            ↓
+          worker returns BOLD/top ROIs
+            ↓
+          main app generates persona narrations and serves media/BOLD back
 ```
 
-The current working path is local-first and PC-bound. Seratonin runs the FastAPI app, the scan registry, the generated ASCII brain videos, and the RTX 5090 TRIBE path. Cloudflare Tunnel can expose that app to the internet, but it is an availability convenience, not a guarantee.
+The current working path is local-first and PC-bound. Seratonin runs the FastAPI app, the scan registry, the generated ASCII brain videos, and the RTX 5090 TRIBE path. Cloudflare Tunnel can expose that app to the internet, but it is an availability convenience, not a guarantee. A configured cloud TRIBE worker can take over the BOLD inference part for funded cloud scans; the main app still owns OpenRouter/local narration and result-panel hydration.
 
 GPU scheduler state machine: `IDLE → GEMMA_ACTIVE → TRIBE_ACTIVE` — eviction-driven swap with OOM recovery. TRIBE checkpoint is 676 MB on disk, ~5–6 GB VRAM during inference.
 
 The website should not depend on this process being live. Durable Cortex publishing should export scan metadata plus selected videos/thumbnails to Cloudflare Pages/R2, then link to the live app only when the desktop is available.
+
+The full deployment map lives in [`ARCHITECTURE.md`](ARCHITECTURE.md). Cloud GPU tradeoffs live in [`docs/TRIBE_CLOUD_GPU_OPTIONS.md`](docs/TRIBE_CLOUD_GPU_OPTIONS.md).
 
 ---
 
