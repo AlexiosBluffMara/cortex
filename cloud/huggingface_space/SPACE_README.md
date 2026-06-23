@@ -32,3 +32,15 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/export_huggingface_space.p
 
 Upload `build/huggingface-space` as the Space root. Keep fake mode enabled
 until the Space logs show that TRIBE dependencies, weights, and CUDA are ready.
+
+For Docker Spaces or any FastAPI-hosted worker, verify the Cortex proxy contract
+before pointing the public app at it:
+
+```bash
+python -m cloud.tribe_worker.verify --endpoint "$CORTEX_CLOUD_TRIBE_ENDPOINT" --token "$CORTEX_CLOUD_TRIBE_TOKEN" --require-real
+```
+
+ZeroGPU Spaces expose the Gradio `scan` function rather than the FastAPI
+contract, so use the included UI/API there as a no-cost experiment path. Use a
+Docker Space, Modal, RunPod, or another ASGI-capable GPU host when Cortex needs
+`CORTEX_CLOUD_TRIBE_ENDPOINT` directly.

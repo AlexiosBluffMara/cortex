@@ -138,6 +138,19 @@ Required state:
 In fake mode, `contract_ready=true` is enough for smoke tests only. It proves the
 HTTP shape works, not that TRIBE weights and CUDA are available.
 
+Then run the end-to-end worker contract verifier:
+
+```powershell
+python -m cloud.tribe_worker.verify `
+  --endpoint $env:CORTEX_CLOUD_TRIBE_ENDPOINT `
+  --token $env:CORTEX_CLOUD_TRIBE_TOKEN `
+  --require-real
+```
+
+This submits a tiny stimulus to the worker, waits for completion, downloads the
+full per-vertex BOLD response, validates the `(T, 20484)` byte shape, and checks
+that source media can be served back to the browser.
+
 ## Pre-Demo Checklist
 
 1. `https://cortex.redteamkitchen.com/api/health` returns `ok: true`.

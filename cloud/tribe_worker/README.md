@@ -52,6 +52,26 @@ Check readiness before routing the public webapp to the worker:
 Invoke-RestMethod http://127.0.0.1:8876/api/tribe/readiness
 ```
 
+Run the full Cortex proxy contract verifier:
+
+```powershell
+python -m cloud.tribe_worker.verify --endpoint http://127.0.0.1:8876
+```
+
+For a protected remote worker:
+
+```powershell
+python -m cloud.tribe_worker.verify `
+  --endpoint $env:CORTEX_CLOUD_TRIBE_ENDPOINT `
+  --token $env:CORTEX_CLOUD_TRIBE_TOKEN `
+  --require-real
+```
+
+The verifier submits a tiny stimulus, waits for completion, downloads
+`bold-vertex`, checks the `(T, 20484)` byte shape, and confirms source media is
+servable. `--require-real` fails unless TRIBE dependencies, weights, and CUDA are
+visible.
+
 In fake mode, `contract_ready=true` proves the HTTP surface is usable. In real
 mode, `real_mode_ready=true` proves the worker can see the TRIBE Python
 modules, a non-empty weights directory, and a CUDA GPU. If real mode is not

@@ -1,6 +1,7 @@
 """Contract coverage for the cloud TRIBE worker."""
 from __future__ import annotations
 
+import httpx
 import time
 
 import pytest
@@ -149,3 +150,60 @@ def test_worker_token_protects_scan_contract(tmp_path, monkeypatch):
             files={"file": ("clip.mp4", b"fake", "video/mp4")},
         )
         assert accepted.status_code == 202
+
+
+@pytest.mark.asyncio
+async def test_verify_worker_contract_succeeds_against_fake_worker(tmp_path, monkeypatch):
+    worker_mod = _configure_worker_tmp_dirs(monkeypatch, tmp_path)
+    monkeypatch.setattr(worker_mod, "WORKER_TOKEN", "secret")
+
+    app = worker_mod.create_app(registry=worker_mod.Registry())
+    stimulus = tmp_path / "stimulus.txt"
+    stimulus.write_text("A bright launch gantry rises into fog.", encoding="utf-8")
+
+    from cloud.tribe_worker.verify import verify_worker
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://worker.test") as client:
+        result = await verify_worker(
+            "http://worker.test",
+            token="secret",
+            sample_path=stimulus,
+            timeout_s=5,
+            poll_s=0.01,
+            n_t=4,
+            client=client,
+        )
+
+    assert result["ok"] is True
+    assert result["scan_status"] == "complete"
+    assert result["analysis_mode"] == "tribe_text"
+    assert result["n_t"] == 4
+    assert result["n_vertices"] == worker_mod.N_VERTICES
+    assert result["bold_bytes"] == 4 * worker_mod.N_VERTICES * 4
+    assert result["source_media_bytes"] > 0
+
+
+@pytest.mark.asyncio
+async def test_verify_worker_require_real_reports_readiness_failure(tmp_path, monkeypatch):
+    worker_mod = _configure_worker_tmp_dirs(monkeypatch, tmp_path)
+    monkeypatch.setattr(worker_mod, "WORKER_MODE", "real")
+    monkeypatch.setattr(worker_mod, "WORKER_TOKEN", "")
+    monkeypatch.setattr(
+        worker_mod,
+        "_tribe_real_readiness",
+        lambda: {
+            "real_mode_ready": False,
+            "missing": ["TRIBE weights directory is missing or empty"],
+            "checks": {},
+        },
+    )
+
+    app = worker_mod.create_app(registry=worker_mod.Registry())
+
+    from cloud.tribe_worker.verify import WorkerVerificationError, verify_worker
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://worker.test") as client:
+        with pytest.raises(WorkerVerificationError, match="real TRIBE mode is not ready"):
+            await verify_worker("http://worker.test", require_real=True, client=client)
