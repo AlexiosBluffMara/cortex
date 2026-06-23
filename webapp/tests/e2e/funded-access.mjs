@@ -80,6 +80,16 @@ async function run() {
   assert(await cloudRadio.isDisabled(), "cloud compute should be disabled before funded unlock");
   assert(await page.locator("#cloud-compute-option").evaluate((el) => el.classList.contains("locked")), "cloud option should render locked before unlock");
 
+  const legacySelect = page.locator("#narration-model-select");
+  assert(!(await legacySelect.isVisible()), "legacy narration select should stay hidden behind the card catalog");
+  await page.waitForFunction(() => {
+    const cards = Array.from(document.querySelectorAll('#model-card-list [data-model]'));
+    return cards.length > 0 && cards.every((card) => {
+      const model = card.dataset.model || "";
+      return model.endsWith(":free") || model === "openrouter:openrouter/free";
+    });
+  });
+
   await page.locator('[data-model-filter="paid"]').click();
   await page.waitForFunction(() => document.querySelectorAll('#model-card-list [data-locked="true"]').length > 0);
   const lockedPaidCopy = await page.locator('#model-card-list [data-locked="true"] small').first().textContent();
