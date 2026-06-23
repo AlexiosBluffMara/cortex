@@ -1,4 +1,4 @@
-# MLX QAT config — runs on Big Apple (M4 Max, 48 GB unified)
+# MLX QAT config — legacy local MLX experiment
 
 teacher: mlx-community/gemma-4-E2B-it-bf16     # frozen FP teacher
 student_init: mlx-community/gemma-4-E2B-it-bf16 # student starts here, BitLinear swap inside

@@ -22,7 +22,7 @@ Workflow:
 - Stick an NTAG215 sticker on your laptop bag
 - Pixel Fold in pocket reads it on contact (auto-trigger via Tagmo / NFC Tools)
 - Pixel opens `https://cortex.redteamkitchen.com/dashboard`
-- Pixel routes Quick Share to Big Apple → Big Apple's `start-demo.sh` runs locally
+- Pixel routes Quick Share to Seratonin → Seratonin's `start-demo.sh` runs locally
 - Flipper IR fires `projector_power_on` + `projector_input_HDMI2`
 - Hue scene "demo bright" triggers via the Pixel's Google Home app (REST call to local Hue Bridge)
 - Result: by the time you're seated, projector is warming up, demo is loading, lights are right

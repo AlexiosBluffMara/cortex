@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# flip-to-mlx-primary.sh -- run on Big Apple after MLX model pull completes.
+# flip-to-mlx-primary.sh -- run on Seratonin after MLX model pull completes.
 # Loads the MLX launchd daemon, verifies port 8090, smoke-tests inference.
 
 set -e

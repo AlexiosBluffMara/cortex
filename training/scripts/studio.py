@@ -179,7 +179,7 @@ def build_ui():
                 gr.Button("Export GGUF", variant="primary").click(
                     cmd_export_gguf, [ckpt_g, quant, reg], gguf_log)
 
-            with gr.Tab("4. Export MLX (Big Apple)"):
+            with gr.Tab("4. Export MLX (Seratonin)"):
                 ckpt_m = gr.Dropdown(choices=list_checkpoints, label="Checkpoint",
                                      allow_custom_value=True)
                 bits = gr.Dropdown(choices=[4, 8], value=4, label="Quant bits")
@@ -189,7 +189,7 @@ def build_ui():
 
             with gr.Tab("5. Deploy"):
                 deploy_log = gr.Textbox(label="log", lines=18, interactive=False)
-                gr.Button("Deploy to Seratonin Ollama + Big Apple MLX",
+                gr.Button("Deploy to Seratonin Ollama + Seratonin MLX",
                           variant="primary").click(cmd_deploy, [], deploy_log)
 
             with gr.Tab("6. Artifacts"):

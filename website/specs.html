@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hardware specs — exact parts for Seratonin and Big Apple</title>
-<meta name="description" content="Every part in the Ascended Base lab — model numbers, prices, sources. Build Seratonin yourself for $4,000; buy a Big Apple-equivalent MacBook for $4,200.">
+<title>Hardware specs — exact parts for Seratonin and Cortex fallback infrastructure</title>
+<meta name="description" content="Every part in the Ascended Base lab — model numbers, prices, sources. Build Seratonin yourself and run the same Cortex demos.">
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="/assets/style.css">
 <style>
   .machine-card {background:rgba(20,21,28,0.6); border:1px solid rgba(56,58,71,0.6); border-radius:12px; padding:1.6rem; margin:1.4rem 0; border-top:3px solid var(--isu-red, #CC0000)}
-  .machine-card.bigapple {border-top-color:var(--isu-gold, #F6A917)}
+  .machine-card.cloud {border-top-color:var(--isu-gold, #F6A917)}
   .machine-card h3 {margin:0 0 0.3rem; font-size:1.5rem}
   .machine-card .tag {color:var(--text-mid, #a0a0bc); font-size:0.92rem; margin-bottom:1rem}
   .parts-table {width:100%; border-collapse:collapse; font-size:0.9rem; margin:1rem 0}
@@ -63,11 +63,12 @@
     <span class="pill gold">Exact parts · prices · sources</span>
     <span class="pill blue">Buy this list, run the same demos</span>
   </div>
-  <h1>The two machines that run <em>everything.</em></h1>
+  <h1>The machine that runs <em>everything.</em></h1>
   <p class="tag">
     Every part on the bench, by model number, with the price we paid and where
-    we bought it. The point of this page is reproducibility — clone these two
-    builds and you can run the same Cortex + Mercury demos at home.
+    we bought it. The point of this page is reproducibility — clone this build,
+    configure the cloud fallback when you need public capacity, and you can run
+    the same Cortex + Mercury demos at home.
   </p>
 </header>
 
@@ -167,54 +168,39 @@
   </div>
 </section>
 
-<!-- ════════════════════════ BIG APPLE ════════════════════════ -->
+<!-- Optional cloud fallback -->
 <section>
-  <div class="machine-card bigapple">
-    <h3>Big Apple · macOS Sequoia · M4 Max</h3>
-    <div class="tag">Secondary GPU node · Chicago, IL · runs Cortex backend + narration + (in progress) TRIBE on MPS</div>
+  <div class="machine-card cloud">
+    <h3>Cloud TRIBE worker · optional funded fallback</h3>
+    <div class="tag">Used only when Seratonin is unavailable or public traffic needs isolated GPU capacity</div>
 
     <div class="perf-grid">
-      <div class="perf-cell good"><div class="lbl">Unified memory</div><div class="val">48 GB</div></div>
-      <div class="perf-cell"><div class="lbl">GPU cores</div><div class="val">40</div></div>
-      <div class="perf-cell"><div class="lbl">Mem bandwidth</div><div class="val">546 GB/s</div></div>
-      <div class="perf-cell"><div class="lbl">Gemma 4 E4B</div><div class="val">~90 tok/s</div></div>
-      <div class="perf-cell"><div class="lbl">CPU cores</div><div class="val">16 (12P + 4E)</div></div>
-      <div class="perf-cell"><div class="lbl">Idle draw</div><div class="val">~7 W</div></div>
-      <div class="perf-cell good"><div class="lbl">Buy price</div><div class="val">$4,199</div></div>
+      <div class="perf-cell good"><div class="lbl">Default spend</div><div class="val">$0</div></div>
+      <div class="perf-cell"><div class="lbl">Trigger</div><div class="val">manual</div></div>
+      <div class="perf-cell"><div class="lbl">Provider</div><div class="val">HF / Modal</div></div>
+      <div class="perf-cell"><div class="lbl">Auth</div><div class="val">bearer</div></div>
+      <div class="perf-cell"><div class="lbl">Use case</div><div class="val">TRIBE</div></div>
+      <div class="perf-cell"><div class="lbl">Env</div><div class="val">CORTEX_CLOUD_TRIBE_ENDPOINT</div></div>
     </div>
 
-    <h4 style="margin-top:1.2rem">Configuration as ordered</h4>
+    <h4 style="margin-top:1.2rem">Configuration knobs</h4>
     <table class="parts-table">
       <thead><tr>
-        <th>Spec</th>
-        <th>This machine</th>
+        <th>Variable</th>
+        <th>Meaning</th>
         <th>Notes</th>
       </tr></thead>
       <tbody>
-        <tr><td>Model</td>                <td><strong>MacBook Pro 16" (M4 Max, 2024)</strong></td>     <td>Order page: <a href="https://www.apple.com/shop/buy-mac/macbook-pro/16-inch-m4-max">apple.com/shop/buy-mac/macbook-pro/16-inch-m4-max</a></td></tr>
-        <tr><td>Chip</td>                 <td>Apple <strong>M4 Max</strong> · 16-core CPU · 40-core GPU · 16-core Neural Engine</td>  <td>Top M4 Max bin (vs. 14-core CPU base)</td></tr>
-        <tr><td>Memory</td>               <td><strong>48 GB unified</strong></td>            <td>Upgrade option from 36 GB; 64 GB is the next step (+$400). 48 GB chosen because TRIBE + Gemma 4 26B comfortably fits.</td></tr>
-        <tr><td>Storage</td>              <td><strong>1 TB NVMe</strong></td>                <td>Up from 512 GB base. ~7.4 GB/s read.</td></tr>
-        <tr><td>Display</td>              <td>16.2" Liquid Retina XDR · 3456 × 2234 · 1000 nits sustained · 1600 nits peak HDR</td>   <td>Useful for the 3D brain visualization preview</td></tr>
-        <tr><td>Charger</td>              <td>140 W USB-C (in-box)</td>                       <td>Yes 140 W is required to fast-charge under load</td></tr>
-        <tr class="total"><td colspan="2">Total ordered config</td><td class="num">$4,199</td></tr>
+        <tr><td><code>CORTEX_CLOUD_TRIBE_ENDPOINT</code></td><td>HTTPS endpoint for the GPU worker</td><td>Unset by default; local Seratonin is the normal path.</td></tr>
+        <tr><td><code>CORTEX_CLOUD_TRIBE_PROVIDER</code></td><td>Provider label shown in diagnostics</td><td>Currently supports explicit Hugging Face, Modal, or Runpod style workers.</td></tr>
+        <tr><td><code>CORTEX_CLOUD_TRIBE_TOKEN</code></td><td>Bearer token for the worker</td><td>Stored as a secret in hosting/runtime config, never hardcoded.</td></tr>
+        <tr><td><code>CORTEX_PAID_ACCESS_CODE</code></td><td>UI gate for paid compute</td><td>Prevents casual users from burning GPU spend.</td></tr>
       </tbody>
     </table>
 
     <div class="deep">
-      <h4>Why M4 Max 48 GB specifically (not the 64 GB or 128 GB)</h4>
-      <p>The 48 GB tier is the cheapest way to comfortably run Gemma 4 26B (4-bit, ~16 GB) <em>plus</em> TRIBE on MPS (~6 GB) <em>plus</em> macOS overhead (~10 GB) <em>plus</em> dev tools — leaving ~12-15 GB headroom. The 64 GB tier (+$400) is overkill for our workload; the 128 GB tier is for people training models, not running them.</p>
-    </div>
-
-    <div class="deep">
-      <h4>Performance numbers we actually measured</h4>
-      <ul style="margin-left:1.2rem; line-height:1.7">
-        <li>Gemma 4 E4B inference: <strong>90 tokens/sec</strong> (tested 2026-05-03 via Ollama on Metal)</li>
-        <li>Gemma 4 26B inference: <strong>~28 tokens/sec</strong> (estimated; not yet hammered in production)</li>
-        <li>Idle wattage with browser + Ollama loaded: <strong>7 W</strong> (vs ~50 W on Seratonin idle)</li>
-        <li>Sustained inference wattage: <strong>~60 W</strong> (vs ~450 W on Seratonin under TRIBE load)</li>
-        <li>One-narration latency end-to-end (HTTP POST → JSON response): <strong>1.4 sec</strong></li>
-      </ul>
+      <h4>Why this is not always on</h4>
+      <p>Cortex is still local-first. The cloud worker exists so the website can keep accepting scans when the PC is unavailable, not as the default route. Free OpenRouter models can carry narration, but TRIBE itself needs GPU time somewhere.</p>
     </div>
   </div>
 </section>
@@ -234,27 +220,6 @@
       <p style="font-size:0.92rem">Edge node planned for AdGuard Home + Tailscale subnet routing for the lab. NOT for LLM inference — too small. Status: SD card prep + AdGuard install scripts written, hardware not flashed yet.</p>
     </div>
   </div>
-</section>
-
-<!-- ════════════════════════ COMPARE ════════════════════════ -->
-<section>
-  <h2>Side by side — same workload, both machines</h2>
-  <table class="parts-table">
-    <thead><tr><th></th><th>Seratonin</th><th>Big Apple</th></tr></thead>
-    <tbody>
-      <tr><td>Architecture</td>                       <td>x86_64 + NVIDIA Blackwell</td>           <td>ARM64 + Apple M4 Max (unified)</td></tr>
-      <tr><td>Memory model</td>                       <td>64 GB system + 32 GB dedicated VRAM</td><td>48 GB unified (CPU + GPU share)</td></tr>
-      <tr><td>Memory bandwidth (GPU)</td>             <td>1.79 TB/s</td>                          <td>546 GB/s</td></tr>
-      <tr><td>Gemma 4 E4B throughput</td>             <td>194 tok/s</td>                          <td>~90 tok/s</td></tr>
-      <tr><td>TRIBE v2 inference time / scan</td>     <td>~3 min (CUDA)</td>                       <td>WIP (MPS, neuralset device-string PR pending)</td></tr>
-      <tr><td>Idle power</td>                         <td>~50 W</td>                              <td>~7 W</td></tr>
-      <tr><td>Sustained ML power</td>                 <td>~450 W</td>                             <td>~60 W</td></tr>
-      <tr><td>Acoustic (under load)</td>              <td>~38 dB (Noctua air)</td>                <td>~22 dB (clamshell, fans on)</td></tr>
-      <tr><td>Hardware cost</td>                      <td>$4,000 (build)</td>                     <td>$4,199 (Apple direct)</td></tr>
-      <tr><td>Energy cost / month (24/7 idle + occasional load)</td><td>~$31</td>                  <td>~$5</td></tr>
-      <tr><td>Best at</td>                            <td>Heavy-throughput training + concurrent demos</td><td>Cool, quiet, portable, low-watt narration server</td></tr>
-    </tbody>
-  </table>
 </section>
 
 <div class="brand-bar">

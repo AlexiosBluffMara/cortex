@@ -1,6 +1,6 @@
 # Cortex Infrastructure Review — 2026-05-04
 
-> Goal: **public website always reachable from anywhere**, **live data updates with the lowest practical latency**, frontend that's **clean, dynamic, page-by-page** instead of one busy mega-page. Compute stays on Seratonin (RTX 5090) + Big Apple (M4 Max) — those are non-negotiable.
+> Goal: **public website always reachable from anywhere**, **live data updates with the lowest practical latency**, frontend that's **clean, dynamic, page-by-page** instead of one busy mega-page. Compute stays on Seratonin (RTX 5090) with an explicit cloud-worker fallback for paid TRIBE jobs.
 
 This document is a recommendation, not a deploy. Reviews three layers (network, transport, frontend) and ends with a phased rollout.
 
@@ -13,19 +13,18 @@ This document is a recommendation, not a deploy. Reviews three layers (network, 
 ```
                               ┌──────────────────────┐
   internet  ───── HTTPS ────▶│ Tailscale Funnel      │── public ingress
-                              │ big-apple.scylla-     │   (free, scoped to
+                              │ seratonin.scylla-     │   (free, scoped to
                               │   betta.ts.net        │    one tailnet host)
                               └──────────┬───────────┘
                                          │ direct WireGuard
                                          ▼
                               ┌──────────────────────┐
-                              │ Big Apple :8773      │── cortex backend
+                              │ Seratonin :8773      │── cortex backend
                               └──────────┬───────────┘
-                                         │ TRIBE-needed proxy via
-                                         │ CORTEX_TRIBE_PROXY
-                                         ▼ http://100.98.19.87:8773
+                                         │ local TRIBE + router
+                                         ▼
                               ┌──────────────────────┐
-                              │ Seratonin :8773/8766 │── TRIBE + router
+                              │ Seratonin GPU stack  │
                               └──────────────────────┘
 
   + Cloudflare Tunnel — `cortex.redteamkitchen.com` → rtk-5090 tunnel
@@ -38,7 +37,7 @@ This document is a recommendation, not a deploy. Reviews three layers (network, 
 |---|---|---|---|---|---|---|
 | **Tailscale Funnel** (current) | Yes (`*.ts.net`) | 1 hop via TS DERP relay if no direct path; usually 60–120 ms US ↔ EU | Auto (LetsEncrypt via TS) | Free | None on Funnel by design | Funnel gateway is single-region (US) — Asia adds 200+ ms |
 | **Cloudflare Tunnel** (already configured for `cortex.redteamkitchen.com`) | Yes (`*.redteamkitchen.com`) | 30–60 ms anywhere — CF anycast | Auto (CF) | Free | Optional CF Access (Zero Trust) | Anycast smoothes geo; CF can cache | 
-| Tailscale Funnel + CF in front | Yes | CF anycast hop, then TS warp into BA | Both | Free | CF Access available | Adds one hop; redundant |
+| Tailscale Funnel + CF in front | Yes | CF anycast hop, then TS mesh into the lab host | Both | Free | CF Access available | Adds one hop; redundant |
 | Pure Cloudflare Pages (static) + API at tunnel | Yes | Best (CF anycast for HTML) | Auto | Free | CF Access | Frontend shipped to CF edge, API still via tunnel |
 | WireGuard self-hosted | Yes if you forward a port | Direct, 1 hop | DIY (Caddy/nginx + LE) | Free + DNS A record | DIY | Most work; full control; no third-party policy risk |
 | ngrok / Cloudflared / Pinggy | Yes | Comparable to CF tunnel | Auto | Free tiers limited | Per-vendor | Vendor lock-in, free-tier rate limits |
@@ -51,11 +50,11 @@ Reasons:
 1. **Anycast**: CF terminates in 250+ POPs. A user in Tokyo hits a Tokyo POP at <30 ms; Funnel forces them to a US relay first.
 2. **Caching**: CF can cache static assets (`/main.js`, `/gridstack.min.css`, `/brain_fsaverage5.glb` — the 3D mesh is multiple MB). Free CDN ≈ free latency.
 3. **DDoS / WAF**: free-tier CF gives basic protection; Funnel has none.
-4. **DNS choice**: `cortex.redteamkitchen.com` is short, brandable, copyable. `big-apple.scylla-betta.ts.net` looks like a system test.
+4. **DNS choice**: `cortex.redteamkitchen.com` is short, brandable, copyable. `redteamkitchen.com` looks like a system test.
 5. **Tunnel is already up** — `rtk-5090` tunnel via `~/.cloudflare/credentials`; rerouting is config-only.
 
 Tailscale stays as:
-- The internal mesh for Sera ↔ Big Apple ↔ Pi 5 (this is its sweet spot, do not move)
+- The internal mesh for Sera ↔ Seratonin ↔ Pi 5 (this is its sweet spot, do not move)
 - A backup public ingress in case CF Tunnel breaks (Funnel URL stays valid)
 - Identity for SSH and `dev.cortex.redteamkitchen.com` if we ever gate that path
 
@@ -63,7 +62,7 @@ Tailscale stays as:
 
 ### Concrete one-day migration
 
-1. Add a CF Tunnel route: `cortex.redteamkitchen.com` → `http://localhost:8773` on Big Apple (already done for Sera; mirror to BA).
+1. Add a CF Tunnel route: `cortex.redteamkitchen.com` → `http://localhost:8773` on Seratonin (already done for Sera; mirror to BA).
 2. Add a 2nd tunnel for `status.cortex.redteamkitchen.com` → `/status` on whichever node is host.
 3. Set CF page rule: cache `*.js *.css *.glb *.json` with 24 h browser TTL, edge TTL 7 days. Bump cache version via the `?v=…` query string (the HTML already does this).
 4. Move the marketing page (`/`) to **Cloudflare Pages** — it's pure HTML+JS+GLB, no server side. Build = `webapp/public/`, output = `webapp/public/`. The 3D brain lives there, the API still hits the tunnel for `/api/*` and `/scan/*`.
@@ -203,7 +202,7 @@ I scanned recent Legend product threads and reviews. The standout patterns:
 ### Phase 1 — this week (one-evening tasks)
 
 - [x] Frontend trimmed (this turn)
-- [ ] Cloudflare Tunnel route added for `cortex.redteamkitchen.com` → Big Apple :8773 (mirror Sera config)
+- [ ] Cloudflare Tunnel route added for `cortex.redteamkitchen.com` → Seratonin :8773 (mirror Sera config)
 - [ ] CF page rule: cache `*.js *.css *.glb`
 - [ ] WebSocket fleet-health broadcaster added; client poll dropped on the WS path; polling kept as fallback
 - [ ] Routes split: `/demo`, `/gallery`, `/status`, `/personas`, `/specs` become first-class (right now they're all sub-pages off the same shell)
@@ -228,4 +227,4 @@ I scanned recent Legend product threads and reviews. The standout patterns:
 - **Networking**: stay on Tailscale internally, switch the canonical public URL to **Cloudflare Tunnel + Pages** (`cortex.redteamkitchen.com`). Gives anycast latency, CDN caching, free DDoS, and a brand-friendly URL. Tailscale stays as backup.
 - **Live updates**: existing WebSocket hub is underused. Move fleet-health + gallery + status off polling onto the socket — sub-50 ms end-to-end on the same continent, ~100× server load drop.
 - **Frontend**: split into routes (`/demo`, `/gallery`, `/status`, etc.), keep gridstack-driven draggable layout (✅ today), add Apple-style scroll storytelling on the marketing page, persist layouts per-user.
-- **Compute stays on Seratonin + Big Apple.** No move.
+- **Compute stays on Seratonin + Seratonin.** No move.

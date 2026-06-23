@@ -4,10 +4,6 @@ Pings every service in the Seratonin stack once every N seconds. If a service
 is dead, restarts it using a known launch recipe. Tracks restart attempts and
 backs off so we don't thrash on persistent failures.
 
-Also pings Big Apple (best-effort) so the local watchdog log shows the full
-fleet state - we can't restart Big Apple's processes from Windows, but a
-human reading the log will see the peer go red and act.
-
 Run from PowerShell:
   python D:/cortex/fleet/watchdog.py
 
@@ -19,7 +15,6 @@ Optional env:
   WATCHDOG_BACKOFF_SEC   reset window for the restart counter, default 600
   WATCHDOG_LOG_DIR       defaults to C:/Temp/logs
   WATCHDOG_HTTP_PORT     exposes /status JSON on this port, default 8780 (set to 0 to disable)
-  BIGAPPLE_HOST          tailnet IP, default 100.93.240.52
 """
 from __future__ import annotations
 
@@ -65,7 +60,6 @@ INTERVAL_SEC = int(os.environ.get("WATCHDOG_INTERVAL_SEC", "20"))
 MAX_RESTARTS = int(os.environ.get("WATCHDOG_MAX_RESTARTS", "3"))
 BACKOFF_SEC = int(os.environ.get("WATCHDOG_BACKOFF_SEC", "600"))
 HTTP_PORT = int(os.environ.get("WATCHDOG_HTTP_PORT", "8780"))
-BIGAPPLE_HOST = os.environ.get("BIGAPPLE_HOST", "100.93.240.52")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -157,7 +151,7 @@ class Service:
     name: str
     health: Callable[[], bool]                          # returns True if alive
     restart: Callable[[], subprocess.Popen | None] | None  # None = monitor-only
-    role: str = "seratonin"                              # seratonin | bigapple
+    role: str = "seratonin"
     restarts: deque = field(default_factory=lambda: deque(maxlen=10))
     last_status: bool | None = None
     last_change: float = field(default_factory=time.time)
@@ -172,7 +166,7 @@ def _restart_router() -> subprocess.Popen | None:
          "--host", "0.0.0.0", "--port", "8766", "--log-level", "info"],
         REPO,
         env_extra={
-            "OLLAMA_BACKENDS": "http://localhost:11434,http://100.93.240.52:11434",
+            "OLLAMA_BACKENDS": "http://localhost:11434",
             "ROUTER_PORT": "8766",
         },
         log_file=LOG_DIR / "cortex_router.log",
@@ -244,9 +238,6 @@ def _restart_cortex_8765() -> subprocess.Popen | None:
 SERVICES: list[Service] = [
     Service("cortex_webapp", lambda: _check_http("http://localhost:8765/api/health"),    _restart_cortex_8765),
     Service("ollama_local",  lambda: _check_http("http://localhost:11434/api/tags"),     _restart_ollama),
-    # Peer (read-only — we can't restart big-apple processes from here)
-    Service("backend_peer",   lambda: _check_http(f"http://{BIGAPPLE_HOST}:8773/api/health"), None, role="bigapple"),
-    Service("ollama_peer",    lambda: _check_http(f"http://{BIGAPPLE_HOST}:11434/api/tags"),  None, role="bigapple"),
 ]
 
 
@@ -308,8 +299,8 @@ _LATEST: dict[str, Any] = {"ts": 0, "services": {}}
 
 
 def _loop() -> None:
-    log.info("[watchdog] starting; interval=%ds, restart cap=%d/%ds, peer=%s",
-             INTERVAL_SEC, MAX_RESTARTS, BACKOFF_SEC, BIGAPPLE_HOST)
+    log.info("[watchdog] starting; interval=%ds, restart cap=%d/%ds",
+             INTERVAL_SEC, MAX_RESTARTS, BACKOFF_SEC)
     while True:
         try:
             snap = _tick()

@@ -1,73 +1,41 @@
-# Ascended Base — fleet control scripts
+# Ascended Base - Fleet Control Scripts
 
-Wind-up, shutdown, and failover scripts for the two production nodes:
+This folder now describes the Seratonin-local Cortex stack only. The retired
+laptop peer has been removed from startup, watchdog, failover, and status
+scripts.
 
-| Node          | OS        | Tailscale name | Role                                              |
-|---------------|-----------|----------------|---------------------------------------------------|
-| **Seratonin** | Windows 11 | `seratonin`    | Primary — RTX 5090 (TRIBE v2 + Gemma + everything) |
-| **Big Apple** | macOS     | `big-apple`    | Secondary — M4 Max 48 GB (narration overflow + standby for Mercury / Cortex narration paths) |
+## Current Runtime
 
-Both nodes are Tailscale-connected; either can SSH the other (SSH key `id_ed25519`).
+| Node | OS | Role |
+| --- | --- | --- |
+| Seratonin | Windows 11 / WSL2 | RTX 5090 host for Cortex, TRIBE v2, local Ollama, Mercury, and the web UI |
+| Cloud TRIBE worker | configured by env | Optional funded fallback for TRIBE inference when deployed |
+| OpenRouter | external API | Narration fallback and selectable model catalog |
 
-## Wind-up / shutdown — single-machine
+## Start / Stop / Status
 
-| Action  | Run on Seratonin (PowerShell)             | Run on Big Apple (zsh)               |
-|---------|-------------------------------------------|--------------------------------------|
-| Up      | `pwsh fleet/up-seratonin.ps1`             | `bash fleet/up-bigapple.sh`          |
-| Down    | `pwsh fleet/down-seratonin.ps1`           | `bash fleet/down-bigapple.sh`        |
-| Status  | `bash fleet/status.sh`                    | `bash fleet/status.sh`               |
-
-## Cross-machine — bring the *other* one up/down via SSH
-
-From either node, run:
-
-| Action                         | Command                                        |
-|--------------------------------|------------------------------------------------|
-| Bring Seratonin up from Big Apple | `bash fleet/remote-up.sh seratonin`         |
-| Bring Big Apple up from Seratonin | `bash fleet/remote-up.sh bigapple`          |
-| Shut Seratonin down from Big Apple | `bash fleet/remote-down.sh seratonin`      |
-| Shut Big Apple down from Seratonin | `bash fleet/remote-down.sh bigapple`       |
-
-## Failover modes
-
-### Active failover (default)
-Both nodes serve narration; the inference router on Seratonin round-robins between them and fails over per-request to OpenRouter free tier on error. **No manual action needed** — this is the default state when both are up.
+Run from Seratonin:
 
 ```bash
-bash fleet/failover-active.sh   # ensure both nodes up; reset router config
+pwsh fleet/up-seratonin.ps1
+pwsh fleet/down-seratonin.ps1
+bash fleet/status.sh
 ```
 
-### Passive failover to Big Apple (gaming mode)
-Seratonin is gaming. Cortex backend stays on Seratonin (TRIBE needs CUDA), but **all narration is forced to Big Apple** and Mercury moves to Big Apple. If the user wants to fully migrate the public URL too, they flip the Tailscale Funnel manually (see `failover-funnel.md`).
+The current app path is FastAPI on `:8765`. Older ports may still appear in
+some diagnostics while we finish consolidating, but no script should route
+traffic to a peer laptop.
 
-```bash
-bash fleet/failover-to-bigapple.sh
-```
+## Required Environment
 
-What this does, in order:
-1. SSH to Big Apple, ensure Ollama is running with Gemma 4 E4B+26B+31B preloaded
-2. SSH to Big Apple, start Mercury gateway + dashboard there (`mercury_remote_up.sh`)
-3. On Seratonin, restart the inference router with Big Apple as PRIMARY backend (Seratonin Ollama removed from pool until gaming ends)
-4. On Seratonin, stop Mercury locally to free CPU
-5. Cortex backend stays on Seratonin (TRIBE needs the 5090)
-6. Verify all four narrations still complete via end-to-end smoke test
+- `OPENROUTER_API_KEY` for narration model access.
+- `CORTEX_CLOUD_TRIBE_ENDPOINT` only when a cloud TRIBE worker is deployed.
+- `CORTEX_CLOUD_TRIBE_TOKEN` when that worker requires bearer auth.
+- Local Ollama at `http://localhost:11434` for local narration.
 
-### Passive failover back to Seratonin (gaming over)
-```bash
-bash fleet/failover-to-seratonin.sh
-```
+## Deployment Direction
 
-Reverses every step above.
-
-## Critical secrets / bindings (NOT in scripts — must be present)
-- `~/.hermes/.env` on each node (OpenRouter key, Discord token)
-- `~/.cloudflare/credentials` on Seratonin only (Wrangler deploys)
-- Tailscale auth on both nodes
-
-## Tailscale Funnel — single-machine constraint
-Tailscale Funnel can be enabled on **only one machine per Tailnet at a time** (the public URL `seratonin.scylla-betta.ts.net` is bound to Seratonin's identity). To physically move the public URL to Big Apple:
-1. On Seratonin: `tailscale funnel reset`
-2. On Big Apple: `tailscale funnel --bg 5173`
-3. Public URL becomes `big-apple.scylla-betta.ts.net`
-
-Update the marketing-site links if you do this — the URL changes.
+Use git as the source of truth, Cloudflare for the public surface, Seratonin
+for local TRIBE, and a cloud worker as the explicit paid fallback. Any future
+extra worker should be added through `OLLAMA_BACKENDS` or cloud-worker env
+vars by name, not by resurrecting machine-specific failover scripts.

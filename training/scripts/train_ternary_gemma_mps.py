@@ -8,7 +8,7 @@ Differences vs the CUDA variant:
   - No bitsandbytes (no AdamW8bit on Mac); use torch.optim.AdamW
   - No NF4 teacher (no bnb on Mac); teacher is bf16 (fits in unified mem)
 
-Run on Big Apple:
+Run on Seratonin:
   ~/cortex-pytorch/bin/python train_ternary_gemma_mps.py \\
       --config /Users/soumitlahiri/cortex-training/configs/ternary-gemma-e2b-mps.yaml
 """

@@ -80,5 +80,5 @@ training:
 export:
   format: "bitnet_i2s"
   output: "exports/ternary-gemma-e2b-i2s.gguf"
-  also_export_mlx: true                  # for Big Apple
+  also_export_mlx: true                  # for Seratonin
   mlx_target: "exports/ternary-gemma-e2b-mlx/"

@@ -14,7 +14,7 @@ duration of a demo. Stop Mercury before starting this.
 
 Env required:
   DISCORD_BOT_TOKEN          — same token Mercury uses
-  CORTEX_API_BASE            — defaults to https://big-apple.scylla-betta.ts.net
+  CORTEX_API_BASE            — defaults to https://redteamkitchen.com
 
 Optional:
   DISCORD_SCAN_CHANNEL_IDS   — comma-separated channel IDs to restrict to
@@ -47,7 +47,7 @@ TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
 if not TOKEN:
     raise SystemExit("DISCORD_BOT_TOKEN env var required")
 
-CORTEX_API_BASE = os.environ.get("CORTEX_API_BASE", "https://big-apple.scylla-betta.ts.net")
+CORTEX_API_BASE = os.environ.get("CORTEX_API_BASE", "https://redteamkitchen.com")
 ALLOWED_CHANNEL_IDS = {
     int(c.strip()) for c in os.environ.get("DISCORD_SCAN_CHANNEL_IDS", "").split(",")
     if c.strip().isdigit()
@@ -101,7 +101,7 @@ async def _do_scan(channel: discord.abc.Messageable, file_bytes: bytes, filename
         pass
 
     notice = await channel.send(
-        f"🧠 Submitting **{filename}** to Cortex (Big Apple → Seratonin TRIBE → 4 personas) …\n"
+        f"🧠 Submitting **{filename}** to Cortex (Seratonin → Seratonin TRIBE → 4 personas) …\n"
         f"Public gallery: {CORTEX_API_BASE}/gallery.html"
     )
 

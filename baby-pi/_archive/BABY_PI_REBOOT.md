@@ -6,7 +6,7 @@ Baby Pi (Raspberry Pi 5, 8 GB) becomes:
 
 1. **A 4th inference backend** — Ollama serving heavily quantized Gemma 4 e2b
    for low-latency LAN calls. Joins the 4-node orchestra alongside MLX
-   on Big Apple, Ollama on Big Apple, and Ollama on Seratonin.
+   on Seratonin, Ollama on Seratonin, and Ollama on Seratonin.
 2. **A smart-home brain** — exposes a FastAPI service on `:8000` that wraps
    Hue + Google Cast + the local LLM. Inference router can route
    "smart home" intents here so commands stay strictly on-LAN.
@@ -80,7 +80,7 @@ Default: `gemma4:e2b q4_k_m` for the orchestra probe. Plenty fast for
    - Targus dock USB-C for keyboard/mouse/ethernet/peripherals
 5. Run `bash setup-baby-pi-kiosk.sh` — installs X11 + dual-monitor xorg.conf + Chromium kiosk systemd unit
 6. Reboot — both screens show the dashboard URL automatically
-7. On Seratonin/Big Apple: update orchestra `BACKENDS` list to add
+7. On Seratonin/Seratonin: update orchestra `BACKENDS` list to add
    `ollama-baby-pi` (port 11434, model `gemma4:e2b`) and remove the BitNet entry
 
 After step 7, the orchestra goes **GREEN** with all 4 nodes online and

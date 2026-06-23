@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="dark" />
-<title>Cortex · Hardware specs (Seratonin · Big Apple · Mini Apple · Baby Pi)</title>
-<meta name="description" content="The four physical machines that run Cortex and Mercury — Seratonin (RTX 5090), Big Apple (M4 Max), Mini Apple, and the in-progress Baby Pi." />
+<title>Cortex · Hardware specs (Seratonin · Mini Apple · Baby Pi)</title>
+<meta name="description" content="The physical machines that run Cortex and Mercury — Seratonin (RTX 5090), Mini Apple, and the in-progress Baby Pi." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -39,7 +39,6 @@
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:1.4rem;max-width:1280px;margin:0 auto;padding:1rem 1.5rem 4rem}
 
   .machine{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column;border-top:3px solid var(--accent)}
-  .machine.bigapple{border-top-color:var(--isu-yellow)}
   .machine.miniapple{border-top-color:var(--isu-blue)}
   .machine.babypi{border-top-color:#9c0d1d;opacity:0.7}
 
@@ -77,10 +76,10 @@
 </header>
 
 <section class="hero">
-  <h1>The four <span class="accent">physical machines</span> behind Cortex &amp; Mercury</h1>
-  <p>Two production GPUs in a Chicago apartment, one Mac in Bloomington-Normal next to ISU,
-     and a Raspberry Pi 5 still being prepared. Together they're the entire compute fleet
-     that runs every demo on this site — no AWS region, no rented cloud GPU pool.</p>
+  <h1>The <span class="accent">physical machines</span> behind Cortex &amp; Mercury</h1>
+  <p>Seratonin is the production GPU box, Mini Apple is the research node near ISU,
+     and Baby Pi is still being prepared. Together with the optional cloud TRIBE worker,
+     this is the compute fleet that runs the demo on this site.</p>
 </section>
 
 <main class="grid">
@@ -107,31 +106,6 @@
       Runs TRIBE v2 (~6 GB VRAM) for cortical-surface BOLD prediction, then runs Gemma 4 E4B locally
       via Ollama for the four parallel persona narrations. Tailscale Funnel makes the Vite dev
       server reachable from any phone browser without authentication.
-    </div>
-  </article>
-
-  <article class="machine bigapple">
-    <div class="head">
-      <div>
-        <div class="name">Big Apple</div>
-        <div class="role">Overflow narration · Apple Silicon · <strong>Chicago, IL (next to Seratonin)</strong></div>
-      </div>
-      <span class="badge live">● live · overflow</span>
-    </div>
-    <dl class="specs">
-      <dt>Chip</dt>     <dd>Apple M4 Max · 16 cores (12P + 4E) · 40-core GPU · 16-core Neural Engine</dd>
-      <dt>RAM</dt>      <dd>48 GB unified memory (LPDDR5X) · 546 GB/s bandwidth</dd>
-      <dt>Storage</dt>  <dd>1 TB NVMe · 7.4 GB/s read</dd>
-      <dt>OS</dt>       <dd>macOS Sequoia 15.x · MLX + Ollama (Metal backend)</dd>
-      <dt>Network</dt>  <dd>Tailscale (<code>big-apple</code> · <code>100.93.240.52</code>)</dd>
-      <dt>Models</dt>   <dd>gemma4:e4b (~9 GB), gemma4:26b (~21 GB), gemma4:31b (~21 GB), gemma4:e2b</dd>
-      <dt>Role</dt>     <dd>Round-robin overflow when the 5090 is busy. ~90 tokens/sec on Gemma 4 E4B.</dd>
-    </dl>
-    <div class="role-box">
-      <strong>What it does for the demo:</strong> when Seratonin is mid-TRIBE-inference and a narration
-      job arrives, the inference router transparently sends it here. The user sees no difference —
-      the M4 Max produces ~30-token-per-sentence narrations in 0.3s end-to-end. Acts as a hot standby
-      so the demo URL never blocks on a single GPU.
     </div>
   </article>
 

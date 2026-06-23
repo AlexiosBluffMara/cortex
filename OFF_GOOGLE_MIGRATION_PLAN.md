@@ -2,7 +2,7 @@
 
 **Trigger:** $2K unexpected Gemini API bill (May 1, 2026). All paid Google AI surfaces are now off-limits. Hackathon submission deadline: **May 18, 2026**.
 
-**Scope:** Replace Cloud Run (`cortex-relay`, `cortex-webapp`) with a Cloudflare-only edge stack fronting the local seratonin/big-apple/baby-pi cluster via the existing `rtk-5090` tunnel. Keep public site fast. Keep public GitHub. Keep Cortex demo working end-to-end before deadline.
+**Scope:** Replace Cloud Run (`cortex-relay`, `cortex-webapp`) with a Cloudflare-only edge stack fronting the local seratonin/seratonin/baby-pi cluster via the existing `rtk-5090` tunnel. Keep public site fast. Keep public GitHub. Keep Cortex demo working end-to-end before deadline.
 
 ---
 
@@ -66,7 +66,7 @@
                               +-----------------+-----------------+
                               |                 |                 |
                               v                 v                 v
-                       Ollama (5090)     big-apple (Mac)    baby-pi (BitNet)
+                       Ollama (5090)     seratonin (Mac)    baby-pi (BitNet)
                               |                 |                 |
                               +-----------------+-----------------+
                                                 |
@@ -459,7 +459,7 @@ Single-line escape hatch (documented, not preferred): if a feature unavoidably n
 | Risk | Mitigation |
 | --- | --- |
 | Tunnel down -> dynamic routes 530 | Worker reads last-good response from KV (TTL 1h), serves cached result with `X-Cortex-Stale: true` |
-| 5090 down (power, reboot, driver crash) | Inference router falls through to big-apple, then baby-pi (BitNet b1.58); Worker retries via Queue retry policy (max 3) |
+| 5090 down (power, reboot, driver crash) | Inference router falls through to seratonin, then baby-pi (BitNet b1.58); Worker retries via Queue retry policy (max 3) |
 | Cloudflare token still read-only at deploy time | Every step labels its required permission group; dashboard click-paths documented as fallback for Pages domain mapping and AI Gateway create |
 | AI Gateway adds 50-150ms latency | Acceptable; cache hits make repeated identical prompts free and instant |
 | Tailscale outage | Tunnel is Cloudflare-native — does not depend on Tailscale. Only Mac/RPi node-to-node fallback uses Tailscale; the public ingress is unaffected |

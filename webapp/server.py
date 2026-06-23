@@ -86,18 +86,13 @@ PUBLIC_DIR = Path(__file__).resolve().parent / "public"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 # ---------------------------------------------------------------------------
-# TRIBE proxy (split-stack: Big Apple as public face, Seratonin runs TRIBE)
+# TRIBE cloud worker proxy
 # ---------------------------------------------------------------------------
-# When CORTEX_TRIBE_PROXY is set, scans that need TRIBE inference (which
-# currently requires CUDA) are forwarded to that backend transparently. Image
-# and document uploads are bridged into TRIBE's text-events path after
-# multimodal/source extraction, so they need TRIBE too.
-#
-# Result: Big Apple keeps the public Funnel + image-scan capability + serves
-# the gallery; Seratonin handles the heavy CUDA work; the user sees one URL.
+# When a funded cloud compute target is selected, scans that need TRIBE
+# inference are forwarded to CORTEX_CLOUD_TRIBE_ENDPOINT. Local mode stays on
+# this machine and never attempts to route to a peer laptop.
 import os as _os
-TRIBE_PROXY_URL = (_os.environ.get("CORTEX_TRIBE_PROXY", "") or "").rstrip("/")
-TRIBE_NEEDED_EXTS = ALLOWED_VIDEO | ALLOWED_AUDIO | ALLOWED_TEXT | ALLOWED_IMAGE | ALLOWED_DOCUMENT
+CLOUD_TRIBE_PROXY_EXTS = ALLOWED_VIDEO | ALLOWED_AUDIO | ALLOWED_TEXT | ALLOWED_IMAGE | ALLOWED_DOCUMENT
 
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
 OPENROUTER_DEFAULT_MODEL = "google/gemma-4-26b-a4b-it:free"
@@ -1210,7 +1205,7 @@ def create_app(
     @app.get("/api/router-health")
     async def router_health() -> dict[str, Any]:
         """Proxy to the inference router's /healthz, with sanitized response.
-        Lets the browser show Big Apple + OpenRouter status without exposing
+        Lets the browser show local router + OpenRouter status without exposing
         internal hostnames/credentials.
         """
         import httpx as _httpx
@@ -1390,14 +1385,11 @@ def create_app(
     async def _do_fleet_snapshot() -> dict[str, Any]:
         import asyncio as _asyncio
         import httpx as _httpx
-        import os as _os
         from cortex import device as _device
 
-        peer_base = (TRIBE_PROXY_URL or "").rstrip("/")
-        # Identify roles deterministically: cuda host = "seratonin", mps = "bigapple"
         my_kind = _device.DEVICE_KIND
-        my_role = "seratonin" if my_kind == "cuda" else "bigapple" if my_kind == "mps" else my_kind
-        peer_role = "bigapple" if my_role == "seratonin" else "seratonin"
+        my_role = "seratonin"
+        cloud_endpoint = CORTEX_CLOUD_TRIBE_ENDPOINT.rstrip("/")
 
         # Local snapshot (cheap, in-process)
         local_gpu = _scheduler.vram_report()
@@ -1432,80 +1424,44 @@ def create_app(
             except Exception:
                 return False
 
+        async def _check_cloud_tribe(client, endpoint: str) -> bool | None:
+            if not endpoint:
+                return None
+            for suffix in ("/api/tribe/readiness", "/api/health", "/healthz"):
+                data = await _get_json(client, f"{endpoint}{suffix}", timeout=3.0)
+                if isinstance(data, dict):
+                    return bool(data.get("ok", True))
+            return False
+
         async with _httpx.AsyncClient() as client:
             tasks = {
                 "router_local":   _get_json(client, "http://localhost:8766/healthz"),
                 "ollama_local":   _check_port(client, "http://localhost:11434/api/tags"),
             }
-            if peer_base:
-                tasks["peer_view"]    = _get_json(client, f"{peer_base}/api/health")
-                tasks["router_peer"]  = _get_json(client, f"{peer_base}/api/router-health")
-                # peer's ollama: don't probe port 11434 directly because some nodes
-                # (Sera) bind Ollama to 127.0.0.1. Ask the peer's own /api/router-health
-                # for its ollama_backends dict — that's authoritative.
+            if cloud_endpoint:
+                tasks["cloud_tribe"] = _check_cloud_tribe(client, cloud_endpoint)
             results = dict(zip(tasks.keys(), await _asyncio.gather(*tasks.values())))
 
         router_local = results.get("router_local") or {}
-        peer_view = results.get("peer_view") or {}
-        peer_gpu = peer_view.get("gpu", {}) if peer_view else {}
-        peer_queue = peer_view.get("queue", {}) if peer_view else {}
-        their_view = {
-            "role": peer_role,
-            "alive": bool(peer_view),
-            "device_kind": peer_gpu.get("device_kind"),
-            "device_name": peer_gpu.get("device_name"),
-            "gpu_state": peer_gpu.get("state"),
-            "free_gb": peer_gpu.get("free_gb"),
-            "used_gb": peer_gpu.get("used_gb"),
-            "total_gb": peer_gpu.get("total_gb"),
-            "tribe_fits": peer_gpu.get("tribe_fits"),
-            "queue_depth": peer_queue.get("queue_depth"),
-            "completed": peer_queue.get("completed"),
-            "failed": peer_queue.get("failed"),
-            "active": peer_queue.get("active_request"),
-        } if peer_base else None
-
-        # Service status — distinguish "not applicable" (no router on this node, no
-        # peer configured) from "DOWN" (configured but unreachable). null = n/a.
-        is_proxy_node = bool(peer_base)        # this node proxies TRIBE → has no router
-        router_peer_payload = results.get("router_peer") or {}
-        # ollama_peer: derived from peer router's own backend self-check, not a
-        # direct port probe (which fails when peer Ollama is bound localhost-only).
-        peer_backends = router_peer_payload.get("ollama_backends", {}) if router_peer_payload else {}
-        # any backend reporting True from the peer's perspective means peer's Ollama is up
-        ollama_peer_status = (
-            any(peer_backends.values()) if peer_backends else None
-        )
+        cloud_tribe_status = results.get("cloud_tribe") if cloud_endpoint else None
 
         return {
             "ok": True,
             "ts": int(time.time()),
             "host": my_role,
-            "nodes": {my_role: my_view, **({peer_role: their_view} if their_view else {})},
+            "nodes": {my_role: my_view},
             "services": {
-                # router_local: n/a on the proxy node (it never runs a router locally)
-                "router_local": (None if is_proxy_node else bool(router_local)),
+                "router_local": bool(router_local),
                 "ollama_local": bool(results.get("ollama_local")),
-                # router_peer: only meaningful when there's a peer
-                "router_peer":  (bool(router_peer_payload) if peer_base else None),
-                # ollama_peer: derived from peer's router self-check
-                "ollama_peer":  ollama_peer_status,
-                "openrouter":   (
-                    bool(router_local.get("openrouter")) if router_local
-                    else bool(router_peer_payload.get("openrouter")) if router_peer_payload
-                    else False
-                ),
+                "openrouter": bool(router_local.get("openrouter")) if router_local else False,
+                "cloud_tribe": cloud_tribe_status,
             },
             "router": {
-                "ollama_backends": router_local.get("ollama_backends", {}) if router_local
-                                    else router_peer_payload.get("ollama_backends", {}),
-                "openrouter": (
-                    router_local.get("openrouter") if router_local
-                    else router_peer_payload.get("openrouter") if router_peer_payload
-                    else False
-                ),
+                "ollama_backends": router_local.get("ollama_backends", {}) if router_local else {},
+                "openrouter": router_local.get("openrouter") if router_local else False,
             },
-            "tribe_proxy_url": peer_base or None,
+            "cloud_tribe_endpoint": cloud_endpoint or None,
+            "cloud_tribe_provider": CORTEX_CLOUD_TRIBE_PROVIDER,
         }
 
     # Expose the closure on the app so the lifespan loop can call it
@@ -1655,7 +1611,7 @@ def create_app(
         selected_proxy_url = (
             CORTEX_CLOUD_TRIBE_ENDPOINT
             if _compute_target_requires_paid_access(compute_target)
-            else TRIBE_PROXY_URL
+            else ""
         )
         if _compute_target_requires_paid_access(compute_target) and not selected_proxy_url:
             return _cloud_tribe_not_configured(compute_target)
@@ -1688,13 +1644,10 @@ def create_app(
             return JSONResponse(err.to_dict(), status_code=413)
 
         # ────────────────────────────────────────────────────────────────────
-        # TRIBE proxy: if this file needs TRIBE (video/audio/text/document) and
-        # we're configured to forward such scans elsewhere (because the local
-        # device can't run TRIBE — Apple Silicon), POST the file to that
-        # backend and store a reference. Image/document scans are included
-        # because the backend bridges them into TRIBE text-event stimuli.
+        # Cloud TRIBE proxy: if this file needs TRIBE and the user selected a
+        # funded cloud worker, POST the file there and store a reference.
         # ────────────────────────────────────────────────────────────────────
-        if selected_proxy_url and ext in TRIBE_NEEDED_EXTS:
+        if selected_proxy_url and ext in CLOUD_TRIBE_PROXY_EXTS:
             log.info("[webapp] proxying TRIBE scan %s (%s) → %s", scan_id, ext, selected_proxy_url)
             try:
                 import httpx as _httpx
@@ -1703,7 +1656,7 @@ def create_app(
                         files_payload = {"file": (file.filename, fh.read(), file.content_type or "application/octet-stream")}
                     data_payload = {
                         "tier": str(tier),
-                        "source": f"proxy-from-bigapple:{source}",
+                        "source": f"cloud-proxy:{source}",
                         "narration_model": narration_model,
                         "compute_target": "local",
                     }
@@ -1834,7 +1787,7 @@ def create_app(
         if not rec.get("proxied"):
             return rec
         upstream_id = rec.get("upstream_id")
-        upstream_base = (rec.get("upstream_base") or TRIBE_PROXY_URL or "").rstrip("/")
+        upstream_base = (rec.get("upstream_base") or "").rstrip("/")
         if not upstream_id or not upstream_base:
             return rec
         try:
@@ -1866,16 +1819,6 @@ def create_app(
     async def get_scan(scan_id: str) -> dict[str, Any]:
         record = await app.state.registry.get(scan_id)
         if record is None:
-            # Fall through to upstream — gallery may surface upstream ids directly
-            if TRIBE_PROXY_URL:
-                try:
-                    import httpx as _httpx
-                    async with _httpx.AsyncClient(timeout=5.0) as client:
-                        r = await client.get(f"{TRIBE_PROXY_URL.rstrip('/')}/api/scan/{scan_id}")
-                    if r.status_code == 200:
-                        return r.json()
-                except Exception:
-                    pass
             raise HTTPException(status_code=404, detail=f"Scan not found: {scan_id}")
         return await _hydrate_proxied(record)
 
@@ -1922,12 +1865,10 @@ def create_app(
         Returns a compact summary per scan: id, filename, status, top_rois,
         peak_t, narrations (all 4 personas), seconds_elapsed.
 
-        Proxied scans are hydrated in-line. ALSO if TRIBE_PROXY_URL is set,
-        the upstream's /api/scans is merged in so the gallery survives a local
-        restart (which wipes our in-memory registry).
+        Proxied cloud scans are hydrated in-line while their local references
+        remain in the registry.
         """
         out: list[dict[str, Any]] = []
-        seen_upstream_ids: set[str] = set()
         seen_local_ids: set[str] = set()
 
         # 1. Local scans (direct + proxy-referenced)
@@ -1940,8 +1881,6 @@ def create_app(
             if status != "all" and rec.get("status") != status:
                 continue
             seen_local_ids.add(sid)
-            if rec.get("upstream_id"):
-                seen_upstream_ids.add(rec["upstream_id"])
             media = _scan_media_summary(sid)
             # Defensive: dict.get(k, default) only returns `default` when the
             # key is ABSENT. Image scans persist `top_rois: null` (key present,
@@ -1969,41 +1908,6 @@ def create_app(
                 **media,
             })
 
-        # 2. If a TRIBE proxy is configured, merge upstream's scans too — so the
-        #    gallery shows everything even after we lose our in-memory registry.
-        if TRIBE_PROXY_URL:
-            try:
-                import httpx as _httpx
-                async with _httpx.AsyncClient(timeout=5.0) as client:
-                    r = await client.get(f"{TRIBE_PROXY_URL}/api/scans?limit=200&status={status}")
-                if r.status_code == 200:
-                    upstream_data = r.json()
-                    for u in upstream_data.get("scans", []):
-                        uid = u.get("id")
-                        if not uid or uid in seen_upstream_ids:
-                            continue
-                        has_ascii_video = u.get("has_ascii_video")
-                        if has_ascii_video is None:
-                            has_ascii_video = True
-                        # Synthesize a local-style record pointing to upstream;
-                        # the gallery's <video src=/api/scan/{id}/...> will
-                        # proxy to upstream via _proxy_media because this entry
-                        # is also marked proxied.
-                        out.append({
-                            **u,
-                            "id": uid,                 # surface upstream id
-                            "proxied": True,
-                            "_upstream_only": True,
-                            "has_bold_vertex": bool(u.get("has_bold_vertex", has_ascii_video)),
-                            "bold_vertex_url": u.get("bold_vertex_url") or f"/api/scan/{uid}/bold-vertex",
-                            "has_ascii_video": bool(has_ascii_video),
-                            "ascii_video_url": u.get("ascii_video_url") or f"/api/scan/{uid}/ascii-video",
-                            "source_media_url": u.get("source_media_url"),
-                            "source_media_kind": u.get("source_media_kind"),
-                        })
-            except Exception as exc:
-                log.debug("[webapp] upstream /api/scans merge failed: %s", exc)
-
         # Real per-vertex brain previews first, then newest first. Scans without
         # persisted vertices still render through the regional BOLD fallback.
         out.sort(
@@ -2022,27 +1926,18 @@ def create_app(
     @app.get("/api/scan/{scan_id}/narrations")
     async def get_narrations(scan_id: str) -> dict[str, Any]:
         record = await app.state.registry.get(scan_id)
-        # Fall through to upstream if no local record (gallery surfaced upstream ids)
-        if record is None and TRIBE_PROXY_URL:
-            try:
-                import httpx as _httpx
-                async with _httpx.AsyncClient(timeout=5.0) as client:
-                    r = await client.get(f"{TRIBE_PROXY_URL.rstrip('/')}/api/scan/{scan_id}/narrations")
-                if r.status_code == 200:
-                    return r.json()
-            except Exception:
-                pass
         if record is None:
             raise HTTPException(status_code=404, detail=f"Scan not found: {scan_id}")
         # Hydrate from upstream if proxied
         record = await _hydrate_proxied(record)
         narrations = record.get("narrations") or {}
-        # If local hydrate gave us nothing and we have a proxy, ask upstream directly
-        if not narrations and TRIBE_PROXY_URL:
+        # If local hydrate gave us nothing and this scan was proxied to a cloud
+        # worker, ask that upstream directly.
+        if not narrations and record.get("proxied") and record.get("upstream_base"):
             try:
                 import httpx as _httpx
                 upstream_id = record.get("upstream_id") or scan_id
-                upstream_base = (record.get("upstream_base") or TRIBE_PROXY_URL).rstrip("/")
+                upstream_base = record.get("upstream_base").rstrip("/")
                 async with _httpx.AsyncClient(timeout=5.0) as client:
                     r = await client.get(
                         f"{upstream_base}/api/scan/{upstream_id}/narrations",
@@ -2176,13 +2071,6 @@ def create_app(
         """If the scan is proxied to another backend, fetch the media from there
         using the upstream_id. Returns the raw response or None if not proxied /
         upstream unreachable / not found upstream.
-
-        Three cases:
-          1. We have a local record with upstream_id+upstream_base → proxy.
-          2. We have NO local record but TRIBE_PROXY_URL is set → assume the
-             scan_id IS the upstream id (gallery merge surfaces upstream ids
-             directly), and proxy with that.
-          3. No local record AND no proxy → caller falls through to local 404.
         """
         rec = await app.state.registry.get(scan_id)
         upstream_id: str | None = None
@@ -2190,12 +2078,8 @@ def create_app(
         compute_target: str | None = None
         if rec and rec.get("proxied"):
             upstream_id = rec.get("upstream_id")
-            upstream_base = (rec.get("upstream_base") or TRIBE_PROXY_URL or "").rstrip("/")
+            upstream_base = (rec.get("upstream_base") or "").rstrip("/")
             compute_target = rec.get("compute_target")
-        elif rec is None and TRIBE_PROXY_URL:
-            # Gallery merged upstream scan_id directly — try as-is
-            upstream_id = scan_id
-            upstream_base = TRIBE_PROXY_URL.rstrip("/")
         if not upstream_id or not upstream_base:
             return None
         url = f"{upstream_base}/api/scan/{upstream_id}{suffix_path}"
@@ -2380,11 +2264,8 @@ def create_app(
         upstream_id, upstream_base, compute_target = None, None, None
         if rec and rec.get("proxied"):
             upstream_id = rec.get("upstream_id")
-            upstream_base = (rec.get("upstream_base") or TRIBE_PROXY_URL or "").rstrip("/")
+            upstream_base = (rec.get("upstream_base") or "").rstrip("/")
             compute_target = rec.get("compute_target")
-        elif rec is None and TRIBE_PROXY_URL:
-            upstream_id = scan_id
-            upstream_base = TRIBE_PROXY_URL.rstrip("/")
         if upstream_id and upstream_base:
             try:
                 import httpx as _httpx
@@ -2467,7 +2348,7 @@ def create_app(
                         files_payload = {"file": ("text-stimulus.txt", fh.read(), "text/plain")}
                     data_payload = {
                         "tier": str(tier),
-                        "source": f"proxy-from-bigapple:{source}",
+                        "source": f"cloud-proxy:{source}",
                         "narration_model": narration_model,
                         "compute_target": "local",
                     }

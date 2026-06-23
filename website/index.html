@@ -16,9 +16,9 @@
 <link rel="stylesheet" href="/assets/style.css">
 <script>
   // If someone hits cortex.redteamkitchen.com (old subdomain alias), send them
-  // straight to the live demo on Big Apple.
+  // straight to the live demo.
   if (location.hostname === 'cortex.redteamkitchen.com') {
-    location.replace('https://big-apple.scylla-betta.ts.net' + location.pathname + location.search);
+    location.replace('https://redteamkitchen.com' + location.pathname + location.search);
   }
 </script>
 </head>
@@ -65,9 +65,9 @@
     Discord bot, and a phone-friendly web dashboard.
   </p>
   <div class="ctas">
-    <a class="cta primary" href="https://big-apple.scylla-betta.ts.net">See Cortex live demo →</a>
-    <a class="cta ghost" href="https://big-apple.scylla-betta.ts.net/gallery.html">Gallery</a>
-    <a class="cta ghost" href="https://big-apple.scylla-betta.ts.net/personas.html">The 4 personas</a>
+    <a class="cta primary" href="https://redteamkitchen.com">See Cortex live demo →</a>
+    <a class="cta ghost" href="https://redteamkitchen.com/gallery.html">Gallery</a>
+    <a class="cta ghost" href="https://redteamkitchen.com/personas.html">The 4 personas</a>
     <a class="cta ghost" href="https://github.com/AlexiosBluffMara">GitHub</a>
   </div>
 </header>
@@ -112,10 +112,9 @@
     on applied AI and computational-neuroscience <strong>research only</strong>
     (not coursework). The work is hardware-flexible by design: the same code path
     runs on a single RTX 5090 in our <strong>Chicago lab</strong> (call sign
-    Ascended Base), on the M4 Max MacBook (Big Apple) sitting next to it, and —
-    through ACCESS-CI partnerships at UIUC and similar institutions — on national
-    HPC nodes when the experiment demands them. Open-source where possible.
-    Local-first by default.
+    Ascended Base), falls back to OpenRouter for narration when useful, and can
+    move TRIBE work to a funded cloud GPU worker when the local PC is unavailable.
+    Open-source where possible. Local-first by default.
   </p>
 
   <p style="font-size:0.95rem;color:var(--text-mid)">

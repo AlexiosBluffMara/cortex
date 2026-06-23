@@ -44,7 +44,7 @@ MON_X, MON_Y = 0, 0
 MON_W, MON_H = 3840, 1600
 FPS = 30
 
-WEBUI_URL = os.environ.get("WEBUI_URL", "https://big-apple.scylla-betta.ts.net")
+WEBUI_URL = os.environ.get("WEBUI_URL", "https://redteamkitchen.com")
 DISCORD_BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN", "")
 DISCORD_CHANNEL_ID = os.environ.get("DISCORD_DEMO_CHANNEL_ID", "1498659332512940032")
 DISCORD_CHANNEL_URL = os.environ.get(
@@ -406,7 +406,7 @@ async def main() -> None:
             except Exception as exc:
                 print(f"[demo] Discord post for {sample.name} failed: {exc}")
                 event("title", f"Discord post for {sample.name} hit an error", duration=3)
-        event("title", "Demo complete - https://big-apple.scylla-betta.ts.net", duration=4)
+        event("title", "Demo complete - https://redteamkitchen.com", duration=4)
     finally:
         stop_recording(proc)
         print(f"[done] raw at {raw_path}")

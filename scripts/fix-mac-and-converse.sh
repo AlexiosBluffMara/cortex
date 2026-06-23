@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # fix-mac-and-converse.sh
-# Run on Big Apple (Mac). Brings the cluster up, flips MLX to primary,
+# Run on Seratonin (Mac). Brings the cluster up, flips MLX to primary,
 # and starts the cortex-orchestra daemon that ties the Mac to Hue + Google Home.
 #
 # Steps:

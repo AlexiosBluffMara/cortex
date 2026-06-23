@@ -51,7 +51,7 @@ Your bedroom has the WiFi router and the desktop+Mac. RPi is in the living room.
 
 **When to add ethernet later:** if you start moving the full TRIBE input video corpus (~50 GB) between machines, then yes ethernet. But for the core inference + dashboard role, WiFi is fine.
 
-**Tailscale on top of either:** all three machines (seratonin, big-apple, the RPi) talk to each other only via Tailscale IPs (`100.x.x.x`). This way:
+**Tailscale on top of either:** all three machines (seratonin, seratonin, the RPi) talk to each other only via Tailscale IPs (`100.x.x.x`). This way:
 - The cloudflared tunnel ingress rules can target `http://100.x.x.x:11434` directly
 - No port forwarding on your home router
 - Encrypted by default (WireGuard)
@@ -276,7 +276,7 @@ restic -r /mnt/backup/restic init
 # (note the password it generates — store it in 1Password)
 ```
 
-On seratonin (Windows) and big-apple (Mac), point Restic at `sftp:soumit@baby-pi:/mnt/backup/restic` for nightly backups. The RPi just sits there receiving deduplicated encrypted blobs. Doesn't need to do anything else.
+On seratonin (Windows) and seratonin (Mac), point Restic at `sftp:soumit@baby-pi:/mnt/backup/restic` for nightly backups. The RPi just sits there receiving deduplicated encrypted blobs. Doesn't need to do anything else.
 
 ---
 
@@ -287,7 +287,7 @@ After Step 6, on this Windows desktop, edit the env file the router uses:
 ```bash
 cat >> ~/.cortex/inference.env <<EOF
 # Inference backends, tried in order, with model affinity
-INFERENCE_BACKENDS="ollama:seratonin:11434,ollama:big-apple:11434,bitnet:baby-pi:8000"
+INFERENCE_BACKENDS="ollama:seratonin:11434,ollama:seratonin:11434,bitnet:baby-pi:8000"
 INFERENCE_BITNET_TIMEOUT_S=60
 EOF
 
@@ -301,10 +301,10 @@ Routing rules (encoded next time I patch the router):
 | Request shape | Goes to |
 | --- | --- |
 | TRIBE inference | seratonin only |
-| Long narration (> 500 tokens) | seratonin → big-apple |
-| Short narration (< 200 tokens) | big-apple → seratonin → baby-pi |
-| Vision-gate "is this safe?" | big-apple → baby-pi (BitNet handles intent classification well) |
-| Embeddings | seratonin OR big-apple round-robin |
+| Long narration (> 500 tokens) | seratonin → seratonin |
+| Short narration (< 200 tokens) | seratonin → seratonin → baby-pi |
+| Vision-gate "is this safe?" | seratonin → baby-pi (BitNet handles intent classification well) |
+| Embeddings | seratonin OR seratonin round-robin |
 
 ---
 

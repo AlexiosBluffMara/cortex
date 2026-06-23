@@ -127,7 +127,7 @@ def hue_apply(intent: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Cast (TTS) — uses orchestra on Big Apple via HTTP, since launchd-mDNS pain
+# Cast (TTS) — uses orchestra on Seratonin via HTTP, since launchd-mDNS pain
 # is already solved there. Falls back to logging if not reachable.
 # ---------------------------------------------------------------------------
 async def cast_speak(text: str) -> str:

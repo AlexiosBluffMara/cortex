@@ -7,7 +7,7 @@
 #   2. abort if dataset has fewer than MIN_NEW examples (avoid retraining on stale data)
 #   3. train a LoRA on top of base Gemma 4 e4b
 #   4. export GGUF + register in Ollama (Seratonin)
-#   5. export MLX, scp to Big Apple, reload mlx_lm.server
+#   5. export MLX, scp to Seratonin, reload mlx_lm.server
 #   6. run smoke probes against both backends and log results
 
 set -euo pipefail

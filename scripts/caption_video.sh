@@ -51,12 +51,12 @@ FONT_FOR_FFMPEG="${FONT_FOR_FFMPEG/C:/C\\:}"
 #   180-215 narrating phase
 #   215-360 timeline scrubbing + persona tabs + tour
 captions_end_to_end=(
-  "0   4  Cortex live demo — big-apple.scylla-betta.ts.net"
+  "0   4  Cortex live demo — redteamkitchen.com"
   "4   6  Drag a video onto the dropzone (or pick from disk)"
   "10  4  Submit the scan"
   "15 25  TRIBE v2 inference running on the RTX 5090 (proxied via Tailscale)"
   "40 30  20,484 cortical vertices being predicted at 2 Hz"
-  "70 30  Big Apple (M4 Max) handles narration via Gemma 4 + OpenRouter free tier"
+  "70 30  Gemma 4 narrates locally, with OpenRouter free tier as fallback"
   "180 15 Scan complete — four parallel narrations from four readers"
   "200 12 Each narration is one TRIBE prediction interpreted four ways"
   "230 12 Material 3 timeline — scrub to any moment in the BOLD trace"
@@ -70,7 +70,7 @@ captions_gallery=(
   "16  9  Scans land here whether they came from Discord, the WebUI, or the API"
   "27  8  Personas page — Student · Patient · Clinician · ML Scientist"
   "38  8  Tied to real Illinois institutions: ISU · Carle/BroMenn · NW Memorial · RUSH"
-  "48  8  big-apple.scylla-betta.ts.net · redteamkitchen.com"
+  "48  8  redteamkitchen.com · redteamkitchen.com"
 )
 
 if [[ "$MODE" == "end_to_end" ]]; then

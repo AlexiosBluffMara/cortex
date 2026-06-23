@@ -1,6 +1,6 @@
 # Cortex — tweet bank (2026-05-04)
 
-Pick the angle that fits the day. All copy is under 280 chars and includes `https://cortex.redteamkitchen.com` (clean alias) — substitute for the raw Tailscale URL where you need ironclad uptime: `https://big-apple.scylla-betta.ts.net`.
+Pick the angle that fits the day. All copy is under 280 chars and includes `https://cortex.redteamkitchen.com` (clean alias) — substitute for the raw Tailscale URL where you need ironclad uptime: `https://redteamkitchen.com`.
 
 ---
 
@@ -29,7 +29,7 @@ Pick the angle that fits the day. All copy is under 280 chars and includes `http
 
 5. **5090 + M4 Max as a 2-node fleet.**
    • Sera does TRIBE + Gemma e4b (multimodal native)
-   • Big Apple holds Gemma 26b warm + serves the public
+   • Seratonin holds Gemma 26b warm + serves the public
    • Cloudflare Tunnel + Tailscale Funnel for ingress
    • Watchdog auto-heals dead services
    status: https://cortex.redteamkitchen.com/status
@@ -58,7 +58,7 @@ Pick the angle that fits the day. All copy is under 280 chars and includes `http
 
 11. **fleet status, real and live:**
     🟢 Sera RTX 5090 — TRIBE warm, Gemma e4b, 11.2 GB VRAM
-    🟢 Big Apple M4 Max — Gemma 26b warm, 22 GB
+    🟢 Seratonin M4 Max — Gemma 26b warm, 22 GB
     🟢 OpenRouter — Gemma 4 31B cloud-first
     🟢 Cloudflare Tunnel — public ingress
     https://cortex.redteamkitchen.com/status

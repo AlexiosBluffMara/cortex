@@ -10,7 +10,7 @@ Pixel 9 Pro Fold = "mobile control surface" for Ascended Base
 ├─ Multi-window dev work      → unfolded inner display (8" / 2152×2076)
 ├─ Desktop-class workstation  → USB-C dock + monitor (Native Desktop Mode)
 ├─ Demo presenter             → handed to judges to scroll cortex.redteamkitchen.com
-└─ Mac-integrated peripheral  → scrcpy / Android Studio mirroring on Big Apple
+└─ Mac-integrated peripheral  → scrcpy / Android Studio mirroring on Seratonin
 ```
 
 Currently OFFLINE on Tailscale (last seen 11 days). Step 0 wakes it.
@@ -59,15 +59,15 @@ Settings → Display → External display → behavior selector.
 
 ## Step 2 — Pixel Buds Pro 2 multipoint (Pixel + Mac at the same time)
 
-The Buds pair to Pixel and Big Apple simultaneously and auto-switch when audio plays on either side.
+The Buds pair to Pixel and Seratonin simultaneously and auto-switch when audio plays on either side.
 
 ### One-time pair
 1. Charge case → press button on case → **Fast Pair** pop-up on the Pixel → tap Connect
 2. Pixel: Settings → Connected devices → Pixel Buds Pro 2 → toggle **Connect to multiple devices** = ON
-3. On Big Apple: System Settings → Bluetooth → with case open, the buds appear → click Connect
+3. On Seratonin: System Settings → Bluetooth → with case open, the buds appear → click Connect
 
 ### Auto-switching examples
-- YouTube on Big Apple → buds switch from Pixel to Mac
+- YouTube on Seratonin → buds switch from Pixel to Mac
 - Phone call comes in → buds switch back to Pixel
 - Spatial audio + head tracking works on both (Apple Music on Mac, YouTube on Pixel)
 - **Conversation Detection** (auto-pause + transparency when you start talking) works only when audio is currently routed to the Pixel — not on Mac calls. Sensitivity: Medium.
@@ -77,9 +77,9 @@ Tap and hold either earbud → "Translate" → speak in English while the other 
 
 ## Step 3 — Use the Pixel inside the Mac (scrcpy + Android Studio)
 
-When the Pixel is at your desk and you want to operate it from Big Apple's keyboard/screen instead of switching focus.
+When the Pixel is at your desk and you want to operate it from Seratonin's keyboard/screen instead of switching focus.
 
-### One-time setup on Big Apple
+### One-time setup on Seratonin
 
 ```bash
 brew install scrcpy android-platform-tools
@@ -122,12 +122,12 @@ Use this when you also need Logcat / Layout Inspector / Profiler. scrcpy is fast
 Quick Share now works between Pixel and Mac via Google's official Mac client. Faster than AirDrop for big files, and bidirectional.
 
 ```bash
-# On Big Apple
+# On Seratonin
 brew install --cask quick-share
 # First launch: grant Bluetooth + Local Network in System Settings → Privacy & Security
 ```
 
-After install, share from Pixel → choose Quick Share → Big Apple shows up. Or from Big Apple's Quick Share menu bar app → drag a file → Pixel pops up as a target.
+After install, share from Pixel → choose Quick Share → Seratonin shows up. Or from Seratonin's Quick Share menu bar app → drag a file → Pixel pops up as a target.
 
 ## Step 5 — NFC + UWB underused powers
 
@@ -201,9 +201,9 @@ cat > ~/.shortcuts/seratonin <<'EOF'
 #!/data/data/com.termux/files/usr/bin/bash
 ssh -o StrictHostKeyChecking=accept-new soumit@100.98.19.87
 EOF
-cat > ~/.shortcuts/big-apple <<'EOF'
+cat > ~/.shortcuts/seratonin <<'EOF'
 #!/data/data/com.termux/files/usr/bin/bash
-ssh -o StrictHostKeyChecking=accept-new soumit@100.93.240.52
+ssh -o StrictHostKeyChecking=accept-new soumit@127.0.0.1
 EOF
 cat > ~/.shortcuts/baby-pi <<'EOF'
 #!/data/data/com.termux/files/usr/bin/bash
@@ -236,7 +236,7 @@ Outlasts a full work day for any realistic mix.
 
 ## What's NOT on the Pixel
 
-- **Inference**. Don't try to run Gemma on Tensor G4. Pin all LLM work to seratonin/big-apple/baby-pi.
+- **Inference**. Don't try to run Gemma on Tensor G4. Pin all LLM work to seratonin/seratonin/baby-pi.
 - **Restic backups**. Not enough storage; not the right form factor.
 - **Always-on dashboard**. That's Baby Pi's job on the 4K monitor.
 - **Tailscale exit node** for the family. Battery dies.

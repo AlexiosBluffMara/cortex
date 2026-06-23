@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# status.sh — check both Seratonin and Big Apple from anywhere on the tailnet.
+# status.sh - check the Seratonin-local Cortex stack and public surfaces.
 # Works on Windows (git-bash), macOS, Linux. No deps beyond curl + python3.
 set -u
 
-SERATONIN=${SERATONIN_HOST:-100.98.19.87}
-BIGAPPLE=${BIGAPPLE_HOST:-100.93.240.52}
+SERATONIN=${SERATONIN_HOST:-localhost}
 
 probe() {
   local label=$1
@@ -19,40 +18,30 @@ probe() {
   esac
 }
 
-echo "════════════════════════════════════════════════════════════"
-echo "  Ascended Base — fleet status"
-echo "════════════════════════════════════════════════════════════"
+echo "============================================================"
+echo "  Ascended Base - Seratonin status"
+echo "============================================================"
 echo
-echo "── Seratonin (Windows · RTX 5090) at $SERATONIN ──"
-probe "Cortex backend (8773)"     "http://$SERATONIN:8773/api/health"
-probe "Inference router (8766)"   "http://$SERATONIN:8766/healthz"
-probe "Vite frontend (5173)"      "http://$SERATONIN:5173/"
-probe "Mercury dashboard (9119)"  "http://$SERATONIN:9119/"
-probe "Ollama (11434)"            "http://$SERATONIN:11434/api/tags"
+echo "-- Seratonin stack at $SERATONIN --"
+probe "Cortex webapp (8765)"       "http://$SERATONIN:8765/api/health"
+probe "Inference router (8766)"    "http://$SERATONIN:8766/healthz"
+probe "Cortex backend (8773)"      "http://$SERATONIN:8773/api/health"
+probe "Ollama (11434)"             "http://$SERATONIN:11434/api/tags"
+probe "Watchdog (8780)"            "http://$SERATONIN:8780/status"
 echo
-echo "── Big Apple (macOS · M4 Max) at $BIGAPPLE ──"
-probe "Cortex backend (8773)"     "http://$BIGAPPLE:8773/api/health"
-probe "Inference router (8766)"   "http://$BIGAPPLE:8766/healthz"
-probe "Vite frontend (5173)"      "http://$BIGAPPLE:5173/"
-probe "Mercury dashboard (9119)"  "http://$BIGAPPLE:9119/"
-probe "Ollama (11434)"            "http://$BIGAPPLE:11434/api/tags"
+echo "-- Public surface --"
+probe "Marketing / app"            "https://redteamkitchen.com" 5
+probe "Cortex subdomain"           "https://cortex.redteamkitchen.com" 5
 echo
-echo "── Public surface ──"
-probe "Demo (Tailscale Funnel)"        "https://seratonin.scylla-betta.ts.net" 5
-probe "Marketing (CF Pages)"           "https://redteamkitchen.com" 5
-probe "Cortex subdomain (redirect)"    "https://cortex.redteamkitchen.com" 5
-echo
-echo "── Inference fleet (which nodes can take a narration job?) ──"
-curl -s --max-time 4 http://$SERATONIN:8766/healthz 2>/dev/null \
+echo "-- Inference backends --"
+curl -s --max-time 4 "http://$SERATONIN:8766/healthz" 2>/dev/null \
   | python3 -c "
 import sys, json
 try:
-  d = json.load(sys.stdin); b = d.get('ollama_backends', {})
-  for url, ok in b.items():
-    name = 'seratonin' if 'localhost' in url or '11434' in url and 'localhost' in url else 'big-apple'
-    name = 'seratonin' if '11434' in url and 'localhost' in url else ('big-apple' if '100.93' in url else url)
-    print(f'  {name:14s} {\"UP\" if ok else \"DOWN\"}')
-  print(f'  openrouter      {\"UP\" if d.get(\"openrouter\") else \"DOWN\"}')
+  d = json.load(sys.stdin)
+  for url, ok in (d.get('ollama_backends') or {}).items():
+    print(f'  {url:42s} {\"UP\" if ok else \"DOWN\"}')
+  print(f'  openrouter                                  {\"UP\" if d.get(\"openrouter\") else \"DOWN\"}')
 except Exception as e:
   print(f'  router unreachable: {e}')
 " 2>/dev/null

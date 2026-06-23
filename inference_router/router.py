@@ -45,37 +45,14 @@ _rr_counter = itertools.count()
 def _pick_backends(cfg: RouterConfig, model: str | None = None) -> list[str]:
     """Return all backends in priority order for this model.
 
-    Model affinity (post-2026-05-04 plan; OpenRouter is cloud-first so local
-    Ollama is mostly a failover path):
-      gemma4:e4b  → prefer Seratonin (kept warm next to TRIBE; both fit in 32 GB)
-      gemma4:e2b  → prefer Seratonin (same as e4b)
-      gemma4:26b  → prefer Big Apple (M4 Max 48 GB — kept warm here, Sera reserved
-                                       for TRIBE + e4b)
-      gemma4:31b  → prefer Big Apple (only M4 Max has the headroom; Sera would
-                                       evict TRIBE/e4b to load it)
-      anything else → round-robin
-
-    The non-preferred backend is still appended for failover. So if Big Apple
-    is down, 26b/31b still run on Seratonin (slower because of the swap).
+    Backend order is configuration-driven. We rotate through configured
+    Ollama URLs to avoid pinning all local traffic to the same process, but we
+    do not infer machine roles from hostnames or tailnet IPs.
     """
     backends = list(cfg.ollama_backends)
     if len(backends) <= 1:
         return backends
 
-    # Identify Seratonin (localhost) vs Big Apple (Tailscale IP)
-    sera = next((b for b in backends if "localhost" in b or "127.0.0.1" in b), None)
-    bigapple = next((b for b in backends if "100.93" in b or "big-apple" in b), None)
-
-    if model and bigapple and sera:
-        m = model.lower()
-        # Big-model affinity: Big Apple has the headroom for 26b/31b.
-        if ("26b" in m or "31b" in m) and bigapple:
-            return [bigapple] + [b for b in backends if b != bigapple]
-        # Small-model affinity: e4b/e2b stay warm on Sera with TRIBE.
-        if ("e4b" in m or "e2b" in m) and sera:
-            return [sera] + [b for b in backends if b != sera]
-
-    # Default: round-robin starting from the next slot
     start = next(_rr_counter) % len(backends)
     return backends[start:] + backends[:start]
 
@@ -456,7 +433,7 @@ async def generate(
     `route_preference` selects the tier order:
       "cloud-first" (default for demo) — OpenRouter free → Ollama → paid clouds.
                     Best end-user latency, lowest local-GPU contention.
-      "local-first" — Ollama (Seratonin → Big Apple) → OpenRouter → paid clouds.
+      "local-first" — configured Ollama backends → OpenRouter → paid clouds.
                     Best for sovereignty / sustained batch workloads.
       "openrouter-only" — OpenRouter only (skips local Ollama entirely).
       "ollama-only"     — Ollama only (skips cloud entirely).

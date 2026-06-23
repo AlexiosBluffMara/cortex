@@ -15,8 +15,7 @@ Sources scraped (pull, no daemons):
     ~/.mercury/sessions/                   active conversations (JSONL)
     ~/.mercury/logs/                       agent stdout
   Cortex:
-    ssh big-apple cat /tmp/orchestra.log   live cluster probes
-    ssh big-apple cat ~/.cortex/lights-state.json
+    local Cortex health + router health
     nvidia-smi (Seratonin GPU)
     AdGuard Home stats API on baby-pi      query log + filter hits
 
@@ -42,7 +41,6 @@ import httpx
 # Config (env-tunable)
 # ---------------------------------------------------------------------------
 MERCURY_HOME = Path(os.environ.get("MERCURY_HOME", str(Path.home() / ".mercury")))
-BIG_APPLE = os.environ.get("BIG_APPLE_HOST", "big-apple")
 PI_HOST = os.environ.get("PI_HOST", "baby-pi")
 ADGUARD_PASS = os.environ.get("ADGUARD_PASS", "ChangeMeNow!")
 ADGUARD_USER = os.environ.get("ADGUARD_USER", "soumit")
@@ -141,61 +139,47 @@ def scrape_mercury_sessions() -> dict[str, Any]:
     return out
 
 
-_orchestra_log_cache: dict[str, Any] = {"lines": [], "ts": 0}
+_cortex_health_cache: dict[str, Any] = {"ts": 0}
 
 
-async def scrape_cortex_orchestra() -> dict[str, Any]:
-    """Pull last lines of /tmp/orchestra.log on big-apple via ssh."""
-    if time.time() - _orchestra_log_cache["ts"] < POLL_SEC:
-        return _orchestra_log_cache.get("data", {})
-    ssh = shutil.which("ssh") or "ssh"
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            ssh, "-o", "ConnectTimeout=4", f"soumitlahiri@{BIG_APPLE}",
-            "tail -40 /tmp/orchestra.log; echo ---; cat ~/.cortex/lights-state.json 2>/dev/null",
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-        )
-        try:
-            raw, _ = await asyncio.wait_for(proc.communicate(), timeout=6)
-        except asyncio.TimeoutError:
-            proc.kill()
-            return {}
-    except Exception:
-        return {}
-    text = raw.decode("utf-8", errors="replace")
-    if "---" in text:
-        log_part, lights_part = text.rsplit("---", 1)
-    else:
-        log_part, lights_part = text, ""
-
-    lines = [ln.strip() for ln in log_part.splitlines() if "[" in ln or "INFO" in ln]
-    last_state = ""
+async def scrape_cortex_health() -> dict[str, Any]:
+    """Read local Cortex/router health for the kiosk status pane."""
+    if time.time() - _cortex_health_cache["ts"] < POLL_SEC:
+        return _cortex_health_cache.get("data", {})
     backends: dict[str, str] = {}
-    for ln in reversed(lines):
-        if "[GREEN]" in ln or "[AMBER]" in ln or "[RED]" in ln:
-            for tok in ("[GREEN]", "[AMBER]", "[RED]"):
-                if tok in ln:
-                    last_state = tok.strip("[]").lower()
-                    payload = ln.split(tok, 1)[1].strip()
-                    for entry in payload.split():
-                        if "=" in entry:
-                            k, v = entry.split("=", 1)
-                            backends[k] = v
-                    break
-            break
-
+    log_tail: list[str] = []
+    state = "red"
     try:
-        lights = json.loads(lights_part) if lights_part.strip() else {}
-    except json.JSONDecodeError:
-        lights = {}
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            health = await client.get("http://localhost:8765/api/health")
+            backends["cortex-webapp"] = "UP" if health.status_code == 200 else f"HTTP {health.status_code}"
+            log_tail.append(f"cortex-webapp {backends['cortex-webapp']}")
+            try:
+                router = await client.get("http://localhost:8766/healthz")
+                if router.status_code == 200:
+                    rj = router.json()
+                    for url, ok in (rj.get("ollama_backends") or {}).items():
+                        backends[url] = "UP" if ok else "DOWN"
+                    backends["openrouter"] = "UP" if rj.get("openrouter") else "DOWN"
+                    log_tail.append("router UP")
+                else:
+                    backends["router"] = f"HTTP {router.status_code}"
+            except Exception as exc:
+                backends["router"] = "DOWN"
+                log_tail.append(f"router DOWN: {exc}")
+            state = "green" if backends.get("cortex-webapp") == "UP" else "red"
+            if any(v == "DOWN" or str(v).startswith("HTTP") for v in backends.values()):
+                state = "amber" if state == "green" else "red"
+    except Exception as exc:
+        log_tail.append(f"health scrape failed: {exc}")
 
     data = {
-        "state": last_state,
+        "state": state,
         "backends": backends,
-        "lights": lights,
-        "log_tail": lines[-12:],
+        "lights": {},
+        "log_tail": log_tail[-12:],
     }
-    _orchestra_log_cache.update({"ts": time.time(), "data": data, "lines": lines})
+    _cortex_health_cache.update({"ts": time.time(), "data": data})
     return data
 
 
@@ -281,7 +265,7 @@ async def scrape_adguard() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 async def collect() -> dict[str, Any]:
     o, gpu, ag = await asyncio.gather(
-        scrape_cortex_orchestra(),
+        scrape_cortex_health(),
         scrape_seratonin_gpu(),
         scrape_adguard(),
     )
@@ -459,7 +443,7 @@ _HTML = r"""<!DOCTYPE html>
       <div class="surface p-5 flex flex-col gap-3 min-h-0">
         <div class="flex items-baseline justify-between">
           <h2 class="text-xl font-bold cardinal">CORTEX</h2>
-          <span class="mono text-xs text-[var(--text-dim)]">cluster orchestra · 4 nodes</span>
+          <span class="mono text-xs text-[var(--text-dim)]">local Cortex stack</span>
         </div>
         <div class="grow-line"></div>
         <div id="backends-grid" class="grid grid-cols-2 gap-2"></div>

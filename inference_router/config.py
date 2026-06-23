@@ -103,7 +103,7 @@ def load_config() -> RouterConfig:
     ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434").rstrip("/")
     ollama_pref = os.environ.get("OLLAMA_MODEL_PREFERENCE", "gemma4:e4b")
 
-    # OLLAMA_BACKENDS = "http://localhost:11434,http://big-apple:11434"
+    # OLLAMA_BACKENDS = "http://localhost:11434,http://gpu-worker:11434"
     raw_backends = os.environ.get("OLLAMA_BACKENDS", "").strip()
     if raw_backends:
         backends = tuple(b.strip().rstrip("/") for b in raw_backends.split(",") if b.strip())

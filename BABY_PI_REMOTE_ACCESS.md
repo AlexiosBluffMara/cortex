@@ -1,6 +1,6 @@
 # Baby Pi — every way to get into it remotely
 
-Goal: cover every legitimate path from Seratonin (Windows desktop), Big Apple (Mac), Pixel Fold, or any other client. Pick the right tool for the job, don't try to make one tool do all of them.
+Goal: cover every legitimate path from Seratonin (Windows desktop), Seratonin (Mac), Pixel Fold, or any other client. Pick the right tool for the job, don't try to make one tool do all of them.
 
 ## TL;DR — pick one per use case
 
@@ -25,7 +25,7 @@ Already on your stack. Free tier covers everything you need.
 & "C:\Program Files\Tailscale\tailscale.exe" ssh soumit@baby-pi
 ```
 
-### From Big Apple (Mac)
+### From Seratonin (Mac)
 ```bash
 tailscale ssh soumit@baby-pi
 ```
@@ -67,7 +67,7 @@ mstsc.exe /v:baby-pi:3389
 # Login: soumit / <your password>
 ```
 
-### Connect from Big Apple
+### Connect from Seratonin
 - Install **Microsoft Remote Desktop** from the Mac App Store (free)
 - Add PC: `baby-pi`, save credentials
 
@@ -113,7 +113,7 @@ sudo systemctl --user enable --now sunshine
 Sunshine web UI: `https://baby-pi:47990` (self-signed cert, accept once). Pair every Moonlight client by typing the 4-digit PIN it displays.
 
 ### Install Moonlight clients
-- **Big Apple (Mac)**: `brew install --cask moonlight` *or* `Moonlight Game Streaming` from Mac App Store
+- **Seratonin (Mac)**: `brew install --cask moonlight` *or* `Moonlight Game Streaming` from Mac App Store
 - **Seratonin (Windows)**: `winget install Moonlight.Moonlight`
 - **Pixel Fold**: "Moonlight Game Streaming" from Play Store
 - **iPhone172**: "Moonlight Game Streaming" from iOS App Store

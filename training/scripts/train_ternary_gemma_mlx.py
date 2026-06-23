@@ -14,7 +14,7 @@ Pipeline:
   5. Distill: alpha_kl * KL(student || teacher) + alpha_ce * CE(targets)
   6. Save checkpoint; export to HF format; run bitnet.cpp convert helper.
 
-Run on Big Apple:
+Run on Seratonin:
   scp this file + ternary-gemma-e2b-mlx.yaml from Seratonin
   ~/cortex-mlx/bin/python train_ternary_gemma_mlx.py --config <yaml>
 """

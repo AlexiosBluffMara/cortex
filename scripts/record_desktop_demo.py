@@ -45,7 +45,7 @@ from mercury_skills.cortex_scan import submit_and_wait
 from mercury_skills.cortex_scan.scan import format_for_discord
 
 # ── Config ──────────────────────────────────────────────────────────────────
-DEMO_URL          = os.environ.get("CORTEX_DEMO_URL", "https://big-apple.scylla-betta.ts.net")
+DEMO_URL          = os.environ.get("CORTEX_DEMO_URL", "https://redteamkitchen.com")
 WEBUI_CLIP        = os.environ.get("WEBUI_CLIP",   r"D:\cortex\assets\nasa_artemis_15s_silent.mp4")
 DISCORD_CLIP      = os.environ.get("DISCORD_CLIP", r"D:\cortex\assets\demo_clip_20s_silent.mp4")
 DISCORD_CHANNEL   = os.environ.get("DISCORD_DEMO_CHANNEL", "1489805907641503774")  # #bot-test-1

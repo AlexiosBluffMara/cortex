@@ -1257,7 +1257,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 
-// ── Inference node status poller (Seratonin / Big Apple / OpenRouter) ───────
+// ── Inference node status poller (Seratonin / OpenRouter) ───────────────────
 async function pollNodeStatus() {
     try {
         const r = await fetch("/api/health", { cache: "no-store" });
@@ -1269,15 +1269,6 @@ async function pollNodeStatus() {
     } catch (e) {
         setNode("seratonin", "down");
     }
-    // Poll the inference router for big-apple + openrouter
-    try {
-        const r = await fetch("/api/router-health", { cache: "no-store" });
-        if (r.ok) {
-            const d = await r.json();
-            const ba = d.ollama_backends?.["http://100.93.240.52:11434"];
-            setNode("bigapple",   ba ? "up" : "down");
-        }
-    } catch (e) { /* ignore — router may be down independently */ }
 }
 function setNode(name, state) {
     const el = document.querySelector(`.node-${name}`);
@@ -2169,12 +2160,11 @@ window.paintVertexFrame = paintVertexFrame;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Live system monitor + per-scan timing readout
-// Polls /api/fleet-health every 2s — single endpoint, both nodes + services.
+// Polls /api/fleet-health every 2s — single endpoint, local node + services.
 // ─────────────────────────────────────────────────────────────────────────────
 (function wireTelemetry() {
     const seraNode = document.querySelector('.telemetry-node[data-node="seratonin"]');
-    const baNode   = document.querySelector('.telemetry-node[data-node="bigapple"]');
-    if (!seraNode || !baNode) return;
+    if (!seraNode) return;
 
     function setMetric(node, lbl, valueText, fillPct) {
         const rows = node.querySelectorAll(".metric-row");
@@ -2197,7 +2187,7 @@ window.paintVertexFrame = paintVertexFrame;
         if (!view || !view.alive) {
             setBadge(node, "offline", "down");
             setMetric(node, "GPU",  "—", 0);
-            setMetric(node, role === "bigapple" ? "RAM" : "VRAM", "—", 0);
+            setMetric(node, "VRAM", "—", 0);
             setMetric(node, "Queue", "—", 0);
             return;
         }
@@ -2208,20 +2198,16 @@ window.paintVertexFrame = paintVertexFrame;
         const pctGpu = busy ? (60 + Math.random() * 35) : Math.max(2, used / total * 25);
 
         // Compose badge — include services for this node
-        const isLocal = (services && (role === "seratonin"
-            ? services.router_local || services.ollama_local
-            : services.router_peer  || services.ollama_peer));
         let badgeText = view.gpu_state || "idle";
         if (busy) badgeText = "busy";
-        const ollamaUp = role === "seratonin" ? services?.ollama_local : services?.ollama_peer;
-        const routerUp = role === "seratonin" ? services?.router_local : services?.router_peer;
+        const ollamaUp = services?.ollama_local;
+        const routerUp = services?.router_local;
         if (ollamaUp === false) badgeText = "ollama down";
         else if (routerUp === false) badgeText = "router down";
         setBadge(node, badgeText, busy ? "busy" : (ollamaUp === false || routerUp === false ? "down" : "up"));
 
         setMetric(node, "GPU",   Math.round(pctGpu) + "%", pctGpu);
-        setMetric(node, role === "bigapple" ? "RAM" : "VRAM",
-                  used.toFixed(1) + " / " + total.toFixed(0) + " GB", pctMem);
+        setMetric(node, "VRAM", used.toFixed(1) + " / " + total.toFixed(0) + " GB", pctMem);
         setMetric(node, "Queue",
                   ((view.queue_depth ?? 0) + (view.active ? 1 : 0)) + " jobs",
                   Math.min(100, ((view.queue_depth || 0) + (view.active ? 1 : 0)) * 25));
@@ -2230,8 +2216,7 @@ window.paintVertexFrame = paintVertexFrame;
     function applySnapshot(d) {
         const nodes = d.nodes || {};
         const services = d.services || {};
-        paintNode(seraNode, nodes.seratonin, services, "seratonin");
-        paintNode(baNode,   nodes.bigapple,  services, "bigapple");
+        paintNode(seraNode, nodes.seratonin || Object.values(nodes)[0], services, "seratonin");
         window.lastFleet = d;
     }
 
@@ -2242,7 +2227,6 @@ window.paintVertexFrame = paintVertexFrame;
             applySnapshot(await r.json());
         } catch (e) {
             setBadge(seraNode, "unreachable", "down");
-            setBadge(baNode,   "unreachable", "down");
         }
     }
 

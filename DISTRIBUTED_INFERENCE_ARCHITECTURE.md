@@ -6,14 +6,14 @@
 | Node | Tailscale | Role | Hardware | Notes |
 | --- | --- | --- | --- | --- |
 | `seratonin` (this PC) | `100.98.19.87` | Tier-1 GPU + primary storage | RTX 5090 (32 GB GDDR7), 64 GB RAM, Windows 11, D:\ for projects | Always-on; cloudflared tunnel host |
-| `big-apple` (M4 Max) | `100.93.240.52` | Tier-2 inference + warm replica | M4 Max, **48 GB unified RAM**, macOS, Parsec hosting | Always-on; bedroom |
+| `seratonin` (M4 Max) | `127.0.0.1` | Tier-2 inference + warm replica | M4 Max, **48 GB unified RAM**, macOS, Parsec hosting | Always-on; bedroom |
 | `baby-pi` (RPi 5) | (after setup) | Tier-4 ternary LLM + dashboard host | RPi 5 8 GB, 4× Cortex-A76 @ 2.4 GHz, NVMe SSD, 4K HDMI out | **Living room**; runs BitNet b1.58 2B-4T at ~8-11 tok/s; drives 4K monitor as live demo dashboard. **See RASPBERRY_PI_5_SETUP.md** |
 | `miniapple` | `100.75.223.113` | (reserved) | Mac mini class | Online; not in current plan |
 | `dreamer` | offline 36 d | — | Windows | Skip |
 
 ## What "distributing Gemma + TRIBE" actually means (and doesn't)
 
-**It does NOT mean tensor parallelism.** Splitting one inference call across two machines requires sub-millisecond interconnect (NVLink, PCIe 5, or RDMA). Tailscale at LAN speeds (~94 ms ping between seratonin and big-apple) is **5,000× too slow** to make tensor-parallel sharding faster than running on one node. Don't try.
+**It does NOT mean tensor parallelism.** Splitting one inference call across two machines requires sub-millisecond interconnect (NVLink, PCIe 5, or RDMA). Tailscale at LAN speeds (~94 ms ping between seratonin and seratonin) is **5,000× too slow** to make tensor-parallel sharding faster than running on one node. Don't try.
 
 **It DOES mean:**
 
@@ -59,7 +59,7 @@
        ┌───────────────┘                 └────────────────┐
        ▼                                                  ▼
  ┌──────────────────┐                         ┌─────────────────────┐
- │  seratonin (RTX  │                         │  big-apple (M4 Max) │
+ │  seratonin (RTX  │                         │  seratonin (M4 Max) │
  │  5090, 32 GB)    │                         │  48 GB unified      │
  │  Ollama :11434   │                         │  Ollama :11434 over │
  │  -- TRIBE v2     │                         │  Tailscale          │
@@ -77,13 +77,13 @@
 | Model class | Primary | Fallback chain | Why |
 | --- | --- | --- | --- |
 | **TRIBE v2** | `seratonin` only | none | Single-machine, GPU-pinned |
-| **Heavy narration** (gemma4:26b, gemma4:31b) | round-robin seratonin/big-apple | the other → Workers AI | Both can hold the model |
-| **Fast narration** (gemma4:e4b, gemma4:e2b) | `big-apple` | `seratonin` → `baby-pi` (BitNet) → Workers AI | Mac unified memory wins on small models; RPi catches overflow |
-| **Vision gate** (gemma vision) | `big-apple` | `seratonin` | Mac MLX is fast on vision tokens |
-| **Embeddings** (embeddinggemma:300m) | round-robin big-apple/seratonin | the other | Cheap, parallelize |
-| **Whisper / audio** | `big-apple` | none | MLX whisper is faster than CUDA on small clips |
-| **Intent classification / safety gate** | `baby-pi` (BitNet) | `big-apple` → fallthrough | ~600 ms on the Pi for 50-token classifications, free, always-on |
-| **"is this video safe to process?"** | `baby-pi` | `big-apple` | Runs even when desktop+Mac are down |
+| **Heavy narration** (gemma4:26b, gemma4:31b) | round-robin seratonin/seratonin | the other → Workers AI | Both can hold the model |
+| **Fast narration** (gemma4:e4b, gemma4:e2b) | `seratonin` | `seratonin` → `baby-pi` (BitNet) → Workers AI | Mac unified memory wins on small models; RPi catches overflow |
+| **Vision gate** (gemma vision) | `seratonin` | `seratonin` | Mac MLX is fast on vision tokens |
+| **Embeddings** (embeddinggemma:300m) | round-robin seratonin/seratonin | the other | Cheap, parallelize |
+| **Whisper / audio** | `seratonin` | none | MLX whisper is faster than CUDA on small clips |
+| **Intent classification / safety gate** | `baby-pi` (BitNet) | `seratonin` → fallthrough | ~600 ms on the Pi for 50-token classifications, free, always-on |
+| **"is this video safe to process?"** | `baby-pi` | `seratonin` | Runs even when desktop+Mac are down |
 
 Health endpoint on each node: `http://{node}:11434/api/tags`. If 3 consecutive checks fail, mark node **degraded** and route everything to the survivor.
 
@@ -104,7 +104,7 @@ Syncthing chosen over rsync: live, encrypted (Tailscale-only), automatic conflic
 
 Cortex tracks demo submissions, narrations, vision-gate decisions in a SQLite DB. Litestream continuously streams the WAL to:
 - Primary: `seratonin` (write side, low-latency for the relay)
-- Replica: `big-apple` (read-only mirror, queryable from Mac when remote)
+- Replica: `seratonin` (read-only mirror, queryable from Mac when remote)
 - Snapshot target: Cloudflare R2 (every 1 h)
 
 This gives:
@@ -136,7 +136,7 @@ Restic's deduplication means full daily snapshots only cost the delta. Encrypted
 
 ## Always-on configuration
 
-### Mac (`big-apple`, macOS)
+### Mac (`seratonin`, macOS)
 
 ```bash
 # Prevent display sleep AND system sleep when the lid is closed (clamshell mode requires power+display+keyboard;
@@ -194,9 +194,9 @@ Single bottleneck. If seratonin is mid-TRIBE-inference (~30 s on a heavy clip), 
 
 After this change:
 ```
-Browser → Cloud Run → inference-router → {seratonin, big-apple} → response
+Browser → Cloud Run → inference-router → {seratonin, seratonin} → response
 ```
-TRIBE still pins to seratonin. But narration calls (the slow LLM step, ~5–15 s each) split round-robin. Two simultaneous demo submissions: one waits 0 s for narration, the other gets routed to big-apple's Ollama and runs in parallel. **Wall-clock time per submission unchanged for the first user; second concurrent user now sees no queueing.**
+TRIBE still pins to seratonin. But narration calls (the slow LLM step, ~5–15 s each) split round-robin. Two simultaneous demo submissions: one waits 0 s for narration, the other gets routed to seratonin's Ollama and runs in parallel. **Wall-clock time per submission unchanged for the first user; second concurrent user now sees no queueing.**
 
 Caveat: M4 Max gemma4:26b at Q4 is ~30 % slower per-token than the 5090. So the routing prefers M4 for SHORT generations (which gemma's Metal backend handles with low overhead) and 5090 for LONG generations. The router knows.
 
@@ -211,16 +211,16 @@ Caveat: M4 Max gemma4:26b at Q4 is ~30 % slower per-token than the 5090. So the 
    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
    brew install ollama syncthing restic litestream
    ```
-3. Confirm SSH works: `ssh soumit@100.93.240.52` from this Windows PC
+3. Confirm SSH works: `ssh soumit@127.0.0.1` from this Windows PC
 
 ### Phase 2 — Ollama on Mac (5 min, automated once SSH is up)
 Once SSH is on, I'll run from this Windows PC:
 - Push the launchd plist
 - Pull the same Gemma models that are on seratonin
-- Verify `curl http://100.93.240.52:11434/api/tags` returns the expected models
+- Verify `curl http://127.0.0.1:11434/api/tags` returns the expected models
 
 ### Phase 3 — Update inference-router (10 min, automated)
-- Add `OLLAMA_BACKENDS="http://localhost:11434,http://100.93.240.52:11434"` env var
+- Add `OLLAMA_BACKENDS="http://localhost:11434,http://127.0.0.1:11434"` env var
 - Push routing rules per the table above
 - Restart router (parked on 8766 for now — moved off 8765 to avoid the NSSM webapp conflict)
 

@@ -18,12 +18,12 @@ fi
 "$ENV/bin/pip" install --upgrade pip --quiet
 "$ENV/bin/pip" install phue --quiet
 
-# Install the Hue username file from Big Apple if we haven't paired yet on this box.
+# Install the Hue username file from Seratonin if we haven't paired yet on this box.
 if [[ ! -f "$HOME/.python_hue" ]]; then
     if scp -o StrictHostKeyChecking=accept-new \
-        soumitlahiri@big-apple:~/.python_hue \
+        soumitlahiri@seratonin:~/.python_hue \
         "$HOME/.python_hue" 2>/dev/null; then
-        echo "borrowed Hue creds from big-apple"
+        echo "borrowed Hue creds from seratonin"
     else
         echo "WARN: no Hue creds. Press the bridge button, then:"
         echo "  $ENV/bin/python -c 'from phue import Bridge; Bridge(\"192.168.0.134\").connect()'"

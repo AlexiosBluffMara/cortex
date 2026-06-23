@@ -129,7 +129,7 @@ D:\cortex\scripts\
 
 ## What this Pi is NOT
 
-- Not an LLM / inference node (Big Apple's MLX + Seratonin's Ollama cover
+- Not an LLM / inference node (Seratonin's MLX + Seratonin's Ollama cover
   inference; orchestra `BACKENDS` does not include the Pi).
 - Not a kiosk / dashboard display (we tried; pivoted away — headless is
   more useful).

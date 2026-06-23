@@ -556,7 +556,7 @@ For Cortex, the README at `D:/cortex/README.md` should have an equivalent three-
 12. ⬜ **Pin all Python deps with `uv pip compile`** in both repos.
 13. ⬜ **Run the 3-command Mercury quickstart on a fresh Windows VM** (or WSL fresh user). Document any gaps.
 14. ⬜ **Add a `BENCH.md` to Mercury** listing the 194 tok/s, 75 tok/s MTP, 94 tok/s vanilla numbers with the exact commands to reproduce.
-15. ⬜ **Capture a hardware-profile screenshot** showing `nvidia-smi` on Seratonin and `system_profiler SPHardwareDataType` on Big Apple — anchor the "$0/month, runs on a teacher's laptop" claim.
+15. ⬜ **Capture a hardware-profile screenshot** showing `nvidia-smi` on Seratonin and `system_profiler SPHardwareDataType` on Seratonin — anchor the "$0/month, runs on a teacher's laptop" claim.
 
 ### Phase 4 — Demo video (T-7 to T-2)
 

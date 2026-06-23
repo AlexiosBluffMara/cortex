@@ -1,11 +1,11 @@
-"""export_mlx.py — merge LoRA + convert to MLX 4-bit for Big Apple.
+"""export_mlx.py — merge LoRA + convert to MLX 4-bit for Seratonin.
 
 Uses mlx_lm.convert under the hood. Produces an MLX model directory that
-mlx_lm.server (running on Big Apple) can load via --model.
+mlx_lm.server (running on Seratonin) can load via --model.
 
 Run this on the Mac (Apple Silicon) OR on this Windows box (mlx package
 installs even without an MPS device for the convert step). For deployment
-the artifact must be copied to ~/.cache/huggingface/hub/ on Big Apple.
+the artifact must be copied to ~/.cache/huggingface/hub/ on Seratonin.
 """
 from __future__ import annotations
 

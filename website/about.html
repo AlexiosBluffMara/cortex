@@ -56,7 +56,7 @@
   <p class="tag">
     Red Team Kitchen is a one-person research-and-software lab. The hardware lives
     in <strong>Chicago</strong> (call sign Ascended Base) — a single RTX 5090
-    desktop and an M4 Max MacBook sitting next to it. A research node lives in
+    desktop that runs live TRIBE scans. A research node lives in
     <strong>Bloomington–Normal</strong> next to ISU. Everything you see on this
     site — the brain scans, the four narration voices, the local-first agent,
     the public demo URL — is built and shipped by one operator out of those
@@ -122,15 +122,14 @@
 
     <div class="bio blue">
       <h3>Chicago, IL · Ascended Base Lab</h3>
-      <div class="tagline">Where Seratonin and Big Apple actually live</div>
+      <div class="tagline">Where Seratonin, Mini Apple, and Baby Pi fit</div>
       <p>
         The lab — call sign <strong>Ascended Base</strong> — is in
-        <strong>Chicago, Illinois</strong>. Both production GPUs live here:
-        <code>Seratonin</code> (the Windows desktop with the RTX 5090) and
-        <code>Big Apple</code> (the M4 Max MacBook Pro). When you hit the live
-        Cortex demo URL your request travels through a Tailscale Funnel into
-        Chicago, lands on Seratonin, and the Mac is sitting next to it as
-        overflow. The lab also operates a node in Bloomington–Normal —
+        <strong>Chicago, Illinois</strong>. The production GPU is
+        <code>Seratonin</code>, the Windows desktop with the RTX 5090. When you
+        hit the live Cortex demo URL, new TRIBE scans land on Seratonin unless
+        an explicit cloud TRIBE worker has been configured. The lab also operates
+        a node in Bloomington–Normal —
         <code>Mini Apple</code> — that lives near ISU for in-person research
         meetings. <code>Baby Pi</code> (a Raspberry Pi 5 edge node) is in
         progress, not deployed yet.
@@ -220,14 +219,14 @@
 
   Ascended Base Lab (Chicago, IL)                       Bloomington–Normal node
   ├─ Seratonin   Windows · RTX 5090 · 32 GB GDDR7        └─ Mini Apple   Mac · ISU-adjacent
-  └─ Big Apple   Mac · M4 Max · 48 GB unified            (Baby Pi · Raspberry Pi 5 · WIP)
+  └─ Cloud TRIBE worker · optional funded fallback       (Baby Pi · Raspberry Pi 5 · WIP)
   </div>
 </section>
 
 <section>
   <h2>The receipts</h2>
   <ul>
-    <li><strong style="color:var(--text)">Live URL:</strong> <a href="https://big-apple.scylla-betta.ts.net">big-apple.scylla-betta.ts.net</a> — the Tailscale Funnel hostname tells you exactly which machine is serving the page. <code>seratonin</code> is the gaming desktop in Normal. <code>scylla-betta.ts.net</code> is Soumit's personal Tailnet.</li>
+    <li><strong style="color:var(--text)">Live URL:</strong> <a href="https://redteamkitchen.com">redteamkitchen.com</a> — public site, gallery, and Cortex app entrypoint. Live TRIBE scans require Seratonin or a configured cloud worker.</li>
     <li><strong style="color:var(--text)">Mercury identity:</strong> the Discord bot is <code>@abmsnowy</code> (ABM = Alexios Bluff Mara). It's the same single agent everywhere.</li>
     <li><strong style="color:var(--text)">Funding:</strong> self-funded by the LLC. No VC. No grants. The hackathon prizes (Gemma 4 Good · Health &amp; Sciences and Nous Research × Kimi · Creative) are the only outside money in play.</li>
     <li><strong style="color:var(--text)">Trademark notes:</strong> Gemma is a trademark of Google LLC. ISU logos and seals are trademarks of Illinois State University; this site uses ISU's published brand colors (Cardinal Red, ISU Gold, ISU Blue) which are public reference values, not protected marks.</li>

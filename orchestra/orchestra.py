@@ -1,10 +1,9 @@
 """cortex-orchestra
-Always-on daemon that keeps Ascended Base nodes "conversing" and reflects
-cluster health into the smart home (Hue + Google Home / Cast).
+Always-on daemon that reflects Ascended Base health into the smart home
+(Hue + Google Home / Cast).
 
-Runs on Big Apple (always-on Mac). Every PROBE_SEC seconds it:
-  1. Pings each backend (MLX:8090, Big Apple Ollama:11434, Seratonin
-     Ollama:11434, Baby Pi BitNet:8000) with a tiny prompt.
+Runs on Seratonin. Every PROBE_SEC seconds it:
+  1. Pings the local Ollama backend with a tiny prompt.
   2. Logs latency + tok/s to ~/.cortex/orchestra.db.
   3. On health-state change:
        - Pulses Hue lights to a state color (green/amber/red).
@@ -63,9 +62,12 @@ class Backend:
 
 
 BACKENDS: list[Backend] = [
-    Backend("mlx-bigapple",     "mlx",    "http://127.0.0.1:8090",    "mlx-community/gemma-4-26b-a4b-it-4bit"),
-    Backend("ollama-bigapple",  "ollama", "http://127.0.0.1:11434",   "gemma4:e4b"),
-    Backend("ollama-seratonin", "ollama", "http://seratonin:11434",   "gemma4:e4b"),
+    Backend(
+        "ollama-seratonin",
+        "ollama",
+        os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/"),
+        os.environ.get("OLLAMA_MODEL", "gemma4:e4b"),
+    ),
     # Baby Pi is a Cortex Edge node (Tailscale + AdGuard Home) — NOT an
     # inference backend. It does not run any LLM. Don't add Pi entries here.
 ]

@@ -1,4 +1,4 @@
-# PyTorch+MPS QAT for Big Apple (M4 Max, 48 GB unified)
+# PyTorch+MPS QAT for a legacy local MLX/MPS experiment
 
 teacher: /Users/soumitlahiri/cortex-training/gemma-4-E2B-it
 student_init: /Users/soumitlahiri/cortex-training/gemma-4-E2B-it

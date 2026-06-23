@@ -31,7 +31,7 @@ Drop any video / audio / image / PDF / text file into the demo. TRIBE v2 (V-JEPA
 
 **Numbers**
 • Local cost: ~$0.011 / scan (5090 amortised) vs ~$0.32 on a GCP L4
-• Two-node fleet: Seratonin (RTX 5090, Chicago) + Big Apple (M4 Max, Chicago)
+• Two-node fleet: Seratonin (RTX 5090, Chicago) + Seratonin (M4 Max, Chicago)
 • Cloudflare Tunnel + Tailscale Funnel for public ingress
 • 11+ scans in the gallery, 4 narrations each, all reachable from one URL
 

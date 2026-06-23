@@ -102,21 +102,21 @@
     <thead><tr>
       <th>Resource</th>
       <th class="num">Local (Seratonin · 5090)</th>
-      <th class="num">Local (Big Apple · M4 Max)</th>
+      <th class="num">Cloud worker</th>
       <th class="num">Cloud (GCP L4)</th>
     </tr></thead>
     <tbody>
-      <tr><td>GPU peak draw during scan</td><td class="num">~450 W</td><td class="num">~60 W</td><td class="num">N/A (you pay $/hr)</td></tr>
-      <tr><td>Energy per scan (5 min @ peak)</td><td class="num">37.5 Wh</td><td class="num">5 Wh</td><td class="num">N/A</td></tr>
-      <tr><td>Electricity at $0.12/kWh</td><td class="num">$0.0045</td><td class="num">$0.0006</td><td class="num">N/A</td></tr>
-      <tr><td>Hourly rental (24/7 if billed)</td><td class="num">N/A (owned)</td><td class="num">N/A (owned)</td><td class="num">~$0.70/hr</td></tr>
-      <tr><td>5-min slice of cloud GPU</td><td class="num good">$0.011 (incl. amortized hardware)</td><td class="num good">$0.014</td><td class="num bad">$0.058</td></tr>
-      <tr><td><strong>+ networking, egress, idle</strong></td><td class="num good">$0.011 total</td><td class="num good">$0.014 total</td><td class="num bad">~$0.32 total realistic</td></tr>
+      <tr><td>GPU peak draw during scan</td><td class="num">~450 W</td><td class="num">N/A</td><td class="num">N/A (you pay $/hr)</td></tr>
+      <tr><td>Energy per scan (5 min @ peak)</td><td class="num">37.5 Wh</td><td class="num">N/A</td><td class="num">N/A</td></tr>
+      <tr><td>Electricity at $0.12/kWh</td><td class="num">$0.0045</td><td class="num">N/A</td><td class="num">N/A</td></tr>
+      <tr><td>Hourly rental (when enabled)</td><td class="num">N/A (owned)</td><td class="num">provider priced</td><td class="num">~$0.70/hr</td></tr>
+      <tr><td>5-min slice of cloud GPU</td><td class="num good">$0.011 (incl. amortized hardware)</td><td class="num warn">provider priced</td><td class="num bad">$0.058</td></tr>
+      <tr><td><strong>+ networking, egress, idle</strong></td><td class="num good">$0.011 total</td><td class="num warn">depends on provider</td><td class="num bad">~$0.32 total realistic</td></tr>
     </tbody>
   </table>
 
   <p style="font-size:0.88rem; color:var(--text-mid)">
-    Hardware amortization: 5090 at $2,800 over 4 years of 24/7 demo use = $0.00080/hr ≈ $0.0067 per scan. M4 Max at $4,200 over 4 years (assume 8 hrs/day demo use) = $0.013 per scan.
+    Hardware amortization: 5090 at $2,800 over 4 years of 24/7 demo use = $0.00080/hr ≈ $0.0067 per scan. Cloud workers stay off by default and become useful only when the PC is unavailable or the public demo needs isolated capacity.
   </p>
 </section>
 
@@ -145,12 +145,12 @@
         <td class="num good">$5,860</td>
       </tr>
       <tr>
-        <td><strong>Buy M4 Max MacBook</strong> (Big Apple)</td>
-        <td><strong>$4,200</strong> (M4 Max 48GB)</td>
-        <td class="num">$5 electricity (60W avg)</td>
-        <td class="num good">$4,260</td>
-        <td class="num good">$4,380</td>
-        <td class="num good">$4,500</td>
+        <td><strong>Configure cloud worker</strong></td>
+        <td><strong>$0 upfront</strong></td>
+        <td class="num">usage-based</td>
+        <td class="num warn">depends on traffic</td>
+        <td class="num warn">depends on traffic</td>
+        <td class="num warn">depends on traffic</td>
       </tr>
       <tr>
         <td>Rent GCP L4 GPU 24/7</td>
@@ -188,7 +188,7 @@
   </table>
 
   <div class="key-callout">
-    <p><strong>Break-even with the cheapest reliable cloud (GCP L4):</strong> 5090 build pays itself off in <strong>~7.9 months</strong>. Big Apple pays itself off in <strong>~8.4 months</strong>. After year one, every additional year saves $5,000–$25,000 vs cloud.</p>
+    <p><strong>Break-even with the cheapest reliable cloud (GCP L4):</strong> 5090 build pays itself off in <strong>~7.9 months</strong>. After year one, every additional year saves $5,000–$25,000 vs cloud if the workload is steady.</p>
     <p><strong>The catch:</strong> if you only need 5 hours of GPU time per month, cloud wins. The crossover is around <strong>40 GPU-hours/month</strong> — anything above that and ownership is cheaper.</p>
   </div>
 </section>
@@ -218,7 +218,7 @@
       <tr><td><strong>Replicate</strong> · L40s</td>                         <td class="num">$0.000725/sec</td><td class="num">$0.22</td><td class="num">N/A (per-call)</td><td>Easiest API; most expensive per second</td></tr>
       <tr><td><strong>OpenRouter Gemma-4-26B FREE</strong></td>              <td class="num good">$0.00</td><td class="num good">$0.00</td><td class="num good">$0</td><td>Limit: 200 req/day, narration only</td></tr>
       <tr><td colspan="2"><strong>Local Seratonin (RTX 5090)</strong></td>   <td class="num good">$0.011</td><td class="num good">$31</td><td>Owned hardware</td></tr>
-      <tr><td colspan="2"><strong>Local Big Apple (M4 Max)</strong></td>     <td class="num good">$0.014</td><td class="num good">$5</td><td>Owned hardware</td></tr>
+      <tr><td colspan="2"><strong>Cloud TRIBE worker</strong></td>           <td class="num warn">provider priced</td><td class="num warn">usage-based</td><td>Explicit fallback, off by default</td></tr>
     </tbody>
   </table>
 
@@ -250,8 +250,8 @@
       <tr>
         <td><strong>1× (current)</strong></td>
         <td class="num">10–50</td>
-        <td>Seratonin (5090) primary + Big Apple (M4 Max) overflow + OpenRouter cloud failover</td>
-        <td class="num good">~$36/month electricity (both nodes 24/7)</td>
+        <td>Seratonin (5090) primary + optional cloud TRIBE worker + OpenRouter narration failover</td>
+        <td class="num good">~$31/month electricity + optional cloud usage</td>
       </tr>
       <tr>
         <td><strong>10×</strong></td>
@@ -289,7 +289,7 @@
 <section id="failover">
   <h2>Active failover &amp; load balancing — local AND cloud</h2>
 
-  <p>Our two-node local setup (Seratonin + Big Apple) is a <strong>working miniature</strong> of the cloud cluster topology. Same routing logic, same failure modes, same recovery.</p>
+  <p>Our current setup is <strong>local-first with explicit cloud fallback</strong>. Same routing logic, same failure modes, same recovery, but no hidden peer laptop in the path.</p>
 
   <h3>Local pattern (running right now)</h3>
   <pre style="background:#0d0e13; border:1px solid rgba(56,58,71,0.6); border-left:3px solid #CC0000; padding:1rem; border-radius:8px; overflow-x:auto; font-family:'JetBrains Mono', monospace; font-size:0.82rem; line-height:1.55; color:#d8dae0">
@@ -297,13 +297,13 @@
      ↓ HTTPS
    ┌──────────────────── Tailscale Funnel ────────────────────┐
    │                                                          │
-   │   Active node (Seratonin OR Big Apple)                   │
-   │     FastAPI (8773) ── /api/scan, /api/scans, static      │
+   │   Active node (Seratonin)                                │
+   │     FastAPI (8765) ── /api/scan, /api/scans, static      │
    │     Inference Router (8766)                              │
    │       round-robin pool:                                  │
    │         ├─ local Ollama   (low latency)                  │
-   │         ├─ peer Ollama    (5–20 ms over Tailscale)       │
-   │         └─ OpenRouter     (cloud failover, $0)           │
+   │         ├─ OpenRouter     (narration failover, $0)       │
+   │         └─ Cloud TRIBE    (funded worker, explicit)      │
    │                                                          │
    │   Per-request retry: 3 backends × 2 attempts = 6 tries   │
    │   before user sees a 502. (We've never hit one.)         │
@@ -313,9 +313,9 @@
   <p>This is "active-active with intelligent local preference":</p>
   <ul style="margin-left:1.5rem; line-height:1.7">
     <li><strong>Round-robin</strong> at request granularity — no sticky sessions, no warm-up cost</li>
-    <li><strong>Per-request failover</strong> — if Big Apple takes 200 ms longer than expected, we retry on Seratonin within the same client request</li>
-    <li><strong>Failure isolation</strong> — losing one node degrades narration latency by ~10%, doesn't drop traffic</li>
-    <li><strong>Cloud underlay</strong> — OpenRouter is free-tier and handles 200 req/day per backend, which covers a full demo day even if both local nodes vanish</li>
+    <li><strong>Per-request failover</strong> — narration can retry through OpenRouter inside the same client request</li>
+    <li><strong>Failure isolation</strong> — losing the local PC disables new TRIBE scans unless the cloud worker is enabled, but the static site and existing gallery stay up</li>
+    <li><strong>Cloud underlay</strong> — OpenRouter covers narration; a configured cloud TRIBE worker covers paid live scan capacity</li>
   </ul>
 
   <h3>Cloud-scale equivalent (architecture, not running)</h3>
@@ -343,7 +343,7 @@
    via DNS health-check withdrawal.
   </pre>
 
-  <p><strong>The only thing the cloud version adds beyond what we run locally:</strong> geographic failover (region-level) and storage durability (multi-regional GCS). Everything else — round-robin GPU pools, request-level retry, OpenRouter cloud underlay — is identical to what's running on Seratonin + Big Apple right now. <strong>The local setup is a fractal of the cloud setup.</strong></p>
+  <p><strong>The cloud version adds:</strong> geographic failover, storage durability, and independent GPU capacity for live scans when Seratonin is offline. The local setup remains the simplest, cheapest source of truth.</p>
 </section>
 
 <!-- ════════════════════════ MERCURY ════════════════════════ -->

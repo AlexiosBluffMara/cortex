@@ -6,6 +6,7 @@ without spinning up Ollama or TRIBE v2.
 from __future__ import annotations
 
 import io
+import re
 import socket
 import sys
 import threading
@@ -785,6 +786,50 @@ class TestSimulatedBOLD:
 
 
 class TestStatic:
+    def test_retired_laptop_routes_are_not_reintroduced(self):
+        root = Path(__file__).resolve().parents[2]
+        scan_roots = [
+            "webapp",
+            "fleet",
+            "dashboard",
+            "orchestra",
+            "inference_router",
+            "cortex",
+            "mercury_skills",
+            "website",
+            "docs",
+            "scripts",
+            "training",
+            "packages/mercury",
+        ]
+        retired_terms = [
+            "big " + "apple",
+            "big" + "apple",
+            "big-" + "apple",
+            "100." + "93." + "240." + "52",
+            "cortex_" + "tribe_" + "proxy",
+            "tribe_" + "proxy_" + "url",
+            "proxy-from-" + "big" + "apple",
+        ]
+        forbidden = re.compile("|".join(re.escape(term) for term in retired_terms), re.IGNORECASE)
+        offenders: list[str] = []
+        for rel_root in scan_roots:
+            base = root / rel_root
+            if not base.exists():
+                continue
+            for path in base.rglob("*"):
+                if not path.is_file():
+                    continue
+                if any(part in {"__pycache__", ".pytest_cache", "node_modules"} for part in path.parts):
+                    continue
+                try:
+                    text = path.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    continue
+                if forbidden.search(text):
+                    offenders.append(str(path.relative_to(root)))
+        assert offenders == []
+
     def test_root_returns_404_when_viewer_not_built(self, client, monkeypatch, tmp_path):
         # If the viewer build is genuinely missing, GET / should 404 with a clear message.
         from webapp import server as srv

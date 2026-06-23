@@ -28,9 +28,9 @@ Mercury runs (agentic_opd / hermes_swe / web_research / terminal_test envs)
               ↓
            exports/mercury-gemma4-e4b-<DATE>-mlx/
               ↓
-           scp → Big Apple ~/.cache/huggingface/hub/
+           scp → Seratonin ~/.cache/huggingface/hub/
               ↓
-           launchctl reload ai.mlx.server  (Big Apple MLX :8090)
+           launchctl reload ai.mlx.server  (Seratonin MLX :8090)
 ```
 
 The inference router (`inference_router/router.py`) hot-picks whichever model

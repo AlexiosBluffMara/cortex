@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# start-orchestra.sh — finalize the orchestra daemon on Big Apple.
+# start-orchestra.sh — finalize the orchestra daemon on Seratonin.
 # Assumes ~/cortex-orchestra/orchestra.py already exists.
 # Picks Living Room speaker (Google Home Mini) as the primary Cast target.
 

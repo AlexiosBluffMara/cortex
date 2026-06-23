@@ -86,8 +86,8 @@
     <div class="ts">last update <span id="last-ts">—</span></div>
   </header>
   <p class="sub">
-    Public face: <a href="https://big-apple.scylla-betta.ts.net" target="_blank">big-apple.scylla-betta.ts.net</a>
-    · TRIBE inference: <a href="https://seratonin.scylla-betta.ts.net" target="_blank">seratonin.scylla-betta.ts.net</a>
+    Public face: <a href="https://redteamkitchen.com" target="_blank">redteamkitchen.com</a>
+    · TRIBE inference: Seratonin local RTX 5090 or configured cloud worker
     · <a href="/gallery.html">gallery</a> · <a href="/personas.html">personas</a> · <a href="/specs.html">specs</a>
   </p>
 
@@ -96,11 +96,6 @@
     <div class="card" id="card-seratonin">
       <h2>Seratonin <span class="role">RTX 5090 · TRIBE worker · Chicago</span> <span class="pill" id="pill-seratonin">…</span></h2>
       <div class="kv" id="kv-seratonin"></div>
-    </div>
-    <!-- Big Apple card -->
-    <div class="card" id="card-bigapple">
-      <h2>Big Apple <span class="role">M4 Max · public face · Chicago</span> <span class="pill" id="pill-bigapple">…</span></h2>
-      <div class="kv" id="kv-bigapple"></div>
     </div>
   </div>
 
@@ -138,9 +133,7 @@ const els = {
   txt:       $("#overall-text"),
   ts:        $("#last-ts"),
   kvSera:    $("#kv-seratonin"),
-  kvBA:      $("#kv-bigapple"),
   pillSera:  $("#pill-seratonin"),
-  pillBA:    $("#pill-bigapple"),
   services:  $("#services"),
   watchdog:  $("#watchdog-card"),
   watchdogG: $("#watchdog-grid"),
@@ -156,8 +149,8 @@ function fmtSec(s) {
   return Number(s).toFixed(1) + " s";
 }
 function paintNode(prefix, view, services) {
-  const kv = prefix === "seratonin" ? els.kvSera : els.kvBA;
-  const pill = prefix === "seratonin" ? els.pillSera : els.pillBA;
+  const kv = els.kvSera;
+  const pill = els.pillSera;
   if (!view || !view.alive) {
     pill.textContent = "offline";
     pill.className = "pill down";
@@ -173,7 +166,7 @@ function paintNode(prefix, view, services) {
   const memBar = pct > 85 ? "bad" : (pct > 65 ? "warn" : "");
   kv.innerHTML = `
     <div class="k">device</div><div class="v">${view.device_name || "?"} (${view.device_kind || "?"})</div>
-    <div class="k">${prefix === "bigapple" ? "RAM" : "VRAM"}</div>
+    <div class="k">VRAM</div>
       <div class="v">${fmtBytes(used)} / ${fmtBytes(total)} — ${pct}%
         <div class="bar ${memBar}"><div class="fill" style="width:${Math.max(0,Math.min(100,pct))}%"></div></div></div>
     <div class="k">queue</div><div class="v">${view.queue_depth ?? 0} jobs${view.active ? " · 1 active" : ""}</div>
@@ -187,9 +180,8 @@ function renderServices(services) {
   const order = [
     ["router_local",  "Router · local (8766)"],
     ["ollama_local",  "Ollama · local (11434)"],
-    ["router_peer",   "Router · peer (8766)"],
-    ["ollama_peer",   "Ollama · peer (11434)"],
     ["openrouter",    "OpenRouter (cloud)"],
+    ["cloud_tribe",   "Cloud TRIBE worker"],
   ];
   els.services.innerHTML = order.map(([k, label]) => {
     const v = services?.[k];
@@ -204,13 +196,10 @@ function overallState(d) {
   const nodes = d?.nodes || {};
   const services = d?.services || {};
   const seraOk = nodes.seratonin?.alive;
-  const baOk   = nodes.bigapple?.alive;
-  // Either local router OR peer router being up = inference reachable.
-  const routerOk = services.router_local === true || services.router_peer === true;
-  const ollamaOk = services.ollama_local === true || services.ollama_peer === true;
-  if (!seraOk && !baOk)            return ["down",     "all nodes offline"];
+  const routerOk = services.router_local === true;
+  const ollamaOk = services.ollama_local === true;
+  if (!seraOk)                     return ["down",     "local node offline"];
   if (!routerOk || !ollamaOk)      return ["degraded", "inference degraded"];
-  if (!seraOk || !baOk)            return ["degraded", "one node offline"];
   return ["healthy", "operational"];
 }
 
@@ -219,8 +208,7 @@ async function pollFleet() {
     const r = await fetch("/api/fleet-health", { cache: "no-store" });
     if (!r.ok) throw new Error("HTTP " + r.status);
     const d = await r.json();
-    paintNode("seratonin", d.nodes?.seratonin, d.services);
-    paintNode("bigapple",  d.nodes?.bigapple,  d.services);
+    paintNode("seratonin", d.nodes?.seratonin || Object.values(d.nodes || {})[0], d.services);
     renderServices(d.services || {});
     const [cls, txt] = overallState(d);
     els.h1.className = cls;

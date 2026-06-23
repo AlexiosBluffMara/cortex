@@ -1,6 +1,6 @@
-# Mac → Pixel — operate the Pixel from Big Apple
+# Mac → Pixel — operate the Pixel from Seratonin
 
-Goal: when you're at Big Apple, you can mirror, control, and install apps on the Pixel without ever touching the phone. Two tools, both Googley.
+Goal: when you're at Seratonin, you can mirror, control, and install apps on the Pixel without ever touching the phone. Two tools, both Googley.
 
 ## The two tools
 

@@ -29,7 +29,6 @@ Restart=on-failure
 RestartSec=4
 Environment=PORT=9090
 Environment=MERCURY_HOME=/mnt/d/mercury_home
-Environment=BIG_APPLE_HOST=big-apple
 Environment=PI_HOST=baby-pi
 Environment=ADGUARD_USER=soumit
 Environment=ADGUARD_PASS=ChangeMeNow!

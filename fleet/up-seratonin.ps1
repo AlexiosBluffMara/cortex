@@ -43,7 +43,7 @@ function StartDetached($Name, $Exe, $Args, $Cwd, $Log) {
 }
 
 # 1. Inference router (8766)
-$env:OLLAMA_BACKENDS = "http://localhost:11434,http://100.93.240.52:11434"
+$env:OLLAMA_BACKENDS = "http://localhost:11434"
 $env:ROUTER_PORT     = "8766"
 StartDetached "router" $Venv @("-m","uvicorn","inference_router.server:app","--host","0.0.0.0","--port","8766","--log-level","info") $Repo "$Logs\cortex_router.log"
 

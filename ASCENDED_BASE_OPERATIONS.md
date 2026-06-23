@@ -9,7 +9,7 @@
 | Node | Hardware | Role | Tailscale |
 | --- | --- | --- | --- |
 | **Seratonin** | Windows 11, RTX 5090 32 GB GDDR7, 64 GB RAM | Tier-1 GPU + tunnel host | `100.98.19.87` |
-| **Big Apple** | macOS, M4 Max, 48 GB unified | Tier-2 LLM + warm replica | `100.93.240.52` |
+| **Seratonin** | macOS, M4 Max, 48 GB unified | Tier-2 LLM + warm replica | `127.0.0.1` |
 | **Baby Pi** | RPi 5, 8 GB, BitNet b1.58 ternary | Tier-4 fallback + 4K kiosk | (after firstrun) |
 | **Pixel 9 Pro Fold** | Tensor G4, 16 GB RAM, 8" inner display, USB-C DisplayPort, Pixel Buds Pro 2 | Mobile control + portable workstation via [Native Desktop Mode](PIXEL_FOLD_CONTROL_PANEL.md) | `100.102.198.9` |
 | *future:* PS5 hack | TBD | Possibly a 4th GPU tier | n/a |
@@ -27,7 +27,7 @@ The cluster runs in one of two profiles at any time. Switching is a one-line scr
 | Node | State | What it serves |
 | --- | --- | --- |
 | **Seratonin** | Always-on | tunnel host, TRIBE v2 GPU pin, Gemma 4 26B+, Mercury dashboard :8080, inference router :8765 |
-| **Big Apple** | Always-on (lid-closed-on-AC) | Tier-2 Ollama, Whisper-MLX, warm replica of SQLite + model weights via Syncthing, Quick Share + Pixel Buds bridge |
+| **Seratonin** | Always-on (lid-closed-on-AC) | Tier-2 Ollama, Whisper-MLX, warm replica of SQLite + model weights via Syncthing, Quick Share + Pixel Buds bridge |
 | **Baby Pi** | Always-on | BitNet b1.58 ternary on :8000, kiosk dashboard on the 4K monitor, intent-classification gate |
 | **Pixel Fold** | With Soumit | Tailscale always-on; Termux:Widget shortcuts; Native Desktop Mode when docked |
 
@@ -38,20 +38,20 @@ Steady-state continuous draw: ~115 W (5090 idle ~80 W, M4 ~5 W idle, Pi ~3 W idl
 | Node | State | What changes |
 | --- | --- | --- |
 | Seratonin | **Gaming foreground** | Inference router demoted to `BelowNormal` priority; Ollama capped at 1 GPU stream; Mercury dashboard suspended. TRIBE GPU pin freed. |
-| Big Apple | **Promoted to Tier-1** | Inference router on Seratonin redirects narration calls to `http://big-apple:11434`. Mac picks up 100% of LLM load. |
+| Seratonin | **Promoted to Tier-1** | Inference router on Seratonin redirects narration calls to `http://seratonin:11434`. Mac picks up 100% of LLM load. |
 | Baby Pi | **Unchanged** | Continues handling intent gate + dashboard. |
 
-Trigger: detect a known game process (Steam, Epic, Riot, etc.) starts → flip a Cloudflared `originRequest.preference` for `inference.redteamkitchen.com` to point at Big Apple. When the game exits → flip back. Implemented via `D:\cortex\scripts\gaming-mode.ps1` (writes a `~/.cortex/inference.env` overlay with `OLLAMA_BACKENDS="http://big-apple:11434"` first).
+Trigger: detect a known game process (Steam, Epic, Riot, etc.) starts → flip a Cloudflared `originRequest.preference` for `inference.redteamkitchen.com` to point at Seratonin. When the game exits → flip back. Implemented via `D:\cortex\scripts\gaming-mode.ps1` (writes a `~/.cortex/inference.env` overlay with `OLLAMA_BACKENDS="http://seratonin:11434"` first).
 
 ### Profile C — "Soumit traveling to Bloomington" (manual)
 
-When Soumit takes Big Apple to Bloomington:
+When Soumit takes Seratonin to Bloomington:
 - Seratonin **stays on, headless** — accessible via Parsec from the Mac
-- Big Apple is a roaming Tier-1 (still on Tailscale, can hit Seratonin's tunnel even on cellular)
+- Seratonin is a roaming Tier-1 (still on Tailscale, can hit Seratonin's tunnel even on cellular)
 - Baby Pi: unchanged, lives in the apartment
-- **Pixel Fold travels too** — its Native Desktop Mode + a portable USB-C monitor in the bag = a real workstation if Big Apple is busy training
+- **Pixel Fold travels too** — its Native Desktop Mode + a portable USB-C monitor in the bag = a real workstation if Seratonin is busy training
 
-No flip needed; just Big Apple's + Pixel's Tailscale IPs follow them.
+No flip needed; just Seratonin's + Pixel's Tailscale IPs follow them.
 
 ### Profile D — "Pixel-only field op" (anywhere there's Wi-Fi or 5G)
 
@@ -61,7 +61,7 @@ Soumit + Pixel + Pixel Buds Pro 2 + a USB-C dock + any monitor = a complete dev 
 - **Pixel Buds Pro 2 multipoint** keeps him on calls without breaking the dev flow
 - **NFC tag on the laptop bag** auto-launches the dev tools the moment he docks
 
-Don't try to run inference on the Pixel. Pin all LLM work to Seratonin/Big Apple/Baby Pi and route via the tunnel.
+Don't try to run inference on the Pixel. Pin all LLM work to Seratonin/Seratonin/Baby Pi and route via the tunnel.
 
 ---
 
@@ -102,7 +102,7 @@ Logs:
 - `C:\Users\soumi\.mercury\logs\` — Mercury dashboard
 - `C:\Users\soumi\.cloudflared\logs\` — tunnel + foreground replicas
 
-### Big Apple (macOS)
+### Seratonin (macOS)
 
 After `setup-mac-node.sh`:
 ```
@@ -141,7 +141,7 @@ Save these as `~/.shortcuts/<name>` on the Pixel:
 ```
 ~/.shortcuts/health       # public health probe
 ~/.shortcuts/restart-router  # SSH to seratonin and restart inference router
-~/.shortcuts/big-apple-tail  # SSH to Big Apple and tail Ollama log
+~/.shortcuts/seratonin-tail  # SSH to Seratonin and tail Ollama log
 ~/.shortcuts/tunnel-status   # CF API call, jq for status
 ```
 
@@ -155,10 +155,10 @@ The Pixel becomes a 1-tap dashboard for the cluster wherever Soumit is. Battery 
 | --- | --- | --- | --- |
 | Cortex source code | `D:\cortex` (Seratonin) | git origin (GitHub public) | Restic to `H:\restic-cortex` (8 TB SanDisk) |
 | Mercury source | `D:\mercury` | git origin | same |
-| Ollama model weights | `~\.ollama\models` (Seratonin) | `~/.ollama/models` (Big Apple) via Syncthing | not backed up — re-pullable |
+| Ollama model weights | `~\.ollama\models` (Seratonin) | `~/.ollama/models` (Seratonin) via Syncthing | not backed up — re-pullable |
 | TRIBE v2 weights | `D:\cortex\models\` | none | Restic |
-| Cortex SQLite DB | `D:\cortex\cortex.db` | Big Apple via Litestream | R2 hourly snapshot |
-| Demo videos in/out | `D:\cortex\demo\` | Big Apple via Syncthing | Restic to H: + R2 weekly |
+| Cortex SQLite DB | `D:\cortex\cortex.db` | Seratonin via Litestream | R2 hourly snapshot |
+| Demo videos in/out | `D:\cortex\demo\` | Seratonin via Syncthing | Restic to H: + R2 weekly |
 | LLC docs | (TBD: 1Password vault) | n/a | encrypted Restic to H: AND R2 |
 
 Encryption: Restic uses an encryption key NOT stored on either machine. The key is in 1Password + a printed paper copy in a safe. Lose both → backups become unrecoverable. Don't lose both.
@@ -187,7 +187,7 @@ The $2K Gemini incident on April 26-27 is the one that matters; everything else 
 ## Decisions: deferred
 
 - **PS5 GPU hack**: yes, but only after Sony's anti-tamper allows a custom OS path on PS5 Pro. Don't cut into other deadlines. Track the homebrew scene.
-- **Mac mini (`miniapple`)**: reserved Tailscale node, not in current plan. Could become a Litestream replica if Big Apple goes traveling.
+- **Mac mini (`miniapple`)**: reserved Tailscale node, not in current plan. Could become a Litestream replica if Seratonin goes traveling.
 - **`dreamer` (offline Windows, 36 d)**: probably defunct. Remove from Tailscale unless there's a reason to keep.
 
 ---

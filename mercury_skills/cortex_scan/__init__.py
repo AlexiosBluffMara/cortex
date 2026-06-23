@@ -2,7 +2,7 @@
 
 Flow when Mercury sees a scan request (Discord attachment, web upload, CLI arg):
 
-  1. POST file → https://big-apple.scylla-betta.ts.net/api/scan
+  1. POST file → CORTEX_URL/api/scan
   2. Poll /api/scan/<id> until status == "complete" (or "failed", or timeout)
   3. Use the browser skill to screenshot the 3D brain at the scan URL
   4. Return a structured response: {scan_id, top_rois, peak_t, narrations,

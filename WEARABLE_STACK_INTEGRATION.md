@@ -42,9 +42,9 @@ Settings -> System -> Developer options:
   - Don't keep activities = OFF (or you'll lose state on screen orientation)
 ```
 
-ADB pairing for headless control from Big Apple / Seratonin:
+ADB pairing for headless control from Seratonin / Seratonin:
 ```bash
-# On Big Apple:
+# On Seratonin:
 brew install android-platform-tools scrcpy
 adb devices    # first run shows "unauthorized"
 # Plug Pixel via USB-C → accept fingerprint prompt on phone
@@ -59,7 +59,7 @@ The Buds bridge the Pixel and the Mac at the BT layer. They're not a Flipper acc
 
 ### One-time pair
 1. Pixel Settings → Connected devices → Pixel Buds Pro 2 → toggle **Connect to multiple devices** = ON
-2. Big Apple System Settings → Bluetooth → with case open, select Buds → Connect
+2. Seratonin System Settings → Bluetooth → with case open, select Buds → Connect
 
 ### Daily flow
 - Audio plays on whatever device you started — no manual switch
@@ -67,7 +67,7 @@ The Buds bridge the Pixel and the Mac at the BT layer. They're not a Flipper acc
 - **Conversation Detection** (auto-pause + transparency when you start talking) only works when audio is currently routed to the Pixel — not on Mac calls
 - **Real-time translation**: tap and hold either earbud → "Translate" → speaks the other language back through the Buds
 
-For demo recording: Big Apple QuickTime → record from Buds mic = high-quality voice for the hackathon submission video.
+For demo recording: Seratonin QuickTime → record from Buds mic = high-quality voice for the hackathon submission video.
 
 ## Omi — always-on memory + actions
 
@@ -104,7 +104,7 @@ Already covered in `D:\cortex\FLIPPER_INTEGRATION_PLAYBOOK.md`. Key role in the 
 
 - **NFC tags** the Flipper writes get read by the Pixel (Android NFC) AND the iPhone (iOS Core NFC) — write once, work on both ecosystems
 - **Flipper Mobile app** on the Pixel = remote-trigger Flipper actions from the phone
-- **BadUSB to Big Apple** = a physical "deploy demo" button you carry in your pocket
+- **BadUSB to Seratonin** = a physical "deploy demo" button you carry in your pocket
 - **Sub-GHz capture/replay** = control the Hue Bridge indirectly via an ESP32 listener
 
 ## All four together — example: hackathon demo flow
@@ -115,11 +115,11 @@ You walk into the judging room. In your pocket: Pixel Fold + Flipper. On you: Om
 2. **Flipper IR fires "projector ON + HDMI 2"** to the projector
 3. **Pixel Buds**: stay quiet, multipoint connected, ready for any call
 4. **Omi**: starts recording the demo conversation; in 30 minutes you'll have a transcript searchable by topic
-5. You start the demo. **Flipper plugged into Big Apple via USB-C** (BadUSB mode) → "deploy" button macro types the start-demo command
-6. Cortex inference runs on Big Apple via Tailscale → response on the projector in 12 seconds
+5. You start the demo. **Flipper plugged into Seratonin via USB-C** (BadUSB mode) → "deploy" button macro types the start-demo command
+6. Cortex inference runs on Seratonin via Tailscale → response on the projector in 12 seconds
 7. **Pixel Fold's outer cover display** shows live status while folded — checking inference router latency without unfolding
 8. Judge asks a complex question → **Pixel Buds tap-and-hold for translate** if they're not native English
-9. Judge says yes → **Flipper "lock-pc.txt" payload** locks Big Apple cleanly, you wrap up
+9. Judge says yes → **Flipper "lock-pc.txt" payload** locks Seratonin cleanly, you wrap up
 10. Walk out → **Omi memory** has the entire conversation, searchable, narratable
 
 That's the loop. Every device has one thing it does, and they hand off without you thinking.
@@ -130,10 +130,10 @@ That's the loop. Every device has one thing it does, and they hand off without y
 | --- | --- | --- |
 | 1. Wake Pixel + verify Tailscale active | Pixel | 2 min |
 | 2. Enable Developer Options + USB debugging | Pixel | 1 min |
-| 3. ADB pair Pixel ↔ Big Apple (USB then wireless) | Both | 2 min |
+| 3. ADB pair Pixel ↔ Seratonin (USB then wireless) | Both | 2 min |
 | 4. Pair Pixel Buds Pro 2 to Pixel + Mac (multipoint) | Pixel + Mac | 3 min |
 | 5. Install Omi app + pair pendant | Pixel + Omi | 5 min |
-| 6. Test Omi memory API (paste an `OMI_TOKEN` env var on Big Apple) | Big Apple | 2 min |
+| 6. Test Omi memory API (paste an `OMI_TOKEN` env var on Seratonin) | Seratonin | 2 min |
 | 7. Install Flipper Mobile on Pixel + BLE pair | Pixel + Flipper | 3 min |
 | 8. Write your first NFC tag (URL → Cortex dashboard) | Flipper + sticker | 2 min |
 | Total | | ~20 min |

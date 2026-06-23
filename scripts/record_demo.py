@@ -26,7 +26,7 @@ from typing import Optional
 
 from patchright.async_api import async_playwright
 
-DEMO_URL = os.environ.get("CORTEX_DEMO_URL", "https://big-apple.scylla-betta.ts.net")
+DEMO_URL = os.environ.get("CORTEX_DEMO_URL", "https://redteamkitchen.com")
 OUT_DIR = Path(os.environ.get("RECORD_OUT", str(Path(__file__).resolve().parent.parent / "scans" / "recordings")))
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -1,9 +1,8 @@
 """End-to-end Cortex scan: file in, narrations + brain screenshot out.
 
-Defaults to the public Big Apple endpoint so the result lands in the same
-registry that backs the public gallery — meaning a Discord-submitted scan
-shows up at https://big-apple.scylla-betta.ts.net/gallery.html alongside
-WebUI uploads.
+Defaults to the public Cortex endpoint so the result lands in the same
+registry that backs the public gallery. Set CORTEX_API_BASE for local
+development or Cloudflare-hosted deployments.
 """
 from __future__ import annotations
 
@@ -21,7 +20,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_CORTEX_BASE = os.environ.get(
     "CORTEX_API_BASE",
-    "https://big-apple.scylla-betta.ts.net",
+    "https://redteamkitchen.com",
 )
 SCREENSHOT_BASE = os.environ.get(
     "CORTEX_SCREENSHOT_BASE",

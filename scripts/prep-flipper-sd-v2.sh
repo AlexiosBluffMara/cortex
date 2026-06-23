@@ -107,14 +107,14 @@ GUI l
 P
 
 cat > "$SD/badusb/ascended-base/parsec-to-mac.txt" <<'P'
-REM Ascended Base "switch to Big Apple via Parsec"
+REM Ascended Base "switch to Seratonin via Parsec"
 DEFAULTDELAY 200
 GUI r
 DELAY 400
 STRING parsecd
 ENTER
 DELAY 2000
-REM Parsec opens; user picks big-apple from list (no automation past this)
+REM Parsec opens; user picks seratonin from list (no automation past this)
 P
 
 # Hue light payloads (BadUSB curls the Hue Bridge API) ------------------------

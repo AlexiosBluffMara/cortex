@@ -1,6 +1,6 @@
 # Cortex — URL map (2026-05-04)
 
-> All `big-apple.scylla-betta.ts.net` URLs are also reachable as `cortex.redteamkitchen.com` via the Cloudflare Tunnel. Use the clean alias in tweets / docs; use the Tailscale URL for ironclad uptime when CF caching might bite.
+> All `redteamkitchen.com` URLs are also reachable as `cortex.redteamkitchen.com` via the Cloudflare Tunnel. Use the clean alias in tweets / docs; use the Tailscale URL for ironclad uptime when CF caching might bite.
 
 ## Public web
 
@@ -40,6 +40,6 @@
 | URL | Purpose |
 |---|---|
 | `http://100.98.19.87:8773` | Seratonin (RTX 5090) backend direct |
-| `http://100.93.240.52:11434` | Big Apple Ollama direct (Tailscale only) |
+| `http://127.0.0.1:11434` | Seratonin Ollama direct (Tailscale only) |
 | `http://localhost:8766/healthz` | Inference router on Sera |
 | `http://localhost:8780/status` | Fleet watchdog status JSON |

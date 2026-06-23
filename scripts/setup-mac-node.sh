@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup-mac-node.sh — Cortex secondary node bootstrap for big-apple (M4 Max, 48 GB)
+# setup-mac-node.sh — Cortex secondary node bootstrap for seratonin (M4 Max, 48 GB)
 #
 # Run this on the Mac. Two ways:
 #   1. Via Parsec/SSH/local keyboard:
@@ -14,7 +14,7 @@ set -euo pipefail
 
 # ── Tunables (edit if your setup differs) ────────────────────────────────
 SERATONIN_IP="100.98.19.87"        # Windows desktop on Tailscale
-TAILSCALE_NAME_LOCAL="big-apple"
+TAILSCALE_NAME_LOCAL="seratonin"
 OLLAMA_HOST_BIND="0.0.0.0:11434"   # Tailscale ACL is the firewall
 OLLAMA_KEEP_ALIVE="24h"
 OLLAMA_MAX_LOADED_MODELS="3"
@@ -172,7 +172,7 @@ log "  → paste into ~/.ssh/authorized_keys on this Mac"
 cat <<SUMMARY
 
 =========================================================================
-big-apple secondary-inference node setup complete (or in-progress).
+seratonin secondary-inference node setup complete (or in-progress).
 
 Ollama:        running on 0.0.0.0:11434 (Tailscale-accessible)
                models pulling in background; tail /tmp/ollama-pulls.log
