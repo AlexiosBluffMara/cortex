@@ -86,14 +86,16 @@ async function run() {
   assert(!(await legacySelect.isVisible()), "legacy narration select should stay hidden behind the card catalog");
   await page.waitForFunction(() => {
     const cards = Array.from(document.querySelectorAll('#model-card-list [data-model]'));
-    return cards.length > 0 && cards.every((card) => {
+    const selectable = cards.filter((card) => card.dataset.locked !== "true");
+    const locked = cards.filter((card) => card.dataset.locked === "true");
+    return selectable.length > 0 && locked.length > 0 && selectable.every((card) => {
       const model = card.dataset.model || "";
       return model.endsWith(":free") || model === "openrouter:openrouter/free";
-    });
+    }) && locked.every((card) => !(card.dataset.model || "").endsWith(":free"));
   });
-
-  await page.locator('[data-model-filter="paid"]').click();
-  await page.waitForFunction(() => document.querySelectorAll('#model-card-list [data-locked="true"]').length > 0);
+  const visibleSections = await page.locator("#model-card-list .model-section-header").allTextContents();
+  assert(visibleSections.some((text) => text.includes("Free OpenRouter")), "free section header should be visible");
+  assert(visibleSections.some((text) => text.includes("Funded OpenRouter")), "funded locked section header should be visible");
   const lockedPaidCopy = await page.locator('#model-card-list [data-locked="true"] small').first().textContent();
   assert((lockedPaidCopy || "").includes("Please fund Red Team Kitchen"), "paid cards should ask for funding before unlock");
 
@@ -103,12 +105,11 @@ async function run() {
   assert(await page.locator(".purdue-mark").textContent() === "P", "Purdue mark should appear after unlock");
   assert(!(await cloudRadio.isDisabled()), "cloud compute should be enabled after funded unlock");
 
-  await page.locator('[data-model-filter="paid"]').click();
   await page.waitForFunction(() => {
-    const cards = Array.from(document.querySelectorAll('#model-card-list [data-model]'));
-    return cards.length > 0 && cards.every((card) => card.dataset.locked !== "true");
+    const paidCards = Array.from(document.querySelectorAll('#model-card-list [data-group="paid"]'));
+    return paidCards.length > 0 && paidCards.every((card) => card.dataset.locked !== "true");
   });
-  const paidCard = page.locator('#model-card-list [data-model]').first();
+  const paidCard = page.locator('#model-card-list [data-group="paid"]').first();
   const paidModel = await paidCard.getAttribute("data-model");
   assert(paidModel && !paidModel.endsWith(":free"), "funded model should be a paid OpenRouter slug");
   await paidCard.click();

@@ -705,8 +705,11 @@ class TestSubmitScan:
         assert 'id="voice-record-btn"' in html
         assert 'id="paid-access-code"' in html
         assert 'name="compute-target"' in html
-        assert 'data-model-filter="local"' not in html
+        assert 'data-model-filter=' not in html
         assert "Free models first" in html
+        assert "model-section-header" in html
+        assert "Free OpenRouter models available to everyone" in html
+        assert "Funded OpenRouter fallbacks locked until access is enabled" in html
         assert 'id="openrouter-economics"' in html
         assert 'id="or-free-roster"' in html
         assert "Text scans / $1" in html

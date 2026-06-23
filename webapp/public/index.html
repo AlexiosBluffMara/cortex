@@ -802,9 +802,6 @@
                 -webkit-tap-highlight-color: transparent;
                 touch-action: manipulation;
             }
-            .model-filters {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
             .model-card-list {
                 max-height: 248px;
                 gap: 8px;
@@ -1590,26 +1587,6 @@
             font-size: 10px;
             white-space: nowrap;
         }
-        .model-filters {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 6px;
-        }
-        .model-filter {
-            border: 1px solid var(--border);
-            background: rgba(255,255,255,0.035);
-            color: var(--muted);
-            border-radius: 8px;
-            padding: 8px 4px;
-            font-size: 11px;
-            font-weight: 800;
-            cursor: pointer;
-        }
-        .model-filter.active {
-            color: #fff;
-            border-color: rgba(246,169,23,0.72);
-            background: rgba(246,169,23,0.12);
-        }
         .funding-unlock {
             border: 1px solid var(--border);
             border-radius: 8px;
@@ -1706,6 +1683,19 @@
         .model-card-list::-webkit-scrollbar { width: 7px; }
         .model-card-list::-webkit-scrollbar-track { background: transparent; }
         .model-card-list::-webkit-scrollbar-thumb { background: rgba(204,0,0,0.55); border-radius: 8px; }
+        .model-section-header {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            padding: 6px 2px 2px;
+            background: linear-gradient(180deg, rgba(17,18,24,0.98), rgba(17,18,24,0.82));
+            color: var(--muted);
+            font-family: "JetBrains Mono", monospace;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
         .model-card {
             width: 100%;
             text-align: left;
@@ -1999,9 +1989,6 @@
                 gap: 14px;
                 scroll-margin-top: 62px;
             }
-            .model-filters {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
             .model-card-list {
                 max-height: 248px;
                 gap: 8px;
@@ -2282,10 +2269,6 @@
                             <span class="model-toolbar-title">Free models first · funded locked</span>
                             <span id="model-count" class="model-count">loading</span>
                         </div>
-                        <div class="model-filters" role="tablist" aria-label="Model price group">
-                            <button type="button" class="model-filter active" data-model-filter="free">Free</button>
-                            <button type="button" class="model-filter" data-model-filter="paid">Funded</button>
-                        </div>
                         <label class="model-search">
                             <span>Search</span>
                             <input id="model-search" type="search" autocomplete="off" spellcheck="false" placeholder="Gemma, Hermes, Kimi, multimodal..." />
@@ -2454,7 +2437,6 @@
                     { id: 'local:gemma4:e4b', label: 'Gemma 4 E4B local', provider: 'Ollama', group: 'Local fallback', prompt_price: 0, completion_price: 0, notes: 'Use only if OpenRouter is unavailable; consumes local VRAM.' },
                 ];
                 let models = FALLBACK_MODELS;
-                let modelFilter = 'free';
                 let modelQuery = '';
                 let paidAccessUnlocked = false;
                 function fmt(v) {
@@ -2539,9 +2521,9 @@
                 }
                 function filteredModels() {
                     const q = modelQuery.trim().toLowerCase();
+                    const rank = { free: 0, paid: 1, local: 2 };
                     return publicCatalogModels().filter(m => {
                         const group = modelGroup(m);
-                        if (modelFilter !== 'all' && group !== modelFilter) return false;
                         if (!q) return true;
                         const haystack = [
                             m.id,
@@ -2552,16 +2534,20 @@
                             m.notes,
                         ].join(' ').toLowerCase();
                         return haystack.includes(q);
+                    }).sort((a, b) => {
+                        const ga = modelGroup(a);
+                        const gb = modelGroup(b);
+                        if (rank[ga] !== rank[gb]) return rank[ga] - rank[gb];
+                        return String(a.label || a.id).localeCompare(String(b.label || b.id));
                     });
                 }
                 function syncModelChrome(shown) {
                     const count = document.getElementById('model-count');
-                    if (count) count.textContent = `${shown.length}/${publicCatalogModels().length}`;
-                    document.querySelectorAll('[data-model-filter]').forEach(btn => {
-                        const active = btn.dataset.modelFilter === modelFilter;
-                        btn.classList.toggle('active', active);
-                        btn.setAttribute('aria-selected', active ? 'true' : 'false');
-                    });
+                    if (count) {
+                        const visibleFree = shown.filter(m => modelGroup(m) === 'free').length;
+                        const visiblePaid = shown.filter(m => modelGroup(m) === 'paid').length;
+                        count.textContent = `${visibleFree} free · ${visiblePaid} funded`;
+                    }
                 }
                 function renderCards(selectedId) {
                     const mount = document.getElementById('model-card-list');
@@ -2572,7 +2558,17 @@
                         mount.innerHTML = '<div class="status-line">No matching models in this catalog view.</div>';
                         return;
                     }
-                    mount.innerHTML = shown.map(m => {
+                    let lastGroup = '';
+                    const rows = [];
+                    for (const m of shown) {
+                        const group = modelGroup(m);
+                        if (group !== lastGroup) {
+                            const sectionCopy = group === 'free'
+                                ? 'Free OpenRouter models available to everyone'
+                                : 'Funded OpenRouter fallbacks locked until access is enabled';
+                            rows.push(`<div class="model-section-header" data-section="${group}">${sectionCopy}</div>`);
+                            lastGroup = group;
+                        }
                         const active = m.id === selectedId ? ' active' : '';
                         const cost = modelCost(m);
                         const modes = (m.modalities || []).slice(0, 4);
@@ -2584,13 +2580,14 @@
                         const lockedCopy = locked
                             ? 'Please fund Red Team Kitchen or enter funded access to use paid OpenRouter models.'
                             : (m.notes || '');
-                        return `<button type="button" class="model-card${active}${locked ? ' locked' : ''}" data-model="${m.id}" data-locked="${locked ? 'true' : 'false'}"${active ? ' aria-current="true"' : ''}${locked ? ' aria-disabled="true"' : ''}>
+                        rows.push(`<button type="button" class="model-card${active}${locked ? ' locked' : ''}" data-model="${m.id}" data-group="${group}" data-locked="${locked ? 'true' : 'false'}"${active ? ' aria-current="true"' : ''}${locked ? ' aria-disabled="true"' : ''}>
                             <strong>${displayLabel(m)}</strong>
                             <span>${cost ? fmt(cost) : '$0.00000'} narration</span>
                             <div class="model-card-meta">${chips}</div>
                             <small>${lockedCopy}</small>
-                        </button>`;
-                    }).join('');
+                        </button>`);
+                    }
+                    mount.innerHTML = rows.join('');
                     mount.querySelectorAll('[data-model]').forEach(btn => {
                         btn.addEventListener('click', () => {
                             if (btn.dataset.locked === 'true') {
@@ -2755,12 +2752,6 @@
                         updateEstimate();
                         loadCatalog();
                     }
-                    document.querySelectorAll('[data-model-filter]').forEach(btn => {
-                        btn.addEventListener('click', () => {
-                            modelFilter = btn.dataset.modelFilter || 'all';
-                            updateEstimate();
-                        });
-                    });
                     const search = document.getElementById('model-search');
                     if (search) {
                         search.addEventListener('input', () => {
