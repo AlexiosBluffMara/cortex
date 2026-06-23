@@ -618,8 +618,8 @@
 
         /* ════════════════════════════════════════════════
            MOBILE (≤ 768 px) — Samsung / Google Pixel / OnePlus / iPhone
-           Two-row layout: narration on top, input at bottom.
-           No Three.js — 2D donut brain instead.
+           Two-row layout: input first, results below.
+           Phones use a compact Three.js BOLD state strip.
            Touch-first: 44px minimum targets, safe-area insets,
            smooth momentum scrolling, dynamic viewport height.
            ════════════════════════════════════════════════ */
@@ -648,29 +648,28 @@
                 overflow: hidden;
             }
 
-            /* Narration — fills 54% of screen */
-            .panel-right {
-                order: 1;
-                flex: 0 0 54%;
-                border-left: none;
-                border-bottom: 1px solid var(--border);
-                min-height: 0;
-                display: flex;
-                flex-direction: column;
-            }
-
-            /* Input — fills remaining 46% */
+            /* Input — first screen priority */
             .panel-left {
-                order: 2;
-                flex: 1;
+                order: 1;
+                flex: 0 0 58%;
                 border-right: none;
-                border-top: none;
+                border-bottom: 1px solid var(--border);
                 min-height: 0;
                 overflow: hidden;
                 display: flex;
                 flex-direction: column;
-                /* iOS home indicator safe area */
                 padding-bottom: env(safe-area-inset-bottom, 0px);
+            }
+
+            /* Results — below the intake workflow */
+            .panel-right {
+                order: 2;
+                flex: 1;
+                border-left: none;
+                border-top: none;
+                min-height: 0;
+                display: flex;
+                flex-direction: column;
             }
 
             /* 3D viewer hidden on mobile */
@@ -731,7 +730,7 @@
                 font-size: 10px;
             }
 
-            /* 2D brain — pinned to bottom of narration section */
+            /* 2D brain state strip - pinned to bottom of narration section */
             #mobile-brain-canvas {
                 display: block;
                 width: 100%;
@@ -748,6 +747,34 @@
 
             /* ROI section */
             .roi-section { padding-top: 10px; }
+
+            .intake-scroll {
+                padding: 12px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+                gap: 12px;
+            }
+            .intake-hero {
+                display: none;
+            }
+            .step-copy {
+                font-size: 13px;
+                line-height: 1.62;
+            }
+            .workflow-jump {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 4px;
+                padding: 6px 0;
+            }
+            .workflow-jump a {
+                padding: 8px 2px;
+                font-size: 10.5px;
+            }
+            .workflow-step {
+                padding: 14px;
+                gap: 10px;
+            }
+            #input-step .step-copy {
+                display: none;
+            }
 
             /* ── Input panel ── */
             .mode-tabs {
@@ -1039,10 +1066,7 @@
             --spring:       cubic-bezier(0.34, 1.56, 0.64, 1);
             --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
         }
-        body { background:
-            radial-gradient(1200px 800px at 80% -10%, rgba(204,0,0,0.10), transparent 60%),
-            radial-gradient(900px 600px at -5% 90%, rgba(246,169,23,0.06), transparent 60%),
-            var(--bg); }
+        body { background: linear-gradient(180deg, var(--bg-2) 0%, var(--bg) 100%); }
 
         /* Equal grid (left/right balanced, brain centred) */
         @media (min-width: 1280px) {
@@ -1349,6 +1373,7 @@
             display: flex;
             flex-direction: column;
             gap: 16px;
+            scroll-padding-top: 76px;
             scrollbar-width: thin;
             scrollbar-color: rgba(204,0,0,0.75) transparent;
         }
@@ -1374,6 +1399,13 @@
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 6px;
+            position: sticky;
+            top: 0;
+            z-index: 12;
+            padding: 8px 0;
+            background: linear-gradient(180deg, rgba(7,8,12,0.96), rgba(7,8,12,0.82));
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
         }
         .workflow-jump a {
             color: var(--text);
@@ -1391,11 +1423,13 @@
             border: 1px solid var(--border);
             background: rgba(20,21,28,0.82);
             border-radius: 8px;
-            padding: 14px;
+            padding: 16px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 14px;
+            scroll-margin-top: 76px;
         }
+        #input-step { border-color: rgba(246,169,23,0.28); }
         .workflow-step h2 {
             font-size: 16px;
             line-height: 1.25;
@@ -1492,10 +1526,15 @@
             display: grid;
             grid-template-columns: 1fr;
             gap: 8px;
-            max-height: 280px;
+            max-height: 196px;
             overflow-y: auto;
             padding-right: 2px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(204,0,0,0.65) transparent;
         }
+        .model-card-list::-webkit-scrollbar { width: 7px; }
+        .model-card-list::-webkit-scrollbar-track { background: transparent; }
+        .model-card-list::-webkit-scrollbar-thumb { background: rgba(204,0,0,0.55); border-radius: 8px; }
         .model-card {
             width: 100%;
             text-align: left;
@@ -1503,7 +1542,7 @@
             background: rgba(255,255,255,0.035);
             color: var(--text);
             border-radius: 8px;
-            padding: 10px;
+            padding: 9px 10px;
             display: grid;
             gap: 4px;
             cursor: pointer;
@@ -1761,7 +1800,7 @@
                 <section class="intake-hero" aria-labelledby="intake-title">
                     <p class="panel-title">Cortex live demo</p>
                     <h1 id="intake-title">Show the brain what someone sees, hears, or reads.</h1>
-                    <p>TRIBE v2 stays on the RTX 5090 for BOLD prediction. Persona narration defaults to OpenRouter so local VRAM stays open for the brain model.</p>
+                    <p>TRIBE v2 stays on the RTX 5090 for BOLD prediction. Persona narration runs through OpenRouter so local VRAM stays open for the brain model.</p>
                 </section>
 
                 <nav class="workflow-jump" aria-label="Workflow sections">
@@ -1774,7 +1813,7 @@
                 <section class="workflow-step" id="input-step">
                     <div class="step-kicker">1 · Input</div>
                     <h2>Choose the stimulus</h2>
-                    <p class="step-copy">Upload video with sound, an image, or audio, or type text. Video, audio, and text run through TRIBE v2 when supported; still images use OpenRouter visual context.</p>
+                    <p class="step-copy">Upload video with sound, an image, or audio, or type text. Video, audio, and text run directly through TRIBE v2; images and documents are first converted into TRIBE text-event stimuli.</p>
 
                     <div class="mode-tabs" role="tablist" aria-label="Input mode">
                         <button class="mode-tab active" data-mode="file" role="tab">Upload media</button>
@@ -1783,9 +1822,9 @@
 
                     <div class="input-mode-strip" aria-label="Supported uploads">
                         <span>Video + sound</span>
-                        <span>Image</span>
+                        <span>Image bridge</span>
                         <span>Audio</span>
-                        <span>PDF/Text</span>
+                        <span>Docs/Text</span>
                     </div>
 
                     <div class="mode-panel active" id="mode-file" role="tabpanel">
@@ -1847,7 +1886,7 @@
                 <section class="workflow-step" id="model-step">
                     <div class="step-kicker">2 · Narrator</div>
                     <h2>Use OpenRouter for persona analysis</h2>
-                    <p class="step-copy">Free OpenRouter models handle the writing. TRIBE keeps the local GPU. With at least $10 purchased and a positive balance, free models are documented at 1000 requests/day and 20 requests/minute.</p>
+                    <p class="step-copy">Free OpenRouter models handle the writing. TRIBE keeps the local GPU. With at least $10 purchased and a positive balance, free models are documented at 1000 requests/day and 20 requests/minute; below that threshold the free-model cap is 50 requests/day.</p>
                     <select id="narration-model-select" class="model-select">
                         <option value="openrouter:google/gemma-4-26b-a4b-it:free" selected>Gemma 4 26B A4B · OpenRouter free</option>
                     </select>
@@ -2093,7 +2132,7 @@
             <div id="viewer-overlay">
                 <div>
                     <div style="font-size:32px;margin-bottom:10px;opacity:.4">⌬</div>
-                    <div>Submit a media file to begin.<br><span style="font-size:12px;opacity:.6">TRIBE v2 will predict cortical BOLD responses. Gemma will narrate.</span></div>
+                    <div>Submit a media file to begin.<br><span style="font-size:12px;opacity:.6">TRIBE v2 predicts cortical BOLD. OpenRouter narrates.</span></div>
                 </div>
             </div>
         </section>
@@ -2101,7 +2140,7 @@
         <!-- ── Right: narration + ROIs ── -->
         <aside class="panel-right">
             <div class="narration-header">
-                <p class="panel-title" style="margin:0">Gemma narration</p>
+                <p class="panel-title" style="margin:0">Persona narration</p>
                 <!-- Mobile-only cloud badge -->
                 <span class="mobile-cloud-pill" style="display:none; align-items:center; gap:5px; font-size:10px; font-weight:600; color:var(--accent); padding:2px 8px; border-radius:99px; border:1px solid var(--accent); background:rgba(91,141,239,.1);">☁ Cloud</span>
                 <span class="narration-model-badge" id="narration-model">—</span>
@@ -2145,7 +2184,7 @@
                 </div>
             </div>
 
-            <!-- Mobile-only 2D network canvas (hidden on desktop via CSS default, shown via media query) -->
+            <!-- Mobile-only compact brain state canvas (hidden on desktop via CSS default, shown via media query) -->
             <canvas id="mobile-brain-canvas"></canvas>
         </aside>
     </div>
@@ -2181,7 +2220,7 @@
                 <code>W × seconds ÷ 3600 ÷ 1000 × rate × 100</code>
             </div>
             <table class="cost-history-table" id="local-history-table">
-                <thead><tr><th>Scan</th><th>File</th><th>TRIBE (s)</th><th>Gemma (s)</th><th>¢</th></tr></thead>
+                <thead><tr><th>Scan</th><th>File</th><th>TRIBE (s)</th><th>Narration (s)</th><th>¢</th></tr></thead>
                 <tbody id="local-history-body"></tbody>
             </table>
         </div>
@@ -2236,7 +2275,7 @@
 
     <!-- D3 v7 (UMD) for the data panel charts -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script type="module" src="/main.js?v=20260623-openrouter-status"></script>
+    <script type="module" src="/main.js?v=20260623-three-mobile-brain"></script>
     <script type="module" src="/charts.js"></script>
 
     <!-- ── Robinhood-Legend-style draggable panels (gridstack) ─────────────── -->

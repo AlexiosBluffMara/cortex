@@ -1,4 +1,4 @@
-// Cortex viewer v2 — real fsaverage5 surface + TRIBE v2 BOLD + Gemma narration
+// Cortex viewer v2 — real fsaverage5 surface + TRIBE v2 BOLD + cloud narration
 import * as THREE from "https://esm.sh/three@0.176.0";
 import { GLTFLoader } from "https://esm.sh/three@0.176.0/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "https://esm.sh/three@0.176.0/examples/jsm/controls/OrbitControls.js";
@@ -323,9 +323,6 @@ function paintFrame(t) {
     }
     setZScaleForFrame(absMax);
 
-    // Mobile: skip expensive 20484-vertex CPU paint, use 2D canvas only
-    if (isMobile) { drawMobileFrame(t); return; }
-
     const filterActive = st.activeNetworks.size > 0;
 
     for (const [mesh, offset] of [[st.meshLH, 0], [st.meshRH, st.lhVertCount]]) {
@@ -347,6 +344,8 @@ function paintFrame(t) {
         }
         cb.needsUpdate = true;
     }
+
+    if (isMobile) drawMobileFrame(t);
 }
 
 // ---------------------------------------------------------------------------
@@ -497,7 +496,7 @@ const YEO7 = {
 };
 
 // ---------------------------------------------------------------------------
-// Mobile 2D brain network canvas  (donut chart, Yeo-7 segments)
+// Mobile compact brain state canvas
 // ---------------------------------------------------------------------------
 const _mbc = document.getElementById('mobile-brain-canvas');
 
@@ -509,97 +508,207 @@ function drawMobileFrame(t) {
     const cssH = _mbc.offsetHeight;
     if (!cssW || !cssH) return;
 
-    _mbc.width  = cssW * dpr;
-    _mbc.height = cssH * dpr;
-    ctx.scale(dpr, dpr);
+    _mbc.width  = Math.max(1, Math.floor(cssW * dpr));
+    _mbc.height = Math.max(1, Math.floor(cssH * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const w = cssW, h = cssH;
     ctx.clearRect(0, 0, w, h);
 
-    // Compute per-network mean z from BOLD
     const netMeans = {};
-    if (st.boldTrace && t !== undefined) {
-        const row = st.boldTrace.bold[t];
+    let row = null;
+    let rowAbsMax = 0;
+    let secLabel = null;
+    if (t !== undefined && st.boldVertex) {
+        const { n_t, n_vert, data, tr_seconds } = st.boldVertex;
+        const frame = Math.max(0, Math.min(Math.floor(t), n_t - 1));
+        const rowOff = frame * n_vert;
+        row = data.subarray(rowOff, rowOff + n_vert);
+        rowAbsMax = _absMaxOf(data, rowOff, n_vert);
+        secLabel = `${(frame * (tr_seconds ?? 0.5)).toFixed(1)} s`;
+    } else if (t !== undefined && st.boldTrace) {
+        const frame = Math.max(0, Math.min(Math.floor(t), st.boldTrace.bold.length - 1));
+        row = st.boldTrace.bold[frame];
         if (row) {
             const sums = {}, counts = {};
             const lim = Math.min(row.length, st.regionNetwork.length);
             for (let i = 0; i < lim; i++) {
+                const z = row[i];
+                rowAbsMax = Math.max(rowAbsMax, Math.abs(z));
                 const net = st.regionNetwork[i];
                 if (!net) continue;
-                sums[net]   = (sums[net]   || 0) + row[i];
+                sums[net]   = (sums[net]   || 0) + z;
                 counts[net] = (counts[net] || 0) + 1;
             }
             for (const net in sums) netMeans[net] = sums[net] / counts[net];
         }
+        secLabel = `${((t ?? 0) * (st.boldTrace.tr_seconds ?? 0.5)).toFixed(1)} s`;
+    }
+    const hasScan = !!row;
+
+    const bg = ctx.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, 'rgba(13,14,20,0.96)');
+    bg.addColorStop(1, 'rgba(6,7,11,1)');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+
+    const cx = w / 2;
+
+    function drawThreeBrainSnapshot() {
+        if (!st.meshes.length) return false;
+        try {
+            const renderW = Math.max(180, Math.floor(w));
+            const renderH = Math.max(88, Math.floor(h - 14));
+            renderer.setSize(renderW, renderH, false);
+            camera.aspect = renderW / renderH;
+            camera.updateProjectionMatrix();
+            controls.update();
+            renderer.render(scene, camera);
+            ctx.drawImage(renderer.domElement, 0, -4, w, h - 12);
+
+            const vignette = ctx.createLinearGradient(0, 0, 0, h);
+            vignette.addColorStop(0, 'rgba(6,7,11,0.12)');
+            vignette.addColorStop(0.72, 'rgba(6,7,11,0.00)');
+            vignette.addColorStop(1, 'rgba(6,7,11,0.58)');
+            ctx.fillStyle = vignette;
+            ctx.fillRect(0, 0, w, h);
+            return true;
+        } catch {
+            return false;
+        }
     }
 
-    const keys   = Object.keys(YEO7);
-    const cx     = w / 2;
-    const cy     = h * 0.50;
-    const outerR = Math.min(w * 0.38, h * 0.72);
-    const innerR = outerR * 0.44;
-    const segAng = (2 * Math.PI) / keys.length;
-    const gap    = 0.045;
+    const drewThreeBrain = drawThreeBrainSnapshot();
 
-    for (let i = 0; i < keys.length; i++) {
-        const key   = keys[i];
-        const net   = YEO7[key];
-        const z     = netMeans[key] ?? 0;
-        const sa    = i * segAng - Math.PI / 2 + gap / 2;
-        const ea    = sa + segAng - gap;
-        // Positive activation expands segment outward slightly
-        const boost = st.boldTrace ? Math.max(0, z) * 0.13 : 0;
-        const segR  = outerR * (1 + boost);
-        const alpha = st.boldTrace ? Math.min(1, 0.28 + Math.abs(z) * 0.55) : 0.52;
+    if (!drewThreeBrain) {
+    const cy = h * 0.45;
+    const brainW = Math.min(w * 0.78, 285);
+    const brainH = Math.min(Math.max(h * 0.55, 46), 70);
+    const hemiRx = brainW * 0.21;
+    const hemiRy = brainH * 0.48;
+    const leftCx = cx - brainW * 0.235;
+    const rightCx = cx + brainW * 0.235;
 
+    function drawHemisphere(x, side) {
+        const dir = side === 'left' ? -1 : 1;
         ctx.beginPath();
-        ctx.arc(cx, cy, segR,   sa, ea);
-        ctx.arc(cx, cy, innerR, ea, sa, true);
-        ctx.closePath();
-        ctx.fillStyle   = net.color;
-        ctx.globalAlpha = alpha;
+        ctx.ellipse(x, cy, hemiRx, hemiRy, dir * -0.08, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(20,24,34,0.92)';
         ctx.fill();
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = 'rgba(13,14,20,0.55)';
-        ctx.lineWidth   = 1.5;
+        ctx.strokeStyle = 'rgba(142,153,176,0.35)';
+        ctx.lineWidth = 1.3;
         ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(142,153,176,0.18)';
+        ctx.lineWidth = 1;
+        for (let i = -2; i <= 2; i++) {
+            const y = cy + i * brainH * 0.15;
+            ctx.beginPath();
+            ctx.moveTo(x - dir * hemiRx * 0.72, y);
+            ctx.bezierCurveTo(
+                x - dir * hemiRx * 0.25, y - brainH * 0.16,
+                x + dir * hemiRx * 0.18, y + brainH * 0.18,
+                x + dir * hemiRx * 0.72, y + brainH * 0.02
+            );
+            ctx.stroke();
+        }
     }
 
-    // Centre label: time or "No scan"
-    ctx.textAlign    = 'center';
-    ctx.textBaseline = 'middle';
-    if (st.boldTrace) {
-        const sec = ((t ?? 0) * (st.boldTrace.tr_seconds ?? 0.5)).toFixed(1);
-        ctx.font      = `bold 14px system-ui`;
-        ctx.fillStyle = '#dde3f0';
-        ctx.fillText(`${sec} s`, cx, cy - 7);
-        ctx.font      = '9px system-ui';
-        ctx.fillStyle = '#6b738f';
-        ctx.fillText('brain time', cx, cy + 8);
-    } else {
-        ctx.font      = '11px system-ui';
-        ctx.fillStyle = '#6b738f';
-        ctx.fillText('Network map', cx, cy);
+    drawHemisphere(leftCx, 'left');
+    drawHemisphere(rightCx, 'right');
+
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - brainH * 0.5);
+    ctx.lineTo(cx, cy + brainH * 0.5);
+    ctx.strokeStyle = 'rgba(142,153,176,0.20)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    const activationSites = [
+        { key: 'Vis',         x: -0.34, y:  0.16 },
+        { key: 'SomMot',      x: -0.18, y: -0.26 },
+        { key: 'DorsAttn',    x: -0.31, y: -0.05 },
+        { key: 'SalVentAttn', x:  0.31, y: -0.08 },
+        { key: 'Limbic',      x:  0.15, y:  0.27 },
+        { key: 'Cont',        x:  0.35, y: -0.25 },
+        { key: 'Default',     x:  0.27, y:  0.15 },
+        { key: 'Vis',         x:  0.34, y:  0.16 },
+        { key: 'SomMot',      x:  0.18, y: -0.26 },
+        { key: 'Default',     x: -0.27, y:  0.15 },
+    ];
+
+    function rgbCss(rgb, alpha = 1) {
+        const [r, g, b] = rgb.map(v => Math.max(0, Math.min(255, Math.round(v * 255))));
+        return `rgba(${r},${g},${b},${alpha})`;
     }
 
-    // Legend strip along the bottom
-    const legY   = h - 5;
-    const itemW  = w / keys.length;
-    for (let i = 0; i < keys.length; i++) {
-        const key = keys[i];
-        const net = YEO7[key];
-        const lx  = (i + 0.5) * itemW;
-        ctx.beginPath();
-        ctx.arc(lx, legY - 11, 3.5, 0, Math.PI * 2);
-        ctx.fillStyle   = net.color;
-        ctx.globalAlpha = 0.88;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        ctx.fillStyle    = '#6b738f';
-        ctx.font         = '7px system-ui';
-        ctx.textAlign    = 'center';
+    if (hasScan) {
+        for (const site of activationSites) {
+            const z = netMeans[site.key] ?? 0;
+            const magnitude = Math.min(1, Math.abs(z) / Math.max(0.001, _zScale));
+            const rgb = zToRGB(z);
+            const x = cx + site.x * brainW;
+            const y = cy + site.y * brainH;
+            const glow = 6 + magnitude * 15;
+            const dot = 2.5 + magnitude * 5.5;
+
+            ctx.beginPath();
+            ctx.arc(x, y, glow, 0, Math.PI * 2);
+            ctx.fillStyle = rgbCss(rgb, 0.08 + magnitude * 0.30);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(x, y, dot, 0, Math.PI * 2);
+            ctx.fillStyle = rgbCss(rgb, 0.58 + magnitude * 0.38);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+        }
+    }
+    }
+
+    const railX = 18;
+    const railW = w - railX * 2;
+    const railY = h - 20;
+    ctx.beginPath();
+    ctx.moveTo(railX, railY);
+    ctx.lineTo(railX + railW, railY);
+    ctx.strokeStyle = 'rgba(142,153,176,0.18)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    if (hasScan) {
+        const sec = secLabel ?? `${((t ?? 0) * 0.5).toFixed(1)} s`;
+        if (row && rowAbsMax > 0) {
+            const samples = Math.min(64, row.length);
+            ctx.beginPath();
+            for (let i = 0; i < samples; i++) {
+                const idx = Math.floor((i / Math.max(1, samples - 1)) * (row.length - 1));
+                const v = row[idx];
+                const x = railX + (i / Math.max(1, samples - 1)) * railW;
+                const y = railY - Math.max(-1, Math.min(1, v / rowAbsMax)) * 11;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = 'rgba(246,169,23,0.78)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        }
+
+        ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
-        ctx.fillText(net.label.split(' ')[0].slice(0, 5), lx, legY);
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#8e99b0';
+        ctx.fillText(sec, railX, h - 5);
+        ctx.textAlign = 'right';
+        ctx.fillText('TRIBE frame', railX + railW, h - 5);
+    } else {
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#6b738f';
+        ctx.fillText('Awaiting TRIBE scan', cx, h - 6);
     }
 }
 
@@ -870,7 +979,6 @@ function paintVertexFrame(t) {
     const { n_t, n_vert, data, tr_seconds } = st.boldVertex;
     const tt = Math.max(0, Math.min(n_t - 1, t | 0));
     timeLabel.textContent = `t = ${(tt * tr_seconds).toFixed(1)} s`;
-    if (isMobile) { drawMobileFrame(tt); return; }
 
     const filterActive = st.activeNetworks.size > 0;
     const rowOff = tt * n_vert;
@@ -904,6 +1012,8 @@ function paintVertexFrame(t) {
         }
         cb.needsUpdate = true;
     }
+
+    if (isMobile) drawMobileFrame(tt);
 }
 
 async function loadScanResult(scanId) {
@@ -1184,7 +1294,7 @@ function showOverlay(phase) {
     const msgs = {
         queued:    "Queued — waiting for GPU…",
         running:   "TRIBE v2 running…<br><small style='opacity:.6'>Predicting cortical BOLD responses</small>",
-        narrating: "Gemma narrating…<br><small style='opacity:.6'>Building interpretation</small>",
+        narrating: "OpenRouter narrating…<br><small style='opacity:.6'>Building persona interpretation</small>",
     };
     overlayInner.innerHTML = `
         <div style="font-size:28px;opacity:.4;margin-bottom:10px">⌬</div>
@@ -1694,7 +1804,7 @@ textSubmitBtn?.addEventListener("click", async () => {
         } else {
             st.scanId = body.scan_id;
             appendEvent(`text scan accepted: ${body.scan_id}`, "complete");
-            showOverlay("narrating"); // text skips TRIBE, goes straight to Gemma
+            showOverlay("narrating"); // typed text is queued through TRIBE's text-events path
         }
     } catch (err) {
         appendEvent(`error: ${err.message}`, "failed");
@@ -1770,10 +1880,10 @@ function animate() {
     overlayInner.innerHTML = `
         <div style="font-size:32px;opacity:.4;margin-bottom:10px">⌬</div>
         <div>Submit a media file to begin.<br>
-             <span style="font-size:12px;opacity:.6">TRIBE v2 predicts cortical BOLD. Gemma narrates.</span></div>`;
+             <span style="font-size:12px;opacity:.6">TRIBE v2 predicts cortical BOLD. OpenRouter narrates.</span></div>`;
     overlay.classList.remove("hidden");
 
-    // Mobile: default to cloud tab, draw empty network canvas
+    // Mobile: default to cloud tab, then render the compact brain state strip.
     if (isMobile) {
         const cloudTab = document.querySelector('[data-pipeline="cloud"]');
         if (cloudTab) {
@@ -1782,7 +1892,10 @@ function animate() {
             pipelineBadge.className   = 'pipeline-badge cloud';
             pipelineBadge.textContent = '☁ OpenRouter · cloud narration';
         }
-        drawMobileFrame(undefined);
+        const currentFrame = Number.isFinite(+scrubber.value) ? +scrubber.value : 0;
+        if (st.boldVertex) paintVertexFrame(currentFrame);
+        else if (st.boldTrace) paintFrame(currentFrame);
+        else drawMobileFrame(undefined);
     }
 })();
 

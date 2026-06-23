@@ -88,16 +88,16 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 # ---------------------------------------------------------------------------
 # TRIBE proxy (split-stack: Big Apple as public face, Seratonin runs TRIBE)
 # ---------------------------------------------------------------------------
-# When CORTEX_TRIBE_PROXY is set, video/audio/text scans (the ones that need
-# TRIBE inference, which currently requires CUDA) are forwarded to that backend
-# transparently. Image scans stay local because they bypass TRIBE entirely.
+# When CORTEX_TRIBE_PROXY is set, scans that need TRIBE inference (which
+# currently requires CUDA) are forwarded to that backend transparently. Image
+# and document uploads are bridged into TRIBE's text-events path after
+# multimodal/source extraction, so they need TRIBE too.
 #
 # Result: Big Apple keeps the public Funnel + image-scan capability + serves
 # the gallery; Seratonin handles the heavy CUDA work; the user sees one URL.
 import os as _os
 TRIBE_PROXY_URL = (_os.environ.get("CORTEX_TRIBE_PROXY", "") or "").rstrip("/")
-TRIBE_NEEDED_EXTS = ALLOWED_VIDEO | ALLOWED_AUDIO | ALLOWED_TEXT | ALLOWED_DOCUMENT
-# (image scans use Gemma vision directly — no TRIBE needed)
+TRIBE_NEEDED_EXTS = ALLOWED_VIDEO | ALLOWED_AUDIO | ALLOWED_TEXT | ALLOWED_IMAGE | ALLOWED_DOCUMENT
 
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
 OPENROUTER_DEFAULT_MODEL = "google/gemma-4-26b-a4b-it:free"
@@ -661,6 +661,21 @@ def _narration_uses_cloud_model(model_id: str) -> bool:
     return model_id.split(":", 1)[0] in {"openrouter", "gemini"}
 
 
+def _analysis_mode_for_ext(ext: str) -> str:
+    ext = ext.lower()
+    if ext in ALLOWED_VIDEO:
+        return "tribe_video"
+    if ext in ALLOWED_AUDIO:
+        return "tribe_audio"
+    if ext in ALLOWED_TEXT:
+        return "tribe_text"
+    if ext in ALLOWED_IMAGE:
+        return "tribe_text_bridge_image"
+    if ext in ALLOWED_DOCUMENT:
+        return "tribe_text_bridge_document"
+    return "unknown"
+
+
 def _narration_is_cloud_error(text: str) -> bool:
     lower = str(text or "").lower()
     return (
@@ -831,6 +846,30 @@ def _media_metadata_context(media_path: Path) -> str:
             "text/document"
         )
         return f"Source media metadata: file={media_path.name}; modality={kind}; detailed probe unavailable."
+
+
+def _write_text_bridge_stimulus(
+    scan_id: str,
+    source_path: Path,
+    *,
+    modality: str,
+    text: str,
+) -> Path:
+    """Persist a derived text stimulus so TRIBE can process non-native inputs."""
+    bridge_path = UPLOAD_DIR / f"{scan_id}.{modality}-stimulus.txt"
+    body = str(text or "").strip() or f"{modality} stimulus from {source_path.name}"
+    bridge_path.write_text(
+        "\n".join(
+            [
+                f"Original filename: {source_path.name}",
+                f"Original modality: {modality}",
+                "",
+                body[:4000],
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return bridge_path
 
 
 def _openrouter_content_for_media(media_path: Path) -> tuple[str, list[dict[str, Any]] | None]:
@@ -1418,6 +1457,7 @@ def create_app(
         if ext not in ALLOWED_EXTS:
             err = invalid_file_type(file.filename, component="webapp")
             return JSONResponse(err.to_dict(), status_code=400)
+        analysis_mode = _analysis_mode_for_ext(ext)
 
         # Stream upload to disk while enforcing the size cap. Track oversize
         # via a flag so we exit the `with` block before unlinking — on Windows,
@@ -1450,8 +1490,8 @@ def create_app(
         # TRIBE proxy: if this file needs TRIBE (video/audio/text/document) and
         # we're configured to forward such scans elsewhere (because the local
         # device can't run TRIBE — Apple Silicon), POST the file to that
-        # backend and store a reference. Image scans stay local because they
-        # use Gemma vision and bypass TRIBE entirely.
+        # backend and store a reference. Image/document scans are included
+        # because the backend bridges them into TRIBE text-event stimuli.
         # ────────────────────────────────────────────────────────────────────
         if TRIBE_PROXY_URL and ext in TRIBE_NEEDED_EXTS:
             log.info("[webapp] proxying TRIBE scan %s (%s) → %s", scan_id, ext, TRIBE_PROXY_URL)
@@ -1493,6 +1533,7 @@ def create_app(
                         "narration_model": narration_model,
                         "size_mb": round(size / (1024 * 1024), 2),
                         "proxied": True,
+                        "analysis_mode": analysis_mode,
                     },
                 )
                 target.unlink(missing_ok=True)  # local copy not needed; upstream owns the file
@@ -1501,7 +1542,13 @@ def create_app(
                     {"type": "scan_queued", "scan_id": scan_id, "filename": file.filename, "proxied": True}
                 )
                 return JSONResponse(
-                    {"ok": True, "scan_id": scan_id, "status": "queued", "proxied": True},
+                    {
+                        "ok": True,
+                        "scan_id": scan_id,
+                        "status": "queued",
+                        "proxied": True,
+                        "analysis_mode": analysis_mode,
+                    },
                     status_code=202,
                 )
             except Exception as exc:
@@ -1519,6 +1566,7 @@ def create_app(
                 "source": source,
                 "narration_model": narration_model,
                 "size_mb": round(size / (1024 * 1024), 2),
+                "analysis_mode": analysis_mode,
             },
         )
 
@@ -1542,7 +1590,7 @@ def create_app(
         )
 
         return JSONResponse(
-            {"ok": True, "scan_id": scan_id, "status": "queued"},
+            {"ok": True, "scan_id": scan_id, "status": "queued", "analysis_mode": analysis_mode},
             status_code=202,
         )
 
@@ -2509,12 +2557,11 @@ async def _run_image_scan_background(
     source: str,
     narration_model: str = f"openrouter:{OPENROUTER_DEFAULT_MODEL}",
 ) -> None:
-    """Image scan: describe the image, then narrate expected neural correlates.
+    """Image scan: describe the image, then bridge that description through TRIBE.
 
     When OpenRouter is selected, use OpenRouter multimodal description so local
     Gemma does not occupy VRAM that should remain available for TRIBE.
     """
-    queue: RequestQueue = app.state.queue
     registry: ScanRegistry = app.state.registry
     hub: WebSocketHub = app.state.hub
 
@@ -2523,7 +2570,7 @@ async def _run_image_scan_background(
         await registry.update(scan_id, status=phase)
 
     try:
-        await _emit("narrating")
+        await _emit("preparing")
 
         loop = asyncio.get_event_loop()
         if narration_model.startswith("openrouter:"):
@@ -2533,46 +2580,24 @@ async def _run_image_scan_background(
                 None, lambda: _media_gate.classify_image(Path(media_path))
             )
             visual_context = f"Visual description: {desc.short_description()}"
-        brain_ctx = (
-            f"Input modality: image\n"
-            f"{visual_context}\n\n"
-            "No fMRI scan was performed. Based on cognitive neuroscience knowledge, "
-            "describe the brain regions and networks expected to activate when a person "
-            "views this image."
+        stimulus_path = _write_text_bridge_stimulus(
+            scan_id,
+            Path(media_path),
+            modality="image",
+            text=(
+                "TRIBE text-event bridge for an image stimulus.\n"
+                "The original pixels were summarized first; TRIBE receives this semantic "
+                "description as a reading/viewing event stream.\n\n"
+                f"{visual_context}"
+            ),
         )
-        label = Path(media_path).name
-        user_prompt = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
-
-        # Run all 4 persona narrations in parallel — Ollama NUM_PARALLEL=4 batches
-        # them on the same model instance, OpenRouter handles them concurrently.
-        async def _one(pid: str, tier_n: int, sys_prompt: str) -> tuple[str, str]:
-            text = await _narrate_with_model(
-                model=narration_model,
-                prompt=user_prompt,
-                system=sys_prompt,
-                tier=tier_n,
-                num_predict=_tiers._TIER_NUM_PREDICT[tier_n],
-                temperature=_tiers._TIER_TEMPERATURE[tier_n],
-                queue=queue,
-                source=source,
-            )
-            return pid, text
-        results = await asyncio.gather(*[
-            _one(pid, t, sp) for pid, (t, sp) in _prompts.PERSONA_CONFIGS.items()
-        ])
-        narrations: dict[str, str] = dict(results)
-        narrations = _apply_cloud_narration_fallbacks(
-            narrations,
-            label=label,
+        await registry.update(
+            scan_id,
+            analysis_mode="tribe_text_bridge_image",
+            bridge_stimulus=str(stimulus_path),
             media_context=f"Input modality: image\n{visual_context}",
-            result=None,
-            narration_model=narration_model,
         )
-
-        await registry.update(scan_id, status="complete", narration=narrations.get("student", ""), narrations=narrations, top_rois=None, peak_t=None)
-        await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
-        await hub.broadcast({"type": "scan_narrations_ready", "scan_id": scan_id, "narrations": narrations})
-        log.info("[webapp] image scan %s complete", scan_id)
+        await _run_scan_background(app, scan_id, str(stimulus_path), tier, source, narration_model)
 
     except Exception as exc:
         err = CortexError(code=ErrorCode.INFERENCE_FAILED, message=str(exc), component="webapp.image_scan")
@@ -2589,8 +2614,7 @@ async def _run_document_scan_background(
     source: str,
     narration_model: str = f"openrouter:{OPENROUTER_DEFAULT_MODEL}",
 ) -> None:
-    """Document scan: extract text, then narrates expected neural correlates."""
-    queue: RequestQueue = app.state.queue
+    """Document scan: extract text, then bridge that text through TRIBE."""
     registry: ScanRegistry = app.state.registry
     hub: WebSocketHub = app.state.hub
 
@@ -2599,48 +2623,27 @@ async def _run_document_scan_background(
         await registry.update(scan_id, status=phase)
 
     try:
-        await _emit("narrating")
+        await _emit("preparing")
         loop = asyncio.get_event_loop()
         text = await loop.run_in_executor(None, lambda: _extract_document_text(Path(media_path)))
-        label = Path(media_path).name
-        brain_ctx = (
-            f"Input modality: document\nFilename: {label}\n"
-            f"Extracted content: \"{text}\"\n\n"
-            "No fMRI scan was performed. Based on cognitive neuroscience knowledge, "
-            "describe the brain regions and networks expected to activate when a person "
-            "reads or engages with this content."
+        stimulus_path = _write_text_bridge_stimulus(
+            scan_id,
+            Path(media_path),
+            modality="document",
+            text=(
+                "TRIBE text-event bridge for a document stimulus.\n"
+                "The original document text was extracted first; TRIBE receives this "
+                "content as a reading event stream.\n\n"
+                f"{text}"
+            ),
         )
-        user_prompt = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
-
-        # Run all 4 persona narrations in parallel.
-        async def _one(pid: str, tier_n: int, sys_prompt: str) -> tuple[str, str]:
-            text = await _narrate_with_model(
-                model=narration_model,
-                prompt=user_prompt,
-                system=sys_prompt,
-                tier=tier_n,
-                num_predict=_tiers._TIER_NUM_PREDICT[tier_n],
-                temperature=_tiers._TIER_TEMPERATURE[tier_n],
-                queue=queue,
-                source=source,
-            )
-            return pid, text
-        results = await asyncio.gather(*[
-            _one(pid, t, sp) for pid, (t, sp) in _prompts.PERSONA_CONFIGS.items()
-        ])
-        narrations: dict[str, str] = dict(results)
-        narrations = _apply_cloud_narration_fallbacks(
-            narrations,
-            label=label,
+        await registry.update(
+            scan_id,
+            analysis_mode="tribe_text_bridge_document",
+            bridge_stimulus=str(stimulus_path),
             media_context=f"Input modality: document\nExtracted content: {text[:800]}",
-            result=None,
-            narration_model=narration_model,
         )
-
-        await registry.update(scan_id, status="complete", narration=narrations.get("student", ""), narrations=narrations, top_rois=None, peak_t=None)
-        await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
-        await hub.broadcast({"type": "scan_narrations_ready", "scan_id": scan_id, "narrations": narrations})
-        log.info("[webapp] document scan %s complete", scan_id)
+        await _run_scan_background(app, scan_id, str(stimulus_path), tier, source, narration_model)
     except Exception as exc:
         err = CortexError(code=ErrorCode.INFERENCE_FAILED, message=str(exc), component="webapp.doc_scan")
         await registry.update(scan_id, status="failed", error=err.to_dict())
@@ -3009,81 +3012,6 @@ async def _run_scan_background(
             {"type": "scan_failed", "scan_id": scan_id, "error": err.to_dict()}
         )
         log.error("[webapp] scan %s failed: %s", scan_id, exc)
-
-
-# ---------------------------------------------------------------------------
-# Text-only scan (typed text is persisted as .txt and routed through TRIBE)
-# ---------------------------------------------------------------------------
-
-async def _run_text_scan_background(
-    app: FastAPI,
-    scan_id: str,
-    text: str,
-    tier: int,
-    source: str,
-    narration_model: str = f"openrouter:{OPENROUTER_DEFAULT_MODEL}",
-) -> None:
-    queue: RequestQueue = app.state.queue
-    registry: ScanRegistry = app.state.registry
-    hub: WebSocketHub = app.state.hub
-
-    async def _emit(phase: str, **extra: Any) -> None:
-        await hub.broadcast({"type": "scan_progress", "scan_id": scan_id, "phase": phase, **extra})
-        await registry.update(scan_id, status=phase)
-
-    try:
-        await _emit("narrating")
-
-        brain_ctx = (
-            f'Input modality: text\nContent: "{text}"\n\n'
-            "No fMRI scan was performed. Based on cognitive neuroscience knowledge, "
-            "describe the brain regions and networks expected to activate when a person "
-            "reads, thinks about, or experiences this stimulus."
-        )
-        user_prompt = _prompts.TIER_USER_TEMPLATE.format(label="text stimulus", brain_context=brain_ctx)
-
-        async def _one(pid: str, tier_n: int, sys_prompt: str) -> tuple[str, str]:
-            text_out = await _narrate_with_model(
-                model=narration_model,
-                prompt=user_prompt,
-                system=sys_prompt,
-                tier=tier_n,
-                num_predict=_tiers._TIER_NUM_PREDICT[tier_n],
-                temperature=_tiers._TIER_TEMPERATURE[tier_n],
-                queue=queue,
-                source=source,
-            )
-            return pid, text_out
-
-        results = await asyncio.gather(*[
-            _one(pid, t, sp) for pid, (t, sp) in _prompts.PERSONA_CONFIGS.items()
-        ])
-        narrations: dict[str, str] = dict(results)
-        narrations = _apply_cloud_narration_fallbacks(
-            narrations,
-            label="text stimulus",
-            media_context=f"Input modality: text\nContent: {text[:800]}",
-            result=None,
-            narration_model=narration_model,
-        )
-
-        await registry.update(
-            scan_id,
-            status="complete",
-            narration=narrations.get("student", next(iter(narrations.values()), "")),
-            narrations=narrations,
-            top_rois=None,
-            peak_t=None,
-        )
-        await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
-        await hub.broadcast({"type": "scan_narrations_ready", "scan_id": scan_id, "narrations": narrations})
-        log.info("[webapp] text scan %s complete", scan_id)
-
-    except Exception as exc:
-        err = CortexError(code=ErrorCode.INFERENCE_FAILED, message=str(exc), component="webapp.text_scan")
-        await registry.update(scan_id, status="failed", error=err.to_dict())
-        await hub.broadcast({"type": "scan_failed", "scan_id": scan_id, "error": err.to_dict()})
-        log.error("[webapp] text scan %s failed: %s", scan_id, exc)
 
 
 # Default app instance (used by `uvicorn webapp.server:app`)

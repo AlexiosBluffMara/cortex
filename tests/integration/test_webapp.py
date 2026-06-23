@@ -373,6 +373,27 @@ class TestSubmitScan:
         files = {"file": ("voice.wav", io.BytesIO(b"\x00" * 1024), "audio/wav")}
         resp = client.post("/api/scan", files=files)
         assert resp.status_code == 202
+        assert resp.json()["analysis_mode"] == "tribe_audio"
+
+    def test_accepts_image_upload_as_tribe_text_bridge(self, client):
+        files = {"file": ("photo.png", io.BytesIO(b"\x89PNG\r\n\x1a\n"), "image/png")}
+        resp = client.post("/api/scan", files=files)
+        assert resp.status_code == 202
+        body = resp.json()
+        assert body["analysis_mode"] == "tribe_text_bridge_image"
+
+        record = client.get(f"/api/scan/{body['scan_id']}").json()
+        assert record["analysis_mode"] == "tribe_text_bridge_image"
+
+    def test_accepts_document_upload_as_tribe_text_bridge(self, client):
+        files = {"file": ("notes.html", io.BytesIO(b"<p>Neon storm over a lake</p>"), "text/html")}
+        resp = client.post("/api/scan", files=files)
+        assert resp.status_code == 202
+        body = resp.json()
+        assert body["analysis_mode"] == "tribe_text_bridge_document"
+
+        record = client.get(f"/api/scan/{body['scan_id']}").json()
+        assert record["analysis_mode"] == "tribe_text_bridge_document"
 
     def test_tier_clamped_to_valid_range(self, client):
         files = {"file": ("clip.mp4", io.BytesIO(b"\x00" * 1024), "video/mp4")}
