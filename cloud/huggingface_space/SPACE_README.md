@@ -1,0 +1,25 @@
+---
+title: Cortex TRIBE v2 ZeroGPU
+emoji: C
+colorFrom: red
+colorTo: gray
+sdk: gradio
+app_file: app.py
+pinned: false
+hardware: zerogpu
+---
+
+# Cortex TRIBE v2 ZeroGPU
+
+This Space is the no-cost/low-cost experiment path for Cortex TRIBE inference.
+ZeroGPU is Gradio-only, so this Space exposes a Gradio `scan` function rather
+than the FastAPI worker contract used by Docker Spaces, Modal, and RunPod.
+
+Set `CORTEX_WORKER_MODE=fake` for a deployment smoke test. Set
+`CORTEX_WORKER_MODE=real` only after the Space image contains the TRIBE
+dependencies and weights.
+
+Expected output:
+
+- scan JSON metadata
+- a `.npy` file shaped like `(T, 20484)` with fsaverage5 vertex BOLD values

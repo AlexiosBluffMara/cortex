@@ -1902,7 +1902,7 @@
         }
         .economics-table {
             width: 100%;
-            min-width: 520px;
+            min-width: 680px;
             border-collapse: collapse;
             font-size: 10px;
         }
@@ -2273,7 +2273,7 @@
                 <section class="workflow-step" id="model-step">
                     <div class="step-kicker">2 · Narrator</div>
                     <h2>Use OpenRouter for persona analysis</h2>
-                    <p class="step-copy">Free OpenRouter models handle the writing. TRIBE keeps the local GPU. With at least $10 purchased and a positive balance, free models are documented at 1000 requests/day and 20 requests/minute; below that threshold the free-model cap is 50 requests/day.</p>
+                    <p class="step-copy">Free OpenRouter models handle the writing. TRIBE keeps the local GPU. With at least $10 purchased and a positive balance, free models are documented at 1000 requests/day and 20 requests/minute; below that threshold the free-model cap is 50 requests/day. Media inputs can use one extra source-description request before the four persona narrations.</p>
                     <select id="narration-model-select" class="model-select" aria-hidden="true" tabindex="-1">
                         <option value="openrouter:google/gemma-4-26b-a4b-it:free" selected>Gemma 4 26B A4B · OpenRouter free</option>
                     </select>
@@ -2319,8 +2319,16 @@
                                     <strong id="or-free-requests">—</strong>
                                 </div>
                                 <div class="economics-card">
-                                    <span>Cortex scans/day</span>
+                                    <span>Text scans/day</span>
                                     <strong id="or-free-scans">—</strong>
+                                </div>
+                                <div class="economics-card">
+                                    <span>Media scans/day</span>
+                                    <strong id="or-media-scans">—</strong>
+                                </div>
+                                <div class="economics-card">
+                                    <span>Free models</span>
+                                    <strong id="or-free-models">—</strong>
                                 </div>
                                 <div class="economics-card">
                                     <span>$100 balance</span>
@@ -2339,19 +2347,20 @@
                                             <th>Paid fallback</th>
                                             <th>Input / 1M</th>
                                             <th>Output / 1M</th>
-                                            <th>Cortex scan</th>
+                                            <th>Tokens / $1</th>
+                                            <th>4 narrations</th>
                                             <th>Scans / $1</th>
                                         </tr>
                                     </thead>
                                     <tbody id="or-paid-body">
-                                        <tr><td colspan="5">Loading live model pricing…</td></tr>
+                                        <tr><td colspan="6">Loading live model pricing…</td></tr>
                                     </tbody>
                                 </table>
                             </div>
                             <p class="economics-note economics-source">
                                 Sources: <a href="https://openrouter.ai/docs/api/reference/limits" target="_blank" rel="noreferrer">OpenRouter limits</a>,
-                                <a href="https://openrouter.ai/docs/api/api-reference/models/get-models" target="_blank" rel="noreferrer">Models API</a>,
-                                <a href="https://openrouter.ai/docs/cookbook/administration/usage-accounting" target="_blank" rel="noreferrer">usage accounting</a>.
+                                <a href="https://openrouter.ai/docs/guides/overview/models" target="_blank" rel="noreferrer">Models API pricing schema</a>,
+                                <a href="https://openrouter.ai/pricing" target="_blank" rel="noreferrer">OpenRouter pricing</a>.
                             </p>
                         </div>
                     </details>
@@ -2432,7 +2441,7 @@
             (function() {
                 const DEFAULT_MODEL = 'openrouter:google/gemma-4-26b-a4b-it:free';
                 const PAID_ACCESS_CODE = 'boileruphammerdown';
-                const TOKEN_ASSUMPTION = { prompt: 4800, completion: 4000 };
+                const TOKEN_ASSUMPTION = { prompt: 4800, completion: 4000, mediaPrompt: 500, mediaCompletion: 260 };
                 const FIXED = 0.00086;
                 const FALLBACK_MODELS = [
                     { id: DEFAULT_MODEL, label: 'Gemma 4 26B A4B', provider: 'OpenRouter', group: 'Free', prompt_price: 0, completion_price: 0, notes: 'Default cloud narrator; preserves local VRAM for TRIBE.' },
@@ -2468,8 +2477,11 @@
                 }
                 function modelCost(m) {
                     if (m.estimated_narration_cost_usd != null) return Number(m.estimated_narration_cost_usd);
-                    return (Number(m.prompt_price || 0) * TOKEN_ASSUMPTION.prompt)
-                         + (Number(m.completion_price || 0) * TOKEN_ASSUMPTION.completion);
+                    return modelTokenCost(m, TOKEN_ASSUMPTION.prompt, TOKEN_ASSUMPTION.completion);
+                }
+                function modelTokenCost(m, promptTokens, completionTokens) {
+                    return (Number(m.prompt_price || 0) * promptTokens)
+                         + (Number(m.completion_price || 0) * completionTokens);
                 }
                 function displayLabel(m) {
                     const provider = m.provider ? ` · ${m.provider}` : '';
@@ -2615,27 +2627,42 @@
                         daily_without_10_credits: 50,
                         daily_with_10_credits: 1000,
                         credits_required_for_1000_per_day: 10,
+                        persona_requests_per_scan: 4,
+                        media_context_requests_per_scan: 1,
                     };
                     const est = data?.estimated_tokens_per_scan || TOKEN_ASSUMPTION;
-                    const requestsPerScan = 4;
+                    const personaCalls = Number(limits.persona_requests_per_scan || 4);
+                    const mediaContextCalls = Number(limits.media_context_requests_per_scan || 1);
+                    const textRequestsPerScan = personaCalls;
+                    const mediaRequestsPerScan = personaCalls + mediaContextCalls;
                     const daily = Number(limits.daily_with_10_credits || 1000);
+                    const starterDaily = Number(limits.daily_without_10_credits || 50);
                     const rpm = Number(limits.requests_per_minute || 20);
-                    const scansPerDay = Math.floor(daily / requestsPerScan);
-                    const scansPerMinute = Math.floor(rpm / requestsPerScan);
+                    const textScansPerDay = Math.floor(daily / textRequestsPerScan);
+                    const mediaScansPerDay = Math.floor(daily / mediaRequestsPerScan);
+                    const starterTextScans = Math.floor(starterDaily / textRequestsPerScan);
+                    const starterMediaScans = Math.floor(starterDaily / mediaRequestsPerScan);
+                    const textScansPerMinute = Math.floor(rpm / textRequestsPerScan);
+                    const mediaScansPerMinute = Math.floor(rpm / mediaRequestsPerScan);
+                    const freeModelCount = Number(data?.openrouter_free_model_count || data?.catalog_count || 0);
 
                     const quotaSummary = document.getElementById('or-quota-summary');
                     const freeRequests = document.getElementById('or-free-requests');
                     const freeScans = document.getElementById('or-free-scans');
+                    const mediaScans = document.getElementById('or-media-scans');
+                    const freeModels = document.getElementById('or-free-models');
                     const fundedEffect = document.getElementById('or-funded-effect');
                     const perScan = document.getElementById('or-requests-per-scan');
                     const note = document.getElementById('or-free-note');
                     if (quotaSummary) quotaSummary.textContent = `${daily}/day · ${rpm}/min`;
-                    if (freeRequests) freeRequests.textContent = `${daily} free requests/day, ${rpm}/min`;
-                    if (freeScans) freeScans.textContent = `about ${scansPerDay}/day, ${scansPerMinute}/min`;
-                    if (fundedEffect) fundedEffect.textContent = '$100 keeps the same 1000/day free tier';
-                    if (perScan) perScan.textContent = `${requestsPerScan} calls · ${fmtCompact((est.prompt || 0) + (est.completion || 0))} tokens est.`;
+                    if (freeRequests) freeRequests.textContent = `${starterDaily}/day before $10; ${daily}/day after`;
+                    if (freeScans) freeScans.textContent = `${textScansPerDay}/day, ${textScansPerMinute}/min`;
+                    if (mediaScans) mediaScans.textContent = `${mediaScansPerDay}/day, ${mediaScansPerMinute}/min`;
+                    if (freeModels) freeModels.textContent = freeModelCount ? `${freeModelCount} live free options` : 'live list unavailable';
+                    if (fundedEffect) fundedEffect.textContent = '$100 does not raise the free cap beyond 1000/day';
+                    if (perScan) perScan.textContent = `${textRequestsPerScan} text calls, ${mediaRequestsPerScan} media calls`;
                     if (note) {
-                        note.textContent = 'Using only free OpenRouter models should not burn credits while the account stays positive, but the cap does not rise above 1000 free-model requests/day just because the balance is $100. Popular free endpoints can throttle or fail during peak demand; failed attempts may still count against the daily free quota. Cortex uses four persona narrations, so each scan spends four OpenRouter requests. For quality, Gemma 4 free is the default multimodal narrator, Nemotron Omni is the broadest free multimodal fallback, openrouter/free can auto-pick a free compatible model, and text-only free models are best kept as backups for already-summarized TRIBE outputs.';
+                        note.textContent = `No-spend mode uses only :free models or openrouter/free, so successful free runs should stay at $0 while the account balance remains positive. With less than $10 purchased, the public cap is ${starterDaily} free requests/day, or about ${starterTextScans} text scans and ${starterMediaScans} media scans. With at least $10 purchased, including a $100 funded account, the cap is ${daily} free requests/day: about ${textScansPerDay} text scans or ${mediaScansPerDay} image/audio/video scans because media scans may add one source-description request. Free quality is good for demos but less predictable than paid routing: popular endpoints can throttle, fail, or return no content during peak demand, and failed attempts may still count against the daily quota. Cortex defaults to Gemma 4 free for multimodal narration, uses Nemotron Omni for broad audio/video fallback, can use openrouter/free for automatic free routing, and keeps text-only free models as backup readers.`;
                     }
 
                     const paid = models
@@ -2647,17 +2674,20 @@
                     const body = document.getElementById('or-paid-body');
                     if (!body) return;
                     if (!paid.length) {
-                        body.innerHTML = '<tr><td colspan="5">No paid fallback pricing is available in this catalog response.</td></tr>';
+                        body.innerHTML = '<tr><td colspan="6">No paid fallback pricing is available in this catalog response.</td></tr>';
                         return;
                     }
                     body.innerHTML = paid.map(m => {
                         const promptPerM = Number(m.prompt_price || 0) * 1000000;
                         const completionPerM = Number(m.completion_price || 0) * 1000000;
                         const scansPerDollar = m._cost > 0 ? (1 / m._cost) : null;
+                        const inputPerDollar = Number(m.prompt_price || 0) > 0 ? 1 / Number(m.prompt_price || 0) : null;
+                        const outputPerDollar = Number(m.completion_price || 0) > 0 ? 1 / Number(m.completion_price || 0) : null;
                         return `<tr>
                             <td>${displayLabel(m)}</td>
                             <td>${fmtMoney(promptPerM, 3)}</td>
                             <td>${fmtMoney(completionPerM, 3)}</td>
+                            <td>${inputPerDollar ? fmtCompact(inputPerDollar) : 'free'} in<br>${outputPerDollar ? fmtCompact(outputPerDollar) : 'free'} out</td>
                             <td>${fmtMoney(m._cost, 6)}</td>
                             <td>${scansPerDollar ? fmtCompact(scansPerDollar) : '—'}</td>
                         </tr>`;
@@ -2954,7 +2984,7 @@
 
     <!-- D3 v7 (UMD) for the data panel charts -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script type="module" src="/main.js?v=20260623-funded-cloud"></script>
+    <script type="module" src="/main.js?v=20260623-openrouter-economics"></script>
     <script type="module" src="/charts.js?v=20260623-network-summary"></script>
 
     <!-- ── Robinhood-Legend-style draggable panels (gridstack) ─────────────── -->

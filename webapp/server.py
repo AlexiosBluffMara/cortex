@@ -106,6 +106,7 @@ OPENROUTER_MODEL_CACHE_TTL_S = int(_os.environ.get("OPENROUTER_MODEL_CACHE_TTL_S
 CORTEX_PAID_ACCESS_CODE = _os.environ.get("CORTEX_PAID_ACCESS_CODE", "boileruphammerdown")
 CORTEX_CLOUD_TRIBE_ENDPOINT = (_os.environ.get("CORTEX_CLOUD_TRIBE_ENDPOINT", "") or "").rstrip("/")
 CORTEX_CLOUD_TRIBE_PROVIDER = _os.environ.get("CORTEX_CLOUD_TRIBE_PROVIDER", "huggingface-zero-gpu")
+CORTEX_CLOUD_TRIBE_TOKEN = _os.environ.get("CORTEX_CLOUD_TRIBE_TOKEN", "").strip()
 CLOUD_COMPUTE_TARGETS = {"cloud_auto", "cloud_hf", "cloud_modal", "cloud_runpod"}
 
 OPENROUTER_FREE_LIMITS = {
@@ -113,8 +114,16 @@ OPENROUTER_FREE_LIMITS = {
     "daily_without_10_credits": 50,
     "daily_with_10_credits": 1000,
     "credits_required_for_1000_per_day": 10,
-    "account_note": "Free models require a positive credit balance; at least $10 purchased raises the daily free-model limit.",
+    "persona_requests_per_scan": 4,
+    "media_context_requests_per_scan": 1,
+    "free_model_selector": "Model IDs ending in :free, plus openrouter/free.",
+    "account_note": (
+        "Free models are request-limited, not token-bucket-limited. Purchasing at least $10 in credits "
+        "raises the daily free-model cap; a $100 balance does not raise it beyond the documented 1000/day cap. "
+        "Keep the balance positive because negative balances can trigger 402 responses even for free models."
+    ),
     "source": "https://openrouter.ai/docs/api/reference/limits",
+    "pricing_source": "https://openrouter.ai/docs/guides/overview/models",
 }
 
 
@@ -155,6 +164,18 @@ def _normalize_compute_target(compute_target: str | None) -> str:
     if target in {"local", *CLOUD_COMPUTE_TARGETS}:
         return target
     return "local"
+
+
+def _cloud_tribe_headers(compute_target: str | None = None, upstream_base: str | None = None) -> dict[str, str]:
+    is_cloud_target = _compute_target_requires_paid_access(compute_target)
+    is_cloud_base = bool(
+        upstream_base
+        and CORTEX_CLOUD_TRIBE_ENDPOINT
+        and upstream_base.rstrip("/") == CORTEX_CLOUD_TRIBE_ENDPOINT
+    )
+    if CORTEX_CLOUD_TRIBE_TOKEN and (is_cloud_target or is_cloud_base):
+        return {"Authorization": f"Bearer {CORTEX_CLOUD_TRIBE_TOKEN}"}
+    return {}
 
 
 def _paid_access_rejection(reason: str) -> JSONResponse:
@@ -335,6 +356,9 @@ OPENROUTER_FREE_MODEL_PRIORITY = [
 _OPENROUTER_MODEL_CACHE: dict[str, Any] = {
     "expires_at": 0.0,
     "models": [],
+    "paid_overrides": {},
+    "model_count": 0,
+    "free_model_count": 0,
     "error": None,
     "refreshed_at": None,
 }
@@ -592,24 +616,25 @@ def _clean_openrouter_label(model: dict[str, Any]) -> str:
     return label or raw_id
 
 
-def _catalog_item_from_openrouter_model(model: dict[str, Any]) -> dict[str, Any]:
+def _catalog_item_from_openrouter_model(model: dict[str, Any], group: str | None = None) -> dict[str, Any]:
     raw_id = str(model.get("id") or "")
     architecture = model.get("architecture") or {}
     pricing = model.get("pricing") or {}
     modalities = list(architecture.get("input_modalities") or ["text"])
     context_length = int(model.get("context_length") or (model.get("top_provider") or {}).get("context_length") or 0)
     modality_text = ", ".join(modalities) if modalities else "text"
+    resolved_group = group or ("Free" if _openrouter_model_is_free(model) else "Paid")
     return {
         "id": f"openrouter:{raw_id}",
         "label": _clean_openrouter_label(model),
         "provider": "OpenRouter",
-        "group": "Free",
+        "group": resolved_group,
         "default": raw_id == OPENROUTER_DEFAULT_MODEL,
         "modalities": modalities,
         "context_length": context_length,
         "prompt_price": _price_to_float(pricing.get("prompt")),
         "completion_price": _price_to_float(pricing.get("completion")),
-        "notes": f"Live OpenRouter free model. Inputs: {modality_text}.",
+        "notes": f"Live OpenRouter {resolved_group.lower()} model. Inputs: {modality_text}.",
     }
 
 
@@ -655,6 +680,25 @@ def _openrouter_free_models_from_payload(payload: dict[str, Any]) -> list[dict[s
     return prioritized
 
 
+def _openrouter_paid_overrides_from_payload(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    raw_models = payload.get("data") or []
+    if not isinstance(raw_models, list):
+        return {}
+    wanted = {
+        str(item.get("id", "")).removeprefix("openrouter:")
+        for item in NARRATION_MODEL_CATALOG
+        if str(item.get("id", "")).startswith("openrouter:") and item.get("group") == "Paid"
+    }
+    overrides: dict[str, dict[str, Any]] = {}
+    for model in raw_models:
+        if not isinstance(model, dict):
+            continue
+        raw_id = str(model.get("id") or "")
+        if raw_id in wanted:
+            overrides[f"openrouter:{raw_id}"] = _catalog_item_from_openrouter_model(model, group="Paid")
+    return overrides
+
+
 async def _fetch_openrouter_free_models(force_refresh: bool = False) -> list[dict[str, Any]]:
     now = time.time()
     if (
@@ -668,10 +712,15 @@ async def _fetch_openrouter_free_models(force_refresh: bool = False) -> list[dic
     async with _httpx.AsyncClient(timeout=8.0) as client:
         resp = await client.get(f"{OPENROUTER_API_BASE}/models")
     resp.raise_for_status()
-    models = _openrouter_free_models_from_payload(resp.json())
+    payload = resp.json()
+    raw_models = payload.get("data") or []
+    models = _openrouter_free_models_from_payload(payload)
     _OPENROUTER_MODEL_CACHE.update({
         "expires_at": now + OPENROUTER_MODEL_CACHE_TTL_S,
         "models": models,
+        "paid_overrides": _openrouter_paid_overrides_from_payload(payload),
+        "model_count": len(raw_models) if isinstance(raw_models, list) else 0,
+        "free_model_count": len(models),
         "error": None,
         "refreshed_at": int(now),
     })
@@ -679,11 +728,20 @@ async def _fetch_openrouter_free_models(force_refresh: bool = False) -> list[dic
 
 
 def _static_paid_and_local_models() -> list[dict[str, Any]]:
-    return [
-        dict(item)
-        for item in NARRATION_MODEL_CATALOG
-        if item.get("group") != "Free" or str(item.get("id", "")).startswith("local:")
-    ]
+    live_paid = _OPENROUTER_MODEL_CACHE.get("paid_overrides") or {}
+    items: list[dict[str, Any]] = []
+    for item in NARRATION_MODEL_CATALOG:
+        item_id = str(item.get("id", ""))
+        if item.get("group") == "Free" and not item_id.startswith("local:"):
+            continue
+        if item_id in live_paid:
+            merged = {**item, **live_paid[item_id]}
+            if item.get("notes"):
+                merged["notes"] = item["notes"]
+            items.append(merged)
+        else:
+            items.append(dict(item))
+    return items
 
 
 async def _narration_model_catalog() -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -698,6 +756,8 @@ async def _narration_model_catalog() -> tuple[list[dict[str, Any]], dict[str, An
         meta = {
             "catalog_source": "openrouter_live",
             "catalog_count": len(live_free_models),
+            "openrouter_model_count": _OPENROUTER_MODEL_CACHE.get("model_count"),
+            "openrouter_free_model_count": _OPENROUTER_MODEL_CACHE.get("free_model_count") or len(live_free_models),
             "catalog_refreshed_at": _OPENROUTER_MODEL_CACHE.get("refreshed_at"),
             "catalog_error": None,
         }
@@ -706,6 +766,8 @@ async def _narration_model_catalog() -> tuple[list[dict[str, Any]], dict[str, An
     return list(NARRATION_MODEL_CATALOG), {
         "catalog_source": "static_fallback",
         "catalog_count": len(NARRATION_MODEL_CATALOG),
+        "openrouter_model_count": None,
+        "openrouter_free_model_count": None,
         "catalog_refreshed_at": None,
         "catalog_error": _OPENROUTER_MODEL_CACHE.get("error"),
     }
@@ -1172,6 +1234,11 @@ def create_app(
                 "completion": 4000,
                 "total": 8800,
                 "assumption": "Four personas, roughly 1200 prompt + 1000 output tokens each.",
+                "media_context_prompt": 500,
+                "media_context_completion": 260,
+                "media_context_assumption": (
+                    "Image, audio, and video scans can add one source-description request before TRIBE narration."
+                ),
             },
             "fixed_local_cost_estimate_usd": {
                 "tribe_electricity": 0.00006,
@@ -1643,6 +1710,7 @@ def create_app(
                         f"{selected_proxy_url}/api/scan",
                         files=files_payload,
                         data=data_payload,
+                        headers=_cloud_tribe_headers(compute_target, selected_proxy_url),
                     )
                 if r.status_code >= 400:
                     raise RuntimeError(f"upstream {r.status_code}: {r.text[:200]}")
@@ -1659,7 +1727,7 @@ def create_app(
                     {
                         "id": scan_id,
                         "upstream_id": upstream_id,
-                        "upstream_base": TRIBE_PROXY_URL,
+                        "upstream_base": selected_proxy_url,
                         "status": "queued",
                         "filename": file.filename,
                         "tier": tier,
@@ -1771,14 +1839,21 @@ def create_app(
         try:
             import httpx as _httpx
             async with _httpx.AsyncClient(timeout=4.0) as client:
-                r = await client.get(f"{upstream_base}/api/scan/{upstream_id}")
+                r = await client.get(
+                    f"{upstream_base}/api/scan/{upstream_id}",
+                    headers=_cloud_tribe_headers(rec.get("compute_target"), upstream_base),
+                )
             if r.status_code == 200:
                 u = r.json()
                 # Merge: keep local id + filename + source, take upstream
                 # status + results + narrations.
                 merged = dict(rec)
-                for k in ("status", "top_rois", "peak_t", "tr_seconds", "n_t",
-                          "seconds_elapsed", "narrations", "narration", "error"):
+                for k in (
+                    "status", "top_rois", "peak_t", "tr_seconds", "n_t",
+                    "seconds_elapsed", "narrations", "narration", "error",
+                    "has_bold_vertex", "bold_vertex_url", "source_media_url",
+                    "tribe_seconds",
+                ):
                     if k in u and u[k] is not None:
                         merged[k] = u[k]
                 return merged
@@ -1968,7 +2043,10 @@ def create_app(
                 upstream_id = record.get("upstream_id") or scan_id
                 upstream_base = (record.get("upstream_base") or TRIBE_PROXY_URL).rstrip("/")
                 async with _httpx.AsyncClient(timeout=5.0) as client:
-                    r = await client.get(f"{upstream_base}/api/scan/{upstream_id}/narrations")
+                    r = await client.get(
+                        f"{upstream_base}/api/scan/{upstream_id}/narrations",
+                        headers=_cloud_tribe_headers(record.get("compute_target"), upstream_base),
+                    )
                 if r.status_code == 200:
                     j = r.json()
                     narrations = j.get("narrations") or {}
@@ -2108,9 +2186,11 @@ def create_app(
         rec = await app.state.registry.get(scan_id)
         upstream_id: str | None = None
         upstream_base: str | None = None
+        compute_target: str | None = None
         if rec and rec.get("proxied"):
             upstream_id = rec.get("upstream_id")
             upstream_base = (rec.get("upstream_base") or TRIBE_PROXY_URL or "").rstrip("/")
+            compute_target = rec.get("compute_target")
         elif rec is None and TRIBE_PROXY_URL:
             # Gallery merged upstream scan_id directly — try as-is
             upstream_id = scan_id
@@ -2121,7 +2201,7 @@ def create_app(
         try:
             import httpx as _httpx
             async with _httpx.AsyncClient(timeout=20.0) as client:
-                r = await client.get(url)
+                r = await client.get(url, headers=_cloud_tribe_headers(compute_target, upstream_base))
             if r.status_code == 200:
                 return Response(
                     content=r.content,
@@ -2201,8 +2281,11 @@ def create_app(
         raise HTTPException(status_code=404, detail="ascii-video not available for this scan")
 
     @app.get("/api/scan/{scan_id}/source-media")
-    async def source_media_endpoint(scan_id: str) -> FileResponse:
+    async def source_media_endpoint(scan_id: str) -> Response:
         """Serve the original uploaded media for gallery fallbacks."""
+        proxied = await _proxy_media(scan_id, "/source-media")
+        if proxied is not None:
+            return proxied
         for ext in sorted(ALLOWED_EXTS):
             source_path = UPLOAD_DIR / f"{scan_id}{ext}"
             if source_path.exists():
@@ -2293,10 +2376,11 @@ def create_app(
         """
         # Proxy fallthrough for scans handled by another backend (returns JSON)
         rec = await app.state.registry.get(scan_id)
-        upstream_id, upstream_base = None, None
+        upstream_id, upstream_base, compute_target = None, None, None
         if rec and rec.get("proxied"):
             upstream_id = rec.get("upstream_id")
             upstream_base = (rec.get("upstream_base") or TRIBE_PROXY_URL or "").rstrip("/")
+            compute_target = rec.get("compute_target")
         elif rec is None and TRIBE_PROXY_URL:
             upstream_id = scan_id
             upstream_base = TRIBE_PROXY_URL.rstrip("/")
@@ -2304,7 +2388,10 @@ def create_app(
             try:
                 import httpx as _httpx
                 async with _httpx.AsyncClient(timeout=10.0) as client:
-                    r = await client.get(f"{upstream_base}/api/scan/{upstream_id}/bold-simulate?n_t={n_t}")
+                    r = await client.get(
+                        f"{upstream_base}/api/scan/{upstream_id}/bold-simulate?n_t={n_t}",
+                        headers=_cloud_tribe_headers(compute_target, upstream_base),
+                    )
                 if r.status_code == 200:
                     return r.json()
             except Exception as exc:
@@ -2371,6 +2458,77 @@ def create_app(
         scan_id = uuid.uuid4().hex[:12]
         target = UPLOAD_DIR / f"{scan_id}.txt"
         target.write_text(clean_text[:4000], encoding="utf-8")
+        if _compute_target_requires_paid_access(compute_target):
+            try:
+                import httpx as _httpx
+                async with _httpx.AsyncClient(timeout=30.0) as client:
+                    with target.open("rb") as fh:
+                        files_payload = {"file": ("text-stimulus.txt", fh.read(), "text/plain")}
+                    data_payload = {
+                        "tier": str(tier),
+                        "source": f"proxy-from-bigapple:{source}",
+                        "narration_model": narration_model,
+                        "compute_target": "local",
+                    }
+                    r = await client.post(
+                        f"{CORTEX_CLOUD_TRIBE_ENDPOINT}/api/scan",
+                        files=files_payload,
+                        data=data_payload,
+                        headers=_cloud_tribe_headers(compute_target, CORTEX_CLOUD_TRIBE_ENDPOINT),
+                    )
+                if r.status_code >= 400:
+                    raise RuntimeError(f"upstream {r.status_code}: {r.text[:200]}")
+                upstream = r.json()
+                upstream_id = upstream.get("scan_id")
+                if not upstream_id:
+                    raise RuntimeError(f"upstream returned no scan_id: {upstream}")
+                await app.state.registry.put(
+                    scan_id,
+                    {
+                        "id": scan_id,
+                        "upstream_id": upstream_id,
+                        "upstream_base": CORTEX_CLOUD_TRIBE_ENDPOINT,
+                        "status": "queued",
+                        "filename": "<text stimulus>",
+                        "tier": tier,
+                        "source": source,
+                        "narration_model": narration_model,
+                        "compute_target": compute_target,
+                        "paid_access": paid_access,
+                        "text": clean_text[:1000],
+                        "proxied": True,
+                        "analysis_mode": "tribe_text",
+                    },
+                )
+                target.unlink(missing_ok=True)
+                await app.state.hub.broadcast(
+                    {"type": "scan_queued", "scan_id": scan_id, "filename": "<text stimulus>", "proxied": True}
+                )
+                return JSONResponse(
+                    {
+                        "ok": True,
+                        "scan_id": scan_id,
+                        "status": "queued",
+                        "proxied": True,
+                        "analysis_mode": "tribe_text",
+                        "compute_target": compute_target,
+                    },
+                    status_code=202,
+                )
+            except Exception as exc:
+                target.unlink(missing_ok=True)
+                log.error("[webapp] cloud text TRIBE proxy failed (%s): %s", scan_id, exc)
+                return JSONResponse(
+                    {
+                        "ok": False,
+                        "status": "cloud_tribe_unavailable",
+                        "error_code": "cloud_tribe_unavailable",
+                        "compute_target": compute_target,
+                        "message": f"Cloud TRIBE worker did not accept the text scan: {str(exc)[:180]}",
+                    },
+                    status_code=502,
+                )
+
         await app.state.registry.put(
             scan_id,
             {

@@ -8,6 +8,7 @@ counterparts should use markers (`@pytest.mark.gpu`, `@pytest.mark.ollama`,
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -185,6 +186,7 @@ def event_loop_policy():
 
 
 def pytest_collection_modifyitems(config, items):
+    run_e2e = os.environ.get("CORTEX_RUN_E2E") == "1"
     for item in items:
-        if "e2e" in item.keywords:
-            item.add_marker(pytest.mark.skip(reason="e2e requires running server"))
+        if "e2e" in item.keywords and not run_e2e:
+            item.add_marker(pytest.mark.skip(reason="set CORTEX_RUN_E2E=1 to run live-server e2e"))

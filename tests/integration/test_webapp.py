@@ -6,7 +6,12 @@ without spinning up Ollama or TRIBE v2.
 from __future__ import annotations
 
 import io
+import socket
 import sys
+import threading
+import time
+import urllib.request
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -17,6 +22,57 @@ from cortex.gpu_scheduler import GPUState
 from cortex.request_queue import RequestType
 
 pytestmark = pytest.mark.integration
+
+
+def _free_tcp_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+@contextmanager
+def _serve_asgi_app(asgi_app):
+    import uvicorn
+
+    port = _free_tcp_port()
+    server = uvicorn.Server(
+        uvicorn.Config(asgi_app, host="127.0.0.1", port=port, log_level="warning", ws="none")
+    )
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{port}"
+    deadline = time.time() + 8
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(f"{url}/healthz", timeout=0.25) as resp:
+                if resp.status == 200:
+                    break
+        except Exception:
+            time.sleep(0.05)
+    else:
+        server.should_exit = True
+        thread.join(timeout=5)
+        raise RuntimeError("temporary ASGI worker did not start")
+    try:
+        yield url
+    finally:
+        server.should_exit = True
+        thread.join(timeout=5)
+
+
+def _fake_cloud_worker(monkeypatch, tmp_path, token: str = "secret"):
+    from cloud.tribe_worker import app as worker_mod
+
+    upload_dir = tmp_path / "worker-uploads"
+    scan_dir = tmp_path / "worker-scans"
+    upload_dir.mkdir()
+    scan_dir.mkdir()
+    monkeypatch.setattr(worker_mod, "UPLOAD_DIR", upload_dir)
+    monkeypatch.setattr(worker_mod, "SCAN_DIR", scan_dir)
+    monkeypatch.setattr(worker_mod, "WORKER_MODE", "fake")
+    monkeypatch.setattr(worker_mod, "WORKER_TOKEN", token)
+    monkeypatch.setenv("CORTEX_WORKER_FAKE_DELAY_S", "0")
+    return worker_mod.create_app(registry=worker_mod.Registry())
 
 
 @pytest.fixture
@@ -137,6 +193,10 @@ class TestControlPlane:
         assert body["default_model"] == "openrouter:google/gemma-4-26b-a4b-it:free"
         assert body["catalog_source"] == "static_fallback"
         assert body["openrouter_free_limits"]["daily_with_10_credits"] == 1000
+        assert body["openrouter_free_limits"]["daily_without_10_credits"] == 50
+        assert body["openrouter_free_limits"]["persona_requests_per_scan"] == 4
+        assert body["openrouter_free_limits"]["media_context_requests_per_scan"] == 1
+        assert body["estimated_tokens_per_scan"]["media_context_completion"] == 260
         model_ids = {m["id"] for m in body["models"]}
         assert "openrouter:google/gemma-4-26b-a4b-it:free" in model_ids
         assert "local:gemma4:e4b" in model_ids
@@ -176,6 +236,34 @@ class TestControlPlane:
         ]
         assert "openrouter:paid/model" not in {m["id"] for m in models}
         assert models[0]["prompt_price"] == 0.0
+
+    def test_openrouter_payload_builds_paid_pricing_overrides(self):
+        from webapp import server as server_mod
+
+        payload = {
+            "data": [
+                {
+                    "id": "google/gemma-4-26b-a4b-it",
+                    "name": "Google: Gemma 4 26B A4B",
+                    "context_length": 262144,
+                    "architecture": {"input_modalities": ["image", "text", "video"]},
+                    "pricing": {"prompt": "0.00000006", "completion": "0.00000033"},
+                },
+                {
+                    "id": "not-in-ui/model",
+                    "name": "Ignored",
+                    "context_length": 4096,
+                    "architecture": {"input_modalities": ["text"]},
+                    "pricing": {"prompt": "0.000001", "completion": "0.000002"},
+                },
+            ]
+        }
+        overrides = server_mod._openrouter_paid_overrides_from_payload(payload)
+        paid = overrides["openrouter:google/gemma-4-26b-a4b-it"]
+        assert paid["group"] == "Paid"
+        assert paid["prompt_price"] == 0.00000006
+        assert paid["completion_price"] == 0.00000033
+        assert "openrouter:not-in-ui/model" not in overrides
 
     def test_narration_models_uses_live_openrouter_catalog(self, client, monkeypatch):
         from webapp import server as server_mod
@@ -423,6 +511,73 @@ class TestSubmitScan:
         body = resp.json()
         assert body["error_code"] == "cloud_tribe_not_configured"
         assert body["compute_target"] == "cloud_hf"
+
+    def test_cloud_gpu_with_access_proxies_upload_to_worker(self, client, tmp_path, monkeypatch):
+        from webapp import server as server_mod
+
+        with _serve_asgi_app(_fake_cloud_worker(monkeypatch, tmp_path)) as worker_url:
+            monkeypatch.setattr(server_mod, "CORTEX_CLOUD_TRIBE_ENDPOINT", worker_url)
+            monkeypatch.setattr(server_mod, "CORTEX_CLOUD_TRIBE_TOKEN", "secret")
+            files = {"file": ("clip.mp4", io.BytesIO(b"fake video bytes"), "video/mp4")}
+            resp = client.post(
+                "/api/scan",
+                files=files,
+                data={"compute_target": "cloud_hf", "paid_access_code": "boileruphammerdown"},
+            )
+            assert resp.status_code == 202
+            body = resp.json()
+            assert body["proxied"] is True
+            assert body["compute_target"] == "cloud_hf"
+
+            detail = {}
+            for _ in range(30):
+                detail = client.get(f"/api/scan/{body['scan_id']}").json()
+                if detail["status"] == "complete":
+                    break
+                time.sleep(0.05)
+
+            assert detail["status"] == "complete"
+            assert detail["upstream_base"] == worker_url
+            assert detail["has_bold_vertex"] is True
+
+            bold = client.get(f"/api/scan/{body['scan_id']}/bold-vertex?n_t=8")
+            assert bold.status_code == 200
+            assert bold.headers["X-N-T"] == "8"
+            assert len(bold.content) == 8 * 20484 * 4
+
+            source = client.get(f"/api/scan/{body['scan_id']}/source-media")
+            assert source.status_code == 200
+            assert source.content == b"fake video bytes"
+
+    def test_cloud_gpu_with_access_proxies_text_scan_to_worker(self, client, tmp_path, monkeypatch):
+        from webapp import server as server_mod
+
+        with _serve_asgi_app(_fake_cloud_worker(monkeypatch, tmp_path)) as worker_url:
+            monkeypatch.setattr(server_mod, "CORTEX_CLOUD_TRIBE_ENDPOINT", worker_url)
+            monkeypatch.setattr(server_mod, "CORTEX_CLOUD_TRIBE_TOKEN", "secret")
+            resp = client.post(
+                "/api/text-scan",
+                data={
+                    "text": "A Purdue-colored launch gantry rises into fog while a narrator counts down.",
+                    "compute_target": "cloud_hf",
+                    "paid_access_code": "boileruphammerdown",
+                },
+            )
+            assert resp.status_code == 202
+            body = resp.json()
+            assert body["proxied"] is True
+            assert body["analysis_mode"] == "tribe_text"
+
+            detail = {}
+            for _ in range(30):
+                detail = client.get(f"/api/scan/{body['scan_id']}").json()
+                if detail["status"] == "complete":
+                    break
+                time.sleep(0.05)
+
+            assert detail["status"] == "complete"
+            assert detail["compute_target"] == "cloud_hf"
+            assert detail["has_bold_vertex"] is True
 
     def test_rejects_oversized_upload(self, client):
         # 51MB exceeds the 50MB cap
