@@ -220,14 +220,43 @@ class TestControlPlane:
         monkeypatch.setattr(
             server_mod,
             "_openrouter_key_status",
-            AsyncMock(return_value={"ok": False, "status": "not_configured", "message": "missing"}),
+            AsyncMock(return_value={
+                "ok": False,
+                "status": "not_configured",
+                "message": "missing",
+                "key_source": {"source": "missing", "label": "not configured"},
+                "action_required": "configure key",
+            }),
         )
         resp = client.get("/api/openrouter/status")
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "not_configured"
+        assert body["key_source"]["label"] == "not configured"
+        assert body["action_required"] == "configure key"
         assert "default_model" in body
         assert "api_key" not in body
+
+    def test_load_openrouter_key_info_prefers_process_env(self, monkeypatch):
+        from webapp import server as server_mod
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-test-process")
+        info = server_mod._load_openrouter_api_key_info()
+        assert info["api_key"] == "sk-or-v1-test-process"
+        assert info["source"] == "process_env"
+        assert "environment variable" in info["source_label"]
+
+    def test_load_openrouter_key_info_reads_custom_env_file(self, tmp_path, monkeypatch):
+        from webapp import server as server_mod
+
+        env_file = tmp_path / "openrouter.env"
+        env_file.write_text("OPENROUTER_API_KEY='sk-or-v1-test-file'\n", encoding="utf-8")
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.setenv("CORTEX_OPENROUTER_ENV_PATH", str(env_file))
+        info = server_mod._load_openrouter_api_key_info()
+        assert info["api_key"] == "sk-or-v1-test-file"
+        assert info["source"] == "env_file"
+        assert info["source_label"] == "configured operator env file"
 
     def test_tribe_status_reports_warmable_when_idle(self, client):
         resp = client.get("/api/tribe/status")

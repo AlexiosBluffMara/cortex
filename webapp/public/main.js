@@ -1109,15 +1109,15 @@ async function pollOpenRouterStatus() {
         const r = await fetch("/api/openrouter/status", { cache: "no-store" });
         const d = await r.json();
         if (!r.ok || d.ok === false || d.status === "invalid_key") {
-            line.textContent = `OpenRouter needs attention: ${d.message || d.status || "unavailable"}`;
+            line.textContent = `OpenRouter needs attention: ${d.action_required || d.message || d.status || "unavailable"}`;
             setNode("openrouter", "down");
             return;
         }
-        if (d.status === "configured") {
+        if (d.status === "ready" || d.status === "configured") {
             line.textContent = "OpenRouter key is configured and account status is reachable.";
             setNode("openrouter", "up");
         } else {
-            line.textContent = "OpenRouter key is not configured yet; scans will show TRIBE output without cloud narration.";
+            line.textContent = d.action_required || "OpenRouter key is not configured yet; scans will show TRIBE output without cloud narration.";
             setNode("openrouter", "down");
         }
     } catch (err) {

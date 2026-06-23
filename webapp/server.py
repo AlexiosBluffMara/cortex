@@ -376,20 +376,56 @@ class WebSocketHub:
         return len(self._clients)
 
 
-def _load_openrouter_api_key() -> str:
-    """Load OpenRouter API key without exposing it to clients or logs."""
+def _read_openrouter_key_from_file(env_path: Path) -> str:
+    try:
+        for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or not stripped.startswith("OPENROUTER_API_KEY="):
+                continue
+            value = stripped.split("=", 1)[1].strip().strip('"').strip("'")
+            return value
+    except Exception:
+        return ""
+    return ""
+
+
+def _load_openrouter_api_key_info() -> dict[str, str]:
+    """Load OpenRouter key metadata without exposing the key to clients or logs."""
     api_key = _os.environ.get("OPENROUTER_API_KEY", "").strip()
     if api_key:
-        return api_key
-    env_path = Path.home() / ".hermes" / ".env"
-    if env_path.exists():
-        try:
-            for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
-                if line.strip().startswith("OPENROUTER_API_KEY="):
-                    return line.split("=", 1)[1].strip().strip('"').strip("'")
-        except Exception:
-            return ""
-    return ""
+        return {
+            "api_key": api_key,
+            "source": "process_env",
+            "source_label": "OPENROUTER_API_KEY environment variable",
+        }
+
+    env_candidates: list[tuple[Path, str]] = []
+    custom_env_path = (
+        _os.environ.get("CORTEX_OPENROUTER_ENV_PATH", "").strip()
+        or _os.environ.get("OPENROUTER_ENV_PATH", "").strip()
+    )
+    if custom_env_path:
+        env_candidates.append((Path(custom_env_path).expanduser(), "configured operator env file"))
+    env_candidates.extend([
+        (Path(__file__).resolve().parent.parent / ".env", "repo .env"),
+        (Path.home() / ".hermes" / ".env", "~/.hermes/.env"),
+    ])
+
+    for env_path, label in env_candidates:
+        if not env_path.exists():
+            continue
+        api_key = _read_openrouter_key_from_file(env_path).strip()
+        if api_key:
+            return {
+                "api_key": api_key,
+                "source": "env_file",
+                "source_label": label,
+            }
+    return {"api_key": "", "source": "missing", "source_label": "not configured"}
+
+
+def _load_openrouter_api_key() -> str:
+    return _load_openrouter_api_key_info()["api_key"]
 
 
 def _safe_openrouter_message(data: Any) -> str:
@@ -402,13 +438,20 @@ def _safe_openrouter_message(data: Any) -> str:
 
 async def _openrouter_key_status() -> dict[str, Any]:
     """Check the configured OpenRouter key without spending model credits."""
-    api_key = _load_openrouter_api_key()
+    key_info = _load_openrouter_api_key_info()
+    api_key = key_info["api_key"]
+    key_source = {
+        "source": key_info["source"],
+        "label": key_info["source_label"],
+    }
     if not api_key:
         return {
             "configured": False,
             "ok": False,
             "status": "missing_key",
+            "key_source": key_source,
             "message": "OPENROUTER_API_KEY is not configured.",
+            "action_required": "Set OPENROUTER_API_KEY in the service environment, D:\\cortex\\.env, or ~/.hermes/.env, then restart the Cortex FastAPI process.",
         }
     try:
         import httpx as _httpx
@@ -427,20 +470,24 @@ async def _openrouter_key_status() -> dict[str, Any]:
                 "is_free_tier": data.get("is_free_tier"),
                 "rate_limit": data.get("rate_limit"),
             }
-            return {"configured": True, "ok": True, "status": "ready", "key": safe}
+            return {"configured": True, "ok": True, "status": "ready", "key_source": key_source, "key": safe}
         return {
             "configured": True,
             "ok": False,
             "status": "invalid_key" if resp.status_code in {401, 403} else "error",
+            "key_source": key_source,
             "http_status": resp.status_code,
             "message": _safe_openrouter_message(resp.json() if resp.content else {}),
+            "action_required": "Replace the configured OPENROUTER_API_KEY; OpenRouter rejected the current key.",
         }
     except Exception as exc:
         return {
             "configured": True,
             "ok": False,
             "status": "unreachable",
+            "key_source": key_source,
             "message": str(exc)[:180],
+            "action_required": "Check outbound network access to OpenRouter before the live demo.",
         }
 
 
