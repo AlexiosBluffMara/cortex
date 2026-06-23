@@ -104,10 +104,14 @@ async function run() {
     gridItems: document.querySelectorAll(".grid-stack,.grid-stack-item").length,
     collapsibleCards: document.querySelectorAll("details.cd-card").length,
     rightText: document.querySelector(".panel-right")?.innerText || "",
+    sourceEvidenceExists: !!document.querySelector("#source-evidence"),
+    sourceEvidenceInitiallyHidden: document.querySelector("#source-evidence")?.hidden === true,
   }));
   assert(rightRailAudit.resetButtons === 0, "right rail should not inject a reset layout button");
   assert(rightRailAudit.gridItems === 0, "right rail should not be wrapped in GridStack placeholders");
   assert(rightRailAudit.collapsibleCards === 0, "right rail should not hide results inside collapsible cards");
+  assert(rightRailAudit.sourceEvidenceExists, "right rail should include a source evidence panel");
+  assert(rightRailAudit.sourceEvidenceInitiallyHidden, "source evidence should stay hidden until media context exists");
   const rightText = rightRailAudit.rightText.toLowerCase();
   assert(rightText.includes("current analysis shape"), "right rail should show current analysis context");
   assert(rightText.includes("persona narrations"), "right rail should expose persona narrations");

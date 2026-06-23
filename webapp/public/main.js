@@ -842,6 +842,28 @@ function setEvidenceText(id, text, title = null) {
     if (title || text) el.title = title || text;
 }
 
+function sourceEvidenceText(ctx) {
+    const text = String(ctx || "").trim();
+    if (!text) return "";
+    return text
+        .replace(/data:[^,\s]+;base64,[A-Za-z0-9+/=]+/g, "[embedded media omitted]")
+        .slice(0, 2400);
+}
+
+function updateSourceEvidence(ctx) {
+    const box = document.getElementById("source-evidence");
+    const pre = document.getElementById("source-evidence-text");
+    if (!box || !pre) return;
+    const text = sourceEvidenceText(ctx);
+    if (!text) {
+        box.hidden = true;
+        pre.textContent = "";
+        return;
+    }
+    box.hidden = false;
+    pre.textContent = text;
+}
+
 function executionLabel(result = {}) {
     const status = result.status || (st.scanId ? "queued" : "not submitted");
     const target = result.compute_target || selectedComputeTarget();
@@ -857,6 +879,7 @@ function executionLabel(result = {}) {
         return pieces.join(" · ");
     }
     if (status === "failed") return `failed · ${route}`;
+    if (status === "describing_source") return `building source context · ${route}`;
     return `${status} · ${route}`;
 }
 
@@ -917,6 +940,7 @@ function updateAnalysisContext(result = {}) {
     setEvidenceText("analysis-execution", executionLabel(result));
     setEvidenceText("analysis-bold", boldEvidenceLabel(result));
     setEvidenceText("analysis-source", sourceContextLabel(result), result.media_context || null);
+    updateSourceEvidence(result.media_context);
 }
 
 function renderNarration(result) {
@@ -1271,6 +1295,7 @@ function onWs(msg) {
             appendEvent(`${msg.scan_id}: ${msg.phase}`, "progress");
             if (msg.scan_id === st.scanId) showOverlay(msg.phase);
             if (msg.phase === "running") pushStream("tribe", `scan ${shortId(msg.scan_id)} → loading TRIBE v2 weights`);
+            else if (msg.phase === "describing_source") pushStream("vision", `scan ${shortId(msg.scan_id)} → building source timeline/context`);
             else if (msg.phase === "narrating") pushStream("gemma", `scan ${shortId(msg.scan_id)} → narrating with 4 personas`);
             else pushStream("queue", `scan ${shortId(msg.scan_id)} → ${msg.phase}`);
             break;
@@ -1489,6 +1514,7 @@ function showOverlay(phase) {
     const msgs = {
         queued:    "Queued — waiting for GPU…",
         running:   "TRIBE v2 running…<br><small style='opacity:.6'>Predicting cortical BOLD responses</small>",
+        describing_source: "Building source context…<br><small style='opacity:.6'>Sampling media evidence for grounded personas</small>",
         narrating: "OpenRouter narrating…<br><small style='opacity:.6'>Building persona interpretation</small>",
     };
     overlayInner.innerHTML = `

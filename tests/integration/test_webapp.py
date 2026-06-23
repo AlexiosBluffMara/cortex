@@ -15,6 +15,7 @@ import time
 import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -513,6 +514,91 @@ class TestSubmitScan:
         assert record["narration_model"] == "openrouter:google/gemma-4-26b-a4b-it:free"
         assert record["compute_target"] == "local"
 
+    @pytest.mark.asyncio
+    async def test_local_scan_reports_source_context_phase(self, tmp_path, monkeypatch):
+        from types import SimpleNamespace
+
+        from webapp import server as server_mod
+
+        stimulus = tmp_path / "clip.mp4"
+        stimulus.write_bytes(b"fake video bytes")
+        events: list[dict[str, Any]] = []
+        store: dict[str, dict[str, Any]] = {"sourcephase01": {"id": "sourcephase01"}}
+
+        class FakeQueue:
+            async def submit(self, **_kwargs):
+                return SimpleNamespace(
+                    top_rois=["7Networks_RH_Vis_4"],
+                    peak_t=2,
+                    seconds_elapsed=1.2,
+                    preds=None,
+                )
+
+        class FakeRegistry:
+            async def update(self, scan_id, **fields):
+                store.setdefault(scan_id, {"id": scan_id}).update(fields)
+
+        class FakeHub:
+            async def broadcast(self, payload):
+                events.append(payload)
+
+        async def _noop(*_args, **_kwargs):
+            return None
+
+        monkeypatch.setattr(
+            server_mod,
+            "analyse",
+            lambda *_args, **_kwargs: SimpleNamespace(gemma_context=lambda: "BOLD context"),
+        )
+        monkeypatch.setattr(
+            server_mod,
+            "_describe_media_for_prompt",
+            AsyncMock(
+                return_value=(
+                    "Source media metadata:\n"
+                    "- modality: video\n"
+                    "Stimulus timeline (sampled keyframes for source grounding):\n"
+                    "- t=1.00s: keyframe sample extracted for visual timeline analysis."
+                )
+            ),
+        )
+        monkeypatch.setattr(server_mod, "_narrate_with_model", AsyncMock(return_value="grounded narration"))
+        monkeypatch.setattr(server_mod, "_generate_ascii_video", _noop)
+        monkeypatch.setattr(server_mod, "_generate_manim_video", _noop)
+        monkeypatch.setattr(server_mod, "_push_to_gcp", _noop)
+
+        fake_app = SimpleNamespace(
+            state=SimpleNamespace(
+                queue=FakeQueue(),
+                registry=FakeRegistry(),
+                hub=FakeHub(),
+            )
+        )
+
+        await server_mod._run_scan_background(
+            fake_app,
+            "sourcephase01",
+            str(stimulus),
+            1,
+            "webui",
+            "openrouter:google/gemma-4-26b-a4b-it:free",
+        )
+
+        phases = [
+            event["phase"]
+            for event in events
+            if event.get("type") == "scan_progress"
+        ]
+        assert phases == ["running", "describing_source", "narrating"]
+        assert store["sourcephase01"]["status"] == "complete"
+        assert "Stimulus timeline" in store["sourcephase01"]["media_context"]
+        assert set(store["sourcephase01"]["narrations"]) == {
+            "student",
+            "patient",
+            "clinician",
+            "ml_scientist",
+        }
+
     def test_rejects_paid_openrouter_without_funded_access(self, client):
         files = {"file": ("clip.mp4", io.BytesIO(b"\x00" * 1024), "video/mp4")}
         data = {"narration_model": "openrouter:google/gemma-4-26b-a4b-it"}
@@ -792,12 +878,16 @@ class TestSubmitScan:
         assert "Persona narrations" in html
         assert "Network summary" in html
         assert "frame-level causality timeline" in html
+        assert 'id="source-evidence"' in html
+        assert 'id="source-evidence-text"' in html
         assert "gridstack-all.js" not in html
         assert "gridstack.min.css" not in html
         assert "reset-layout-btn" not in html
         assert "details.cd-card" not in html
         assert "navigator.mediaDevices.getUserMedia" in js
         assert "new MediaRecorder" in js
+        assert "describing_source" in js
+        assert "Building source context" in js
         assert 'fd.append("compute_target"' in js
         assert 'fd.append("paid_access_code"' in js
         assert "microphone=(self), camera=(self)" in marketing_headers

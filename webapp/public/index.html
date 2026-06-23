@@ -405,6 +405,24 @@
             font-family: "Open Sans", sans-serif; font-size: 13px;
             color: var(--muted); text-align: center; margin: auto;
         }
+        .source-evidence {
+            margin: 0 14px 12px; padding: 10px 12px;
+            border: 1px solid var(--border); border-radius: 8px;
+            background: rgba(13,14,20,0.42);
+            flex: 0 0 auto; max-height: 156px; overflow: hidden;
+        }
+        .source-evidence[hidden] { display: none; }
+        .source-evidence-title {
+            font-family: "JetBrains Mono", monospace; font-size: 10px;
+            text-transform: uppercase; letter-spacing: 0.05em;
+            color: var(--muted); margin-bottom: 7px;
+        }
+        .source-evidence-text {
+            margin: 0; max-height: 112px; overflow: auto;
+            white-space: pre-wrap; overflow-wrap: anywhere;
+            font-family: "JetBrains Mono", monospace; font-size: 10.5px;
+            line-height: 1.55; color: var(--text-mid);
+        }
         .narration-tier { display: none; }
         .narration-tier.active-tier { display: block; }
 
@@ -2696,6 +2714,11 @@
             </div>
 
             <div id="run-cost-badge" class="run-cost-badge hidden"></div>
+
+            <div class="source-evidence" id="source-evidence" hidden>
+                <div class="source-evidence-title">Source evidence</div>
+                <pre class="source-evidence-text" id="source-evidence-text"></pre>
+            </div>
 
             <div class="narration-body" id="narration-body">
                 <div id="narration-student"      class="narration-tier active-tier"><p class="narration-placeholder">Submit a scan to see how an ISU undergrad would describe it.</p></div>

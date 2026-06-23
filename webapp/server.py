@@ -3716,7 +3716,6 @@ async def _run_scan_background(
             source=source,
         )
         tribe_seconds = round(time.time() - scan_t0, 2)
-        await _emit("narrating", tribe_seconds=tribe_seconds)
 
         # Persist the per-vertex BOLD trace so the WebUI can render the full
         # 20,484-vertex animation (not just the 50-region downsample) and so
@@ -3741,6 +3740,8 @@ async def _run_scan_background(
         except Exception as _exc:
             log.warning("[webapp] preds persist failed for %s: %s", scan_id, _exc)
 
+        await _emit("describing_source", tribe_seconds=tribe_seconds)
+
         # Build full brain context so the narrator gets both the real BOLD data
         # and modality/source context. For video/audio this preserves soundtrack
         # awareness through OpenRouter multimodal description or metadata fallback.
@@ -3753,6 +3754,11 @@ async def _run_scan_background(
         brain_ctx = f"{media_ctx}\n\nTRIBE v2 BOLD response summary:\n{bold_ctx}"
         label = Path(media_path).name
         user_prompt = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
+        await _emit(
+            "narrating",
+            tribe_seconds=tribe_seconds,
+            source_context="timeline" if "Stimulus timeline" in media_ctx else "metadata",
+        )
 
         # Fan out all 4 persona narrations concurrently — Ollama NUM_PARALLEL=4
         # batches them on one model instance, OpenRouter handles them in parallel.
