@@ -32,6 +32,17 @@ The FastAPI worker is what Cortex can call directly today. The ZeroGPU adapter
 is a no-cost experiment target, but it is not the same HTTP contract because
 ZeroGPU currently requires Gradio.
 
+Before routing production traffic to any cloud worker, check:
+
+```powershell
+Invoke-RestMethod https://your-worker.example/api/tribe/readiness
+```
+
+`contract_ready=true` means the HTTP proxy contract is online. In
+`CORTEX_WORKER_MODE=real`, `real_mode_ready=true` must also be true; otherwise
+the worker will reject real scans quickly with the missing module, weights, or
+CUDA readiness details.
+
 ## Provider Screen
 
 | Provider | Best Use | Cost Shape | Fit For TRIBE v2 |
@@ -68,6 +79,8 @@ The integration suite now proves:
 - a funded text scan can proxy to the same worker;
 - scan status hydration preserves worker `has_bold_vertex` metadata;
 - BOLD vertex bytes and source media proxy back through the main Cortex app.
+- the cloud worker reports real-mode readiness and fails fast when a GPU image
+  is missing TRIBE dependencies, weights, or CUDA.
 
 Run:
 

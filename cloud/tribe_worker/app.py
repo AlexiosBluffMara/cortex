@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import importlib.util
 import mimetypes
 import os
 import tempfile
@@ -53,6 +54,98 @@ YEO_ROIS = [
     "7Networks_LH_SalVentAttn_7",
     "7Networks_RH_Limbic_8",
 ]
+
+
+def _module_available(name: str) -> bool:
+    try:
+        return importlib.util.find_spec(name) is not None
+    except (ImportError, ValueError):
+        return False
+
+
+def _dir_has_files(path: Path | None) -> bool:
+    if path is None or not path.exists() or not path.is_dir():
+        return False
+    try:
+        return any(path.iterdir())
+    except OSError:
+        return False
+
+
+def _tribe_real_readiness() -> dict[str, Any]:
+    """Describe whether this container can run real TRIBE inference.
+
+    This intentionally avoids importing `cortex.pipeline` because that can be
+    expensive and may initialize accelerator libraries. It performs deploy-time
+    checks that explain the usual cloud failures: missing Python deps, missing
+    weights, and no visible accelerator.
+    """
+    modules = {
+        "torch": _module_available("torch"),
+        "tribev2": _module_available("tribev2"),
+        "cortex.pipeline": _module_available("cortex.pipeline"),
+    }
+    weights_dir: Path | None = None
+    cache_dir: Path | None = None
+    try:
+        from cortex import config as cortex_config  # noqa: PLC0415
+
+        weights_dir = Path(cortex_config.WEIGHTS_DIR)
+        cache_dir = Path(cortex_config.CACHE_DIR)
+    except Exception:
+        weights_dir = None
+        cache_dir = None
+
+    torch_info: dict[str, Any] = {
+        "importable": modules["torch"],
+        "cuda_available": False,
+        "cuda_device_count": 0,
+        "device_name": None,
+    }
+    if modules["torch"]:
+        try:
+            import torch  # noqa: PLC0415
+
+            torch_info["cuda_available"] = bool(torch.cuda.is_available())
+            torch_info["cuda_device_count"] = int(torch.cuda.device_count())
+            if torch.cuda.is_available():
+                torch_info["device_name"] = torch.cuda.get_device_name(0)
+        except Exception as exc:  # noqa: BLE001
+            torch_info["error"] = f"{exc.__class__.__name__}: {exc}"
+
+    checks = {
+        "modules": modules,
+        "weights_dir": str(weights_dir) if weights_dir else None,
+        "weights_present": _dir_has_files(weights_dir),
+        "cache_dir": str(cache_dir) if cache_dir else None,
+        "torch": torch_info,
+    }
+    missing: list[str] = []
+    for name, available in modules.items():
+        if not available:
+            missing.append(f"missing Python module: {name}")
+    if not checks["weights_present"]:
+        missing.append("TRIBE weights directory is missing or empty")
+    if not torch_info["cuda_available"]:
+        missing.append("no CUDA GPU visible to the worker")
+
+    return {
+        "real_mode_ready": not missing,
+        "missing": missing,
+        "checks": checks,
+    }
+
+
+def tribe_readiness() -> dict[str, Any]:
+    real = _tribe_real_readiness()
+    return {
+        "ok": WORKER_MODE != "real" or real["real_mode_ready"],
+        "mode": WORKER_MODE,
+        "provider": WORKER_PROVIDER,
+        "contract_ready": True,
+        "real_mode_required": WORKER_MODE == "real",
+        **real,
+    }
 
 
 def require_bearer(authorization: str | None = Header(default=None)) -> None:
@@ -197,6 +290,12 @@ async def _process_scan(app: FastAPI, scan_id: str, media_path: Path) -> None:
     await app.state.registry.update(scan_id, status="running")
     try:
         if WORKER_MODE == "real":
+            readiness = tribe_readiness()
+            if not readiness["real_mode_ready"]:
+                raise RuntimeError(
+                    "TRIBE real mode is not ready: "
+                    + "; ".join(readiness.get("missing") or ["unknown readiness failure"])
+                )
             bold, rois, peak_t, seconds_elapsed = await _run_real(scan_id, media_path)
         else:
             await asyncio.sleep(float(os.environ.get("CORTEX_WORKER_FAKE_DELAY_S", "0.05")))
@@ -230,27 +329,38 @@ def create_app(registry: Registry | None = None) -> FastAPI:
     @app.get("/healthz")
     async def healthz() -> dict[str, Any]:
         records = await app.state.registry.list_recent(limit=1000)
+        readiness = tribe_readiness()
         return {
-            "ok": True,
+            "ok": readiness["ok"],
             "mode": WORKER_MODE,
             "provider": WORKER_PROVIDER,
             "n_vertices": N_VERTICES,
             "tr_seconds": TR_SECONDS,
             "queue_depth": sum(1 for item in records if item.status == "queued"),
             "active": sum(1 for item in records if item.status == "running"),
+            "readiness": readiness,
         }
+
+    @app.get("/api/tribe/readiness")
+    async def tribe_readiness_endpoint() -> dict[str, Any]:
+        return tribe_readiness()
 
     @app.get("/api/tribe/status")
     async def tribe_status() -> dict[str, Any]:
         health = await healthz()
+        readiness = health["readiness"]
         return {
-            "ok": True,
+            "ok": readiness["ok"],
             "pc_online": False,
             "cloud_worker": True,
-            "tribe_loaded": WORKER_MODE == "real",
-            "tribe_ready": True,
+            "tribe_loaded": WORKER_MODE == "real" and readiness["real_mode_ready"],
+            "tribe_ready": readiness["ok"],
             "can_warm_tribe": True,
-            "message": "Cloud TRIBE worker is reachable.",
+            "message": (
+                "Cloud TRIBE worker is reachable."
+                if readiness["ok"]
+                else "Cloud worker is reachable, but real TRIBE mode is not ready."
+            ),
             **health,
         }
 

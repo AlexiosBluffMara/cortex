@@ -17,6 +17,7 @@ The worker exposes:
 
 - `GET /healthz`
 - `GET /api/tribe/status`
+- `GET /api/tribe/readiness`
 - `POST /api/scan`
 - `GET /api/scan/{scan_id}`
 - `GET /api/scan/{scan_id}/bold-vertex`
@@ -44,6 +45,18 @@ $env:CORTEX_CLOUD_TRIBE_ENDPOINT = "http://127.0.0.1:8876"
 $env:CORTEX_CLOUD_TRIBE_PROVIDER = "local-fake-worker"
 $env:CORTEX_CLOUD_TRIBE_TOKEN = ""
 ```
+
+Check readiness before routing the public webapp to the worker:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8876/api/tribe/readiness
+```
+
+In fake mode, `contract_ready=true` proves the HTTP surface is usable. In real
+mode, `real_mode_ready=true` proves the worker can see the TRIBE Python
+modules, a non-empty weights directory, and a CUDA GPU. If real mode is not
+ready, scans fail quickly with the missing readiness checks instead of sitting
+in the queue.
 
 ## Real GPU Mode
 
