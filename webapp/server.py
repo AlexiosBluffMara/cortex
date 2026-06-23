@@ -24,6 +24,9 @@ from __future__ import annotations
 import asyncio
 import base64
 import mimetypes
+import shutil
+import subprocess
+import tempfile
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -1124,26 +1127,133 @@ def _write_text_bridge_stimulus(
     return bridge_path
 
 
-def _openrouter_content_for_media(media_path: Path) -> tuple[str, list[dict[str, Any]] | None]:
+def _video_keyframe_samples_for_prompt(
+    media_path: Path,
+    *,
+    max_frames: int = 6,
+) -> tuple[str, list[dict[str, Any]]]:
+    """Extract small timestamped keyframes for timeline-aware source grounding."""
+    suffix = media_path.suffix.lower()
+    if suffix not in ALLOWED_VIDEO:
+        return "", []
+
+    try:
+        from cortex import media_processor as _mp
+        info = _mp.probe(media_path)
+    except Exception as exc:  # noqa: BLE001
+        return f"Stimulus timeline: unavailable because media probe failed ({str(exc)[:100]}).", []
+
+    if info.width <= 0 or info.duration_s <= 0:
+        return "Stimulus timeline: unavailable because no video stream was detected.", []
+
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return "Stimulus timeline: unavailable because ffmpeg is not on PATH.", []
+
+    n_frames = max(1, min(max_frames, int(round(info.duration_s)) or 1))
+    times = [
+        max(0.0, min(info.duration_s, info.duration_s * (idx + 1) / (n_frames + 1)))
+        for idx in range(n_frames)
+    ]
+    samples: list[dict[str, Any]] = []
+
+    with tempfile.TemporaryDirectory(prefix="cortex_video_frames_") as tmp:
+        tmp_dir = Path(tmp)
+        for idx, seconds in enumerate(times):
+            out = tmp_dir / f"frame_{idx:02d}.jpg"
+            cmd = [
+                ffmpeg,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-ss",
+                f"{seconds:.3f}",
+                "-i",
+                str(media_path),
+                "-frames:v",
+                "1",
+                "-q:v",
+                "4",
+                "-vf",
+                "scale=512:-2:force_original_aspect_ratio=decrease",
+                str(out),
+            ]
+            try:
+                subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    timeout=20,
+                    check=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+                )
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                continue
+            if not out.exists() or out.stat().st_size < 256:
+                continue
+            samples.append({
+                "time_s": round(seconds, 2),
+                "mime": "image/jpeg",
+                "b64": base64.b64encode(out.read_bytes()).decode("ascii"),
+            })
+
+    if not samples:
+        return "Stimulus timeline: keyframe extraction attempted, but no usable frames were produced.", []
+
+    lines = [
+        "Stimulus timeline (sampled keyframes for source grounding):",
+        *[f"- t={sample['time_s']:.2f}s: keyframe sample extracted for visual timeline analysis." for sample in samples],
+    ]
+    if info.has_audio:
+        lines.append("- audio: present, but not transcribed in this lightweight timeline pass.")
+    return "\n".join(lines), samples
+
+
+def _openrouter_content_for_media(
+    media_path: Path,
+    *,
+    video_samples: list[dict[str, Any]] | None = None,
+) -> tuple[str, list[dict[str, Any]] | None]:
     suffix = media_path.suffix.lower()
     mime = mimetypes.guess_type(str(media_path))[0] or "application/octet-stream"
-    raw_b64 = base64.b64encode(media_path.read_bytes()).decode("ascii")
     prompt = (
         "Describe this Cortex stimulus for a neuroscience brain-response demo. "
         "Focus on what a viewer/hearer is experiencing, including motion, objects, text, speech, music, and emotional tone. "
         "Do not diagnose anyone. Keep it under 160 words."
     )
     if suffix in ALLOWED_IMAGE:
+        raw_b64 = base64.b64encode(media_path.read_bytes()).decode("ascii")
         return OPENROUTER_DEFAULT_MODEL, [
             {"type": "text", "text": prompt},
             {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{raw_b64}"}},
         ]
     if suffix in ALLOWED_VIDEO:
+        if video_samples:
+            content: list[dict[str, Any]] = [
+                {
+                    "type": "text",
+                    "text": (
+                        "Describe this Cortex video stimulus as a compact timeline for a neuroscience brain-response demo. "
+                        "Use the timestamped keyframes below as anchors. Mention visible objects, motion, scene changes, text, and emotional tone. "
+                        "If audio is only indicated by metadata and not provided, say that audio is present but not transcribed. "
+                        "Return 3-6 short timestamp bullets plus one sentence naming the likely dominant sensory drivers."
+                    ),
+                }
+            ]
+            for sample in video_samples:
+                content.append({"type": "text", "text": f"Keyframe at t={sample['time_s']:.2f}s"})
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{sample['mime']};base64,{sample['b64']}"},
+                })
+            return OPENROUTER_DEFAULT_MODEL, content
+        raw_b64 = base64.b64encode(media_path.read_bytes()).decode("ascii")
         return OPENROUTER_DEFAULT_MODEL, [
             {"type": "text", "text": prompt + " Include the soundtrack or speech if the model can perceive it."},
             {"type": "video_url", "video_url": {"url": f"data:{mime};base64,{raw_b64}"}},
         ]
     if suffix in ALLOWED_AUDIO:
+        raw_b64 = base64.b64encode(media_path.read_bytes()).decode("ascii")
         audio_format = suffix.lstrip(".") or "wav"
         if audio_format == "m4a":
             audio_format = "mp4"
@@ -1157,21 +1267,26 @@ def _openrouter_content_for_media(media_path: Path) -> tuple[str, list[dict[str,
 async def _describe_media_for_prompt(media_path: Path) -> str:
     """Generate a bounded multimodal source description without loading local Gemma."""
     metadata = _media_metadata_context(media_path)
+    timeline_context = ""
+    video_samples: list[dict[str, Any]] = []
+    if media_path.suffix.lower() in ALLOWED_VIDEO:
+        timeline_context, video_samples = _video_keyframe_samples_for_prompt(media_path)
+    base_context = metadata + (f"\n{timeline_context}" if timeline_context else "")
     if _os.environ.get("CORTEX_DISABLE_OPENROUTER_MEDIA_CONTEXT", "").lower() in {"1", "true", "yes"}:
-        return metadata
+        return base_context
     api_key = _load_openrouter_api_key()
     if not api_key:
-        return metadata + "\nOpenRouter multimodal source description: unavailable (no API key configured)."
+        return base_context + "\nOpenRouter multimodal source description: unavailable (no API key configured)."
     max_bytes = int(OPENROUTER_MEDIA_MAX_MB * 1024 * 1024)
     try:
-        if media_path.stat().st_size > max_bytes:
+        if media_path.stat().st_size > max_bytes and not video_samples:
             return (
-                metadata
+                base_context
                 + f"\nOpenRouter multimodal source description: skipped because media exceeds {OPENROUTER_MEDIA_MAX_MB:g} MB."
             )
-        model, content = _openrouter_content_for_media(media_path)
+        model, content = _openrouter_content_for_media(media_path, video_samples=video_samples)
         if content is None:
-            return metadata
+            return base_context
         import httpx as _httpx
         body = {
             "model": model,
@@ -1196,10 +1311,15 @@ async def _describe_media_for_prompt(media_path: Path) -> str:
         text = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
         text = str(text).strip()
         if not text:
-            return metadata
-        return metadata + f"\nOpenRouter multimodal source description ({model}):\n{text[:1400]}"
+            return base_context
+        heading = (
+            "OpenRouter multimodal source timeline"
+            if video_samples
+            else "OpenRouter multimodal source description"
+        )
+        return base_context + f"\n{heading} ({model}):\n{text[:1400]}"
     except Exception as exc:
-        return metadata + f"\nOpenRouter multimodal source description: unavailable ({str(exc)[:120]})."
+        return base_context + f"\nOpenRouter multimodal source description: unavailable ({str(exc)[:120]})."
 
 
 # ---------------------------------------------------------------------------
@@ -1764,7 +1884,10 @@ def create_app(
             )
             return JSONResponse(err.to_dict(), status_code=413)
 
-        media_context = _media_metadata_context(target)
+        if selected_proxy_url and ext in CLOUD_TRIBE_PROXY_EXTS:
+            media_context = await _describe_media_for_prompt(target)
+        else:
+            media_context = _media_metadata_context(target)
 
         # ────────────────────────────────────────────────────────────────────
         # Cloud TRIBE proxy: if this file needs TRIBE and the user selected a

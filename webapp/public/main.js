@@ -880,6 +880,12 @@ function sourceContextLabel(result = {}) {
     if (ctx.includes("OpenRouter multimodal source description (")) {
         return "OpenRouter source description";
     }
+    if (ctx.includes("OpenRouter multimodal source timeline (")) {
+        return "OpenRouter timeline description";
+    }
+    if (ctx.includes("Stimulus timeline (sampled keyframes")) {
+        return "sampled frame timeline";
+    }
     if (ctx.includes("skipped because media exceeds")) {
         return "metadata only · media too large";
     }

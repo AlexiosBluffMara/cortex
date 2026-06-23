@@ -5,6 +5,7 @@ without spinning up Ollama or TRIBE v2.
 """
 from __future__ import annotations
 
+import asyncio
 import io
 import re
 import socket
@@ -376,6 +377,43 @@ class TestControlPlane:
         assert "thunder and neon lights" in context
         assert "TRIBE v2 received through its text events path" in context
 
+    def test_video_media_context_can_include_sampled_timeline_without_openrouter(self, tmp_path, monkeypatch):
+        from webapp import server as server_mod
+
+        stimulus = tmp_path / "clip.mp4"
+        stimulus.write_bytes(b"fake video bytes")
+        monkeypatch.setenv("CORTEX_DISABLE_OPENROUTER_MEDIA_CONTEXT", "1")
+        monkeypatch.setattr(
+            server_mod,
+            "_video_keyframe_samples_for_prompt",
+            lambda _path: (
+                "Stimulus timeline (sampled keyframes for source grounding):\n"
+                "- t=1.00s: keyframe sample extracted for visual timeline analysis.",
+                [{"time_s": 1.0, "mime": "image/jpeg", "b64": "ZmFrZQ=="}],
+            ),
+        )
+
+        context = asyncio.run(server_mod._describe_media_for_prompt(stimulus))
+
+        assert "Source media metadata" in context
+        assert "Stimulus timeline (sampled keyframes" in context
+        assert "t=1.00s" in context
+
+    def test_openrouter_video_content_prefers_keyframes_over_raw_video(self, tmp_path):
+        from webapp import server as server_mod
+
+        stimulus = tmp_path / "clip.mp4"
+        stimulus.write_bytes(b"fake video bytes")
+        _model, content = server_mod._openrouter_content_for_media(
+            stimulus,
+            video_samples=[{"time_s": 1.25, "mime": "image/jpeg", "b64": "ZmFrZQ=="}],
+        )
+
+        assert content is not None
+        assert any(part.get("type") == "image_url" for part in content)
+        assert any("Keyframe at t=1.25s" in part.get("text", "") for part in content if part.get("type") == "text")
+        assert not any("video_url" in part for part in content)
+
     def test_cloud_narration_keeps_gpu_on_tribe(self):
         from webapp import server as server_mod
 
@@ -546,7 +584,7 @@ class TestSubmitScan:
             assert set(detail["narrations"]) == {"student", "patient", "clinician", "ml_scientist"}
             assert detail["narration"] == "narration text"
             assert detail["narration_timings"]
-            assert "modality=video" in detail["media_context"] or "modality: video" in detail["media_context"]
+            assert detail["media_context"] == "test media context"
 
             bold = client.get(f"/api/scan/{body['scan_id']}/bold-vertex?n_t=8")
             assert bold.status_code == 200
@@ -878,3 +916,5 @@ class TestStatic:
         assert "analysis-bold" in html
         assert "analysis-source" in html
         assert "publishBoldDataFromVertex" in main_js
+        assert "OpenRouter multimodal source timeline" in main_js
+        assert "Stimulus timeline (sampled keyframes" in main_js
