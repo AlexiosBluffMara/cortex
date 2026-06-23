@@ -97,7 +97,9 @@ include the same TRIBE dependencies and weights as the local Seratonin path.
   Spaces or paid Endpoints. For a ZeroGPU Gradio Space, deploy
   `cloud/huggingface_space` and set the main webapp to
   `CORTEX_CLOUD_TRIBE_MODE=gradio`; Cortex will call the Gradio `scan` API and
-  cache the returned BOLD file locally.
+  cache the returned BOLD file locally. Verify that route with
+  `python -m cloud.huggingface_space.verify --endpoint https://your-space.hf.space`
+  and add `--require-real` before exposing real scans.
 - **Modal:** wrap this app in an ASGI web endpoint or call the same processing
   function from a Modal GPU function. Good first paid serverless candidate.
 - **RunPod Serverless:** containerize this worker and expose the same HTTP

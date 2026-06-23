@@ -48,6 +48,18 @@ SPACE_SCAN_DIR.mkdir(parents=True, exist_ok=True)
 ZERO_GPU_DURATION_S = int(os.environ.get("CORTEX_ZEROGPU_DURATION_S", "120"))
 
 
+def _space_readiness() -> dict[str, Any]:
+    readiness = worker.tribe_readiness()
+    return {
+        "provider": "huggingface-zerogpu-gradio",
+        "worker_mode": readiness.get("mode") or worker.WORKER_MODE,
+        "contract_ready": bool(readiness.get("contract_ready")),
+        "real_mode_ready": bool(readiness.get("real_mode_ready")),
+        "real_mode_required": bool(readiness.get("real_mode_required")),
+        "readiness_missing": readiness.get("missing") or [],
+    }
+
+
 def _upload_path(upload: Any, scan_id: str) -> Path:
     if upload is None:
         raise ValueError("Upload a media or text file before running TRIBE.")
@@ -108,6 +120,7 @@ def run_tribe_scan(
         "tr_seconds": worker.TR_SECONDS,
         "has_bold_vertex": True,
         "bold_vertex_file": str(bold_path),
+        **_space_readiness(),
     }
     json_path = SPACE_SCAN_DIR / f"{scan_id}.json"
     json_path.write_text(json.dumps(record, indent=2), encoding="utf-8")

@@ -52,5 +52,18 @@ export CORTEX_CLOUD_TRIBE_MODE="gradio"
 export CORTEX_CLOUD_TRIBE_PROVIDER="huggingface-zerogpu"
 ```
 
+Verify the Gradio Space directly before enabling it in the webapp:
+
+```bash
+python -m cloud.huggingface_space.verify \
+  --endpoint "$CORTEX_CLOUD_TRIBE_ENDPOINT" \
+  --hf-token "$CORTEX_CLOUD_TRIBE_HF_TOKEN" \
+  --require-real
+```
+
+Without `--require-real`, the verifier proves the Space function, metadata, and
+downloaded BOLD `.npy` shape. With `--require-real`, it also fails unless the
+Space payload reports `worker_mode=real` and `real_mode_ready=true`.
+
 Use a Docker Space, Modal, RunPod, or another ASGI-capable GPU host when Cortex
 needs the faster direct FastAPI worker contract.

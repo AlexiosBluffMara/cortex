@@ -1019,12 +1019,10 @@
         .live-stream .ls-empty { color: var(--muted); font-style: italic; }
 
         /* ════════════════════════════════════════════════════════════════════════
-           ISU + Apple polish overlay (2026-05-04, take 2)
+           ISU + Apple polish overlay (2026-05-04, take 3)
            — ISU palette: Cardinal Red, Reggie (deep), Gold, White, Bone
            — Apple-style polish: gradients, frosted glass, soft shadows, springy
-             transitions, generous radii, draggable Robinhood-Legend-style panels
-             via gridstack.js (loaded in head)
-           — Collapsible <details> cards stay; scoped under .cd-card
+             transitions, generous radii, and dense work-focused panels
            — Auto-stick log slider with "↓ new logs" pill stays
            ══════════════════════════════════════════════════════════════════════ */
         :root {
@@ -1114,72 +1112,6 @@
             filter: drop-shadow(0 1px 8px rgba(204,0,0,0.5));
         }
 
-        /* ── Collapsible Apple-style cards ── */
-        details.cd-card {
-            margin: 10px 12px;
-            background: var(--surface);
-            background-image: var(--grad-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            overflow: hidden;
-            box-shadow: var(--shadow-1);
-            transition: background 200ms var(--ease-out),
-                        box-shadow 200ms var(--ease-out),
-                        border-color 200ms var(--ease-out);
-        }
-        details.cd-card:hover { border-color: var(--border-strong); }
-        details.cd-card[open] {
-            background: var(--surface2);
-            background-image: var(--grad-glass);
-            box-shadow: var(--shadow-2);
-        }
-        details.cd-card > summary {
-            list-style: none;
-            cursor: pointer;
-            padding: 13px 18px;
-            font-size: 11px; font-weight: 700;
-            text-transform: uppercase; letter-spacing: 0.08em;
-            color: var(--muted);
-            display: flex; align-items: center; gap: 10px;
-            user-select: none;
-            transition: color 160ms var(--ease-out);
-        }
-        details.cd-card > summary::-webkit-details-marker { display: none; }
-        details.cd-card > summary::before {
-            content: "›";
-            display: inline-block;
-            font-family: ui-monospace, SFMono-Regular, monospace;
-            font-size: 16px; line-height: 1;
-            transition: transform 220ms var(--spring);
-            color: var(--accent);
-            width: 14px; text-align: center;
-        }
-        details.cd-card[open] > summary::before { transform: rotate(90deg); }
-        details.cd-card > summary:hover { color: var(--text); }
-        details.cd-card > summary .cd-badge {
-            margin-left: auto;
-            font-size: 10px; font-weight: 700;
-            padding: 3px 9px; border-radius: 99px;
-            background: var(--accent-soft);
-            color: #ff5e5e;
-            text-transform: none; letter-spacing: 0.02em;
-            border: 1px solid rgba(204,0,0,0.32);
-        }
-        details.cd-card > .cd-body {
-            padding: 6px 18px 18px;
-            border-top: 1px solid var(--border);
-            background: transparent;
-        }
-
-        /* Drag handle (right side of summary) — only shown when gridstack is loaded */
-        .cd-card .cd-drag {
-            margin-left: 6px; cursor: move;
-            color: var(--muted2); font-size: 14px; line-height: 1;
-            user-select: none;
-            transition: color 160ms var(--ease-out);
-        }
-        .cd-card:hover .cd-drag { color: var(--accent2); }
-
         .panel-title {
             color: var(--muted) !important;
             letter-spacing: 0.08em;
@@ -1252,56 +1184,6 @@
         #live-stream::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
         body, button, input, select { letter-spacing: 0; }
-
-        details.cd-card > .cd-body {
-            opacity: 0; transform: translateY(-4px);
-            max-height: 0; overflow: hidden;
-            transition: opacity 240ms var(--ease-out),
-                        transform 280ms var(--ease-out),
-                        max-height 280ms var(--ease-out);
-        }
-        details.cd-card[open] > .cd-body {
-            opacity: 1; transform: translateY(0);
-            max-height: 1400px;
-        }
-
-        /* ── Drag-and-resize panels (gridstack) ── */
-        .grid-stack {
-            background: transparent;
-            min-height: 200px;
-        }
-        .grid-stack-item-content {
-            background: var(--surface);
-            background-image: var(--grad-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            overflow: hidden;
-            box-shadow: var(--shadow-1);
-            transition: box-shadow 200ms var(--ease-out),
-                        border-color 200ms var(--ease-out);
-        }
-        .grid-stack-item.ui-draggable-dragging .grid-stack-item-content,
-        .grid-stack-item.ui-resizable-resizing .grid-stack-item-content {
-            box-shadow: var(--shadow-2), 0 0 0 2px var(--accent);
-            border-color: var(--accent);
-        }
-        .grid-stack-placeholder > .placeholder-content {
-            background: var(--accent-soft);
-            border: 2px dashed var(--accent);
-            border-radius: var(--radius-lg);
-        }
-        .grid-stack-item > .ui-resizable-se,
-        .grid-stack-item > .ui-resizable-sw,
-        .grid-stack-item > .ui-resizable-ne,
-        .grid-stack-item > .ui-resizable-nw {
-            color: var(--accent2);
-        }
-        .gs-handle {
-            cursor: move; padding: 4px 6px; border-radius: 6px;
-            color: var(--muted2); font-size: 12px;
-            transition: background 160ms ease, color 160ms ease;
-        }
-        .gs-handle:hover { background: var(--surface2); color: var(--accent2); }
 
         /* Apple-y "shimmer" for active/loading borders */
         @keyframes cd-shimmer {
@@ -1999,9 +1881,6 @@
         }
     </style>
 
-    <!-- gridstack.js (drag + resize panels, Robinhood-Legend-style) — self-hosted -->
-    <link rel="stylesheet" href="/gridstack.min.css">
-    <script src="/gridstack-all.js"></script>
     <!-- GA4 — replace G-MBRS3TCQTL with your Measurement ID -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-MBRS3TCQTL"></script>
     <script>
@@ -2011,90 +1890,7 @@
       gtag('config', 'G-MBRS3TCQTL', { send_page_view: true });
     </script>
 
-    <!-- ISU + Apple polish overlay: collapsible cards + drag handles
-         (gridstack wiring is inlined at the end of <body> so it runs after
-         the rest of main.js binds.) -->
     <script>
-    (function () {
-      const COLLAPSIBLE_TARGETS = [
-        // Default-COLLAPSED until a scan completes — opens automatically via
-        // the cortex:scan-complete event handler at the bottom.
-        { sel: ".narration-tabs",     title: "Persona narrations",open: false,
-          alsoMove: ".narration-body, #run-cost-badge" },
-        { sel: "#data-panel",         title: "Charts & ROIs",     open: false },
-      ];
-
-      function wrap(target) {
-        const root = document.querySelector(target.sel);
-        if (!root || root.closest("details.cd-card")) return;
-
-        let titleEl = null;
-        const sib = root.previousElementSibling;
-        if (sib && sib.classList.contains("panel-title")) titleEl = sib;
-
-        const details = document.createElement("details");
-        details.className = "cd-card";
-        details.dataset.cardId = target.sel.replace(/[^a-z0-9]+/gi, "-");
-        if (target.open) details.open = true;
-
-        const summary = document.createElement("summary");
-        const titleText = (titleEl && titleEl.textContent.trim()) || target.title;
-        summary.innerHTML = `<span class="cd-title">${titleText}</span>`;
-
-        if (target.badge) {
-          const b = document.createElement("span");
-          b.className = "cd-badge";
-          const text = target.badge();
-          if (text) { b.textContent = text; summary.appendChild(b); }
-        }
-
-        // Drag handle (used by gridstack when the layout is in "free move" mode)
-        const drag = document.createElement("span");
-        drag.className = "cd-drag gs-handle";
-        drag.title = "Drag to reorder";
-        drag.textContent = "⋮⋮";
-        summary.appendChild(drag);
-
-        const body = document.createElement("div");
-        body.className = "cd-body";
-
-        const insertBefore = titleEl || root;
-        insertBefore.parentNode.insertBefore(details, insertBefore);
-        details.appendChild(summary);
-        details.appendChild(body);
-        if (titleEl) titleEl.remove();
-        body.appendChild(root);
-
-        if (target.alsoMove) {
-          target.alsoMove.split(",").map(s => s.trim()).forEach(sel => {
-            document.querySelectorAll(sel).forEach(el => body.appendChild(el));
-          });
-        }
-      }
-
-      function applyAll() { COLLAPSIBLE_TARGETS.forEach(wrap); }
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", applyAll);
-      } else {
-        applyAll();
-      }
-
-      // Auto-open the Narrations + Charts cards the moment a scan finishes —
-      // so the user lands on the result without having to hunt for it. They
-      // can collapse manually after that; we don't fight them.
-      function openCardBySel(sel) {
-        const root = document.querySelector(sel);
-        if (!root) return;
-        const card = root.closest("details.cd-card");
-        if (card && !card.open) card.open = true;
-      }
-      window.addEventListener("cortex:scan-complete", () => {
-        openCardBySel(".narration-tabs");
-        openCardBySel("#data-panel");
-        openCardBySel("#run-timing");
-      });
-    })();
-
     // ── Top-nav active state + same-origin View Transition fallback ─────────
     (function () {
       function markActive() {
@@ -2875,7 +2671,7 @@
         <!-- ── Right: narration + ROIs ── -->
         <aside class="panel-right">
             <div class="narration-header">
-                <p class="panel-title" style="margin:0">Persona narration</p>
+                <p class="panel-title" style="margin:0">Persona narrations</p>
                 <!-- Mobile-only cloud badge -->
                 <span class="mobile-cloud-pill" style="display:none; align-items:center; gap:5px; font-size:10px; font-weight:600; color:var(--accent); padding:2px 8px; border-radius:99px; border:1px solid var(--accent); background:rgba(91,141,239,.1);">☁ Cloud</span>
                 <span class="narration-model-badge" id="narration-model">—</span>
@@ -3021,93 +2817,8 @@
 
     <!-- D3 v7 (UMD) for the data panel charts -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script type="module" src="/main.js?v=20260623-openrouter-economics"></script>
+    <script type="module" src="/main.js?v=20260623-capture-right-rail"></script>
     <script type="module" src="/charts.js?v=20260623-network-summary"></script>
 
-    <!-- ── Robinhood-Legend-style draggable panels (gridstack) ─────────────── -->
-    <script>
-    (function () {
-      // Wait until cd-cards are wrapped + DOM is settled.
-      function init() {
-        if (typeof GridStack === "undefined") return setTimeout(init, 200);
-
-        ["panel-right"].forEach(side => {
-          const root = document.querySelector("." + side);
-          if (!root || root.dataset.gsApplied === "1") return;
-          root.dataset.gsApplied = "1";
-
-          // Each direct .cd-card child becomes a grid item
-          const cards = Array.from(root.querySelectorAll(":scope > details.cd-card"));
-          if (!cards.length) return;
-
-          // Build a fresh container so gridstack owns layout
-          const grid = document.createElement("div");
-          grid.className = "grid-stack";
-          grid.dataset.side = side;
-          root.appendChild(grid);
-
-          cards.forEach((card, i) => {
-            const item = document.createElement("div");
-            item.className = "grid-stack-item";
-            item.setAttribute("gs-w", "12");
-            item.setAttribute("gs-h", "3");
-            item.setAttribute("gs-y", String(i * 3));
-            item.setAttribute("gs-id", card.dataset.cardId || ("card-" + i));
-            const inner = document.createElement("div");
-            inner.className = "grid-stack-item-content";
-            inner.appendChild(card);
-            item.appendChild(inner);
-            grid.appendChild(item);
-          });
-
-          const gs = GridStack.init({
-            column: 12,
-            cellHeight: 56,
-            margin: 8,
-            float: false,
-            animate: true,
-            handle: ".gs-handle",
-            resizable: { handles: "se,sw" },
-            disableOneColumnMode: true,
-          }, grid);
-
-          // Persist layout per side
-          const KEY = "cortex.layout." + side;
-          try {
-            const saved = JSON.parse(localStorage.getItem(KEY) || "null");
-            if (saved && Array.isArray(saved)) gs.load(saved);
-          } catch (_) {}
-          const persist = () => {
-            try { localStorage.setItem(KEY, JSON.stringify(gs.save(false))); } catch (_) {}
-          };
-          gs.on("change resizestop dragstop", persist);
-        });
-
-        // Reset-layout button in the topbar
-        const topbar = document.querySelector(".topbar");
-        if (topbar && !document.getElementById("reset-layout-btn")) {
-          const btn = document.createElement("button");
-          btn.id = "reset-layout-btn";
-          btn.title = "Reset panel layout";
-          btn.style.cssText = "background:transparent;border:1px solid var(--border);"
-            + "color:var(--muted);font-size:11px;padding:5px 12px;border-radius:99px;"
-            + "cursor:pointer;margin-left:8px;transition:all 160ms var(--ease-out);";
-          btn.textContent = "↺ Reset layout";
-          btn.onmouseover = () => { btn.style.color = "var(--accent2)";
-                                     btn.style.borderColor = "var(--accent2)"; };
-          btn.onmouseout  = () => { btn.style.color = "var(--muted)";
-                                     btn.style.borderColor = "var(--border)"; };
-          btn.onclick = () => {
-          ["panel-right"].forEach(s => localStorage.removeItem("cortex.layout."+s));
-            location.reload();
-          };
-          topbar.appendChild(btn);
-        }
-      }
-
-      if (document.readyState === "complete") init();
-      else window.addEventListener("load", () => setTimeout(init, 250));
-    })();
-    </script>
 </body>
 </html>

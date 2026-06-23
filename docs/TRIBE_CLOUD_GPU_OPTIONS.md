@@ -70,7 +70,7 @@ downloads `bold-vertex`, verifies the `(T, 20484)` byte shape, and confirms
 source media can be served back to the browser.
 
 For a Gradio Space, use an actual funded upload/text scan through the webapp as
-the contract test:
+the final integration test:
 
 ```powershell
 $env:CORTEX_CLOUD_TRIBE_ENDPOINT = "https://your-space.hf.space"
@@ -81,6 +81,19 @@ $env:CORTEX_CLOUD_TRIBE_PROVIDER = "huggingface-zerogpu"
 Then submit `compute_target=cloud_hf` with funded access and confirm the scan
 reaches `status=complete` and `/api/scan/{id}/bold-vertex` returns
 `X-N-Vert: 20484`.
+
+Before the webapp is involved, verify the Space itself:
+
+```powershell
+python -m cloud.huggingface_space.verify `
+  --endpoint $env:CORTEX_CLOUD_TRIBE_ENDPOINT `
+  --hf-token $env:CORTEX_CLOUD_TRIBE_HF_TOKEN `
+  --require-real
+```
+
+Without `--require-real`, the command is a fake-mode smoke test. With
+`--require-real`, it fails unless the Space payload reports `worker_mode=real`,
+`real_mode_ready=true`, and a downloaded BOLD array shaped `(T, 20484)`.
 
 ## Provider Screen
 
@@ -134,6 +147,9 @@ The integration suite now proves:
 - `python -m cloud.tribe_worker.verify` submits a scan to a worker, validates
   returned BOLD bytes, and fails unless real mode is ready when `--require-real`
   is supplied.
+- `python -m cloud.huggingface_space.verify` calls the Gradio `scan` API,
+  validates the returned scan JSON plus downloaded `.npy`, and can fail unless
+  the Space is in real TRIBE mode.
 
 Run:
 

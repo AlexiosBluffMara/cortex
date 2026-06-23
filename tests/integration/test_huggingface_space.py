@@ -35,6 +35,10 @@ def test_huggingface_space_fake_scan_emits_scan_record_and_bold(tmp_path, monkey
     assert payload["analysis_mode"] == "tribe_video"
     assert payload["has_bold_vertex"] is True
     assert payload["top_rois"]
+    assert payload["provider"] == "huggingface-zerogpu-gradio"
+    assert payload["worker_mode"] == "fake"
+    assert payload["contract_ready"] is True
+    assert payload["real_mode_ready"] is False
 
     bold_file = Path(bold_path)
     assert bold_file.exists()
@@ -93,3 +97,70 @@ def test_huggingface_space_export_script_builds_upload_root(tmp_path):
     assert (out_dir / "requirements.txt").exists()
     assert (out_dir / "cloud/tribe_worker/app.py").exists()
     assert (out_dir / "cortex/__init__.py").exists()
+
+
+def test_gradio_space_verifier_accepts_valid_space_result(tmp_path):
+    from cloud.huggingface_space.verify import verify_space
+
+    bold_path = tmp_path / "bold.npy"
+    np.save(bold_path, np.zeros((5, 20484), dtype=np.float32))
+
+    class FakeClient:
+        def predict(self, media_file, tier, narration_model, *, api_name):
+            assert Path(media_file).exists()
+            assert tier == 4
+            assert narration_model == "openrouter/free"
+            assert api_name == "/scan"
+            return (
+                json.dumps(
+                    {
+                        "ok": True,
+                        "scan_id": "space-ok",
+                        "status": "complete",
+                        "analysis_mode": "tribe_text",
+                        "top_rois": ["RH-Vis 4"],
+                        "peak_t": 2,
+                        "provider": "huggingface-zerogpu-gradio",
+                        "worker_mode": "fake",
+                        "contract_ready": True,
+                        "real_mode_ready": False,
+                        "n_t": 5,
+                    }
+                ),
+                str(bold_path),
+            )
+
+    result = verify_space("https://example-space.hf.space", client=FakeClient())
+
+    assert result["ok"] is True
+    assert result["mode"] == "fake"
+    assert result["provider"] == "huggingface-zerogpu-gradio"
+    assert result["scan_id"] == "space-ok"
+    assert result["n_t"] == 5
+    assert result["n_vertices"] == 20484
+
+
+def test_gradio_space_verifier_require_real_rejects_fake_result(tmp_path):
+    from cloud.huggingface_space.verify import GradioSpaceVerificationError, verify_space
+
+    bold_path = tmp_path / "bold.npy"
+    np.save(bold_path, np.zeros((3, 20484), dtype=np.float32))
+
+    class FakeClient:
+        def predict(self, *_args, **_kwargs):
+            return (
+                {
+                    "ok": True,
+                    "scan_id": "fake-mode",
+                    "status": "complete",
+                    "worker_mode": "fake",
+                    "contract_ready": True,
+                    "real_mode_ready": False,
+                    "readiness_missing": ["TRIBE weights directory is missing or empty"],
+                    "n_t": 3,
+                },
+                {"path": str(bold_path)},
+            )
+
+    with pytest.raises(GradioSpaceVerificationError, match="real TRIBE mode is not ready"):
+        verify_space("https://example-space.hf.space", client=FakeClient(), require_real=True)

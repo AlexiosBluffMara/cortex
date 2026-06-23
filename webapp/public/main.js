@@ -1780,9 +1780,45 @@ const camCaptureBtn = document.getElementById("camera-capture-btn");
 const camRetakeBtn  = document.getElementById("camera-retake-btn");
 const camSubmitBtn  = document.getElementById("camera-submit-btn");
 
+function resetCameraUi() {
+    if (camOpenBtn) camOpenBtn.hidden = false;
+    if (camCaptureBtn) {
+        camCaptureBtn.hidden = true;
+        camCaptureBtn.disabled = false;
+    }
+    if (camRetakeBtn) camRetakeBtn.hidden = true;
+    if (camSubmitBtn) camSubmitBtn.hidden = true;
+    if (camVideo) camVideo.hidden = false;
+    if (camCanvas) camCanvas.hidden = true;
+}
+
+function waitForVideoFrame(video, timeoutMs = 2500) {
+    if (!video) return Promise.resolve(false);
+    if (video.videoWidth > 0 && video.videoHeight > 0) return Promise.resolve(true);
+    return new Promise(resolve => {
+        let settled = false;
+        const done = ok => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            video.removeEventListener("loadedmetadata", onReady);
+            video.removeEventListener("canplay", onReady);
+            resolve(ok);
+        };
+        const onReady = () => done(video.videoWidth > 0 && video.videoHeight > 0);
+        const timer = setTimeout(() => done(video.videoWidth > 0 && video.videoHeight > 0), timeoutMs);
+        video.addEventListener("loadedmetadata", onReady, { once: true });
+        video.addEventListener("canplay", onReady, { once: true });
+    });
+}
+
 async function openCamera() {
     if (_camStream) return;
     try {
+        if (camCaptureBtn) {
+            camCaptureBtn.hidden = false;
+            camCaptureBtn.disabled = true;
+        }
         // On mobile, "environment" = rear camera; fall back to any camera on desktop
         const constraints = {
             video: isMobile
@@ -1793,33 +1829,47 @@ async function openCamera() {
         camVideo.srcObject = _camStream;
         // iOS Safari: must call play() explicitly after assigning srcObject
         await camVideo.play().catch(() => {});
+        const ready = await waitForVideoFrame(camVideo);
+        if (!ready) {
+            throw new Error("camera stream opened, but no video frame was available");
+        }
         camOpenBtn.hidden    = true;
         camCaptureBtn.hidden = false;
+        camCaptureBtn.disabled = false;
         appendEvent("camera open");
     } catch (err) {
+        stopCamera();
         appendEvent(`camera denied: ${err.message}`, "failed");
     }
 }
 
 function stopCamera() {
-    if (!_camStream) return;
-    _camStream.getTracks().forEach(t => t.stop());
+    _camStream?.getTracks().forEach(t => t.stop());
     _camStream = null;
-    camVideo.srcObject = null;
     _camBlob         = null;
-    camOpenBtn.hidden    = false;
-    camCaptureBtn.hidden = true;
-    camRetakeBtn.hidden  = true;
-    camSubmitBtn.hidden  = true;
-    camVideo.hidden  = false;
-    camCanvas.hidden = true;
+    if (camVideo) camVideo.srcObject = null;
+    resetCameraUi();
 }
 
 function capturePhoto() {
-    const w = camVideo.videoWidth, h = camVideo.videoHeight;
+    const w = camVideo.videoWidth || camVideo.clientWidth || 640;
+    const h = camVideo.videoHeight || camVideo.clientHeight || 480;
+    if (!_camStream || w <= 0 || h <= 0) {
+        appendEvent("camera frame not ready yet", "failed");
+        return;
+    }
     camCanvas.width = w; camCanvas.height = h;
-    camCanvas.getContext("2d").drawImage(camVideo, 0, 0, w, h);
+    try {
+        camCanvas.getContext("2d").drawImage(camVideo, 0, 0, w, h);
+    } catch (err) {
+        appendEvent(`camera capture failed: ${err.message}`, "failed");
+        return;
+    }
     camCanvas.toBlob(blob => {
+        if (!blob || blob.size === 0) {
+            appendEvent("camera produced an empty image", "failed");
+            return;
+        }
         _camBlob = blob;
         camVideo.hidden      = true;
         camCanvas.hidden     = false;
@@ -1873,6 +1923,7 @@ const voiceSubmitBtn = document.getElementById("voice-submit-btn");
 function fmtTime(s) { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
 
 async function startVoice() {
+    if (_voiceRecorder?.state === "recording") return;
     _voiceChunks = [];
     _voiceBlob   = null;
     voiceSubmitBtn.hidden = true;
@@ -1885,7 +1936,20 @@ async function startVoice() {
     }
 
     // Frequency analyser for visualizer
-    _voiceAudioCtx = new AudioContext();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!window.MediaRecorder) {
+        _voiceStream?.getTracks().forEach(t => t.stop());
+        _voiceStream = null;
+        appendEvent("mic unavailable: MediaRecorder is not supported in this browser", "failed");
+        return;
+    }
+    if (!AudioContextClass) {
+        _voiceStream?.getTracks().forEach(t => t.stop());
+        _voiceStream = null;
+        appendEvent("mic unavailable: Web Audio is not supported in this browser", "failed");
+        return;
+    }
+    _voiceAudioCtx = new AudioContextClass();
     const src = _voiceAudioCtx.createMediaStreamSource(_voiceStream);
     _voiceAnalyser = _voiceAudioCtx.createAnalyser();
     _voiceAnalyser.fftSize = 64;
@@ -1903,9 +1967,14 @@ async function startVoice() {
     _voiceRecorder.ondataavailable = e => { if (e.data.size > 0) _voiceChunks.push(e.data); };
     _voiceRecorder.onstop = () => {
         _voiceBlob = new Blob(_voiceChunks, { type: _voiceRecorder.mimeType || "audio/webm" });
-        voiceStateEl.textContent  = "Recording ready";
-        voiceSubmitBtn.hidden     = false;
+        voiceStateEl.textContent = _voiceBlob.size ? "Recording ready" : "Recording was empty";
+        voiceSubmitBtn.hidden = !_voiceBlob.size;
         _drawVoiceFlat();
+        _voiceStream?.getTracks().forEach(t => t.stop());
+        _voiceStream = null;
+        _voiceAudioCtx?.close?.().catch(() => {});
+        _voiceAudioCtx = null;
+        _voiceAnalyser = null;
     };
     _voiceRecorder.start(250);
 
@@ -1926,16 +1995,30 @@ async function startVoice() {
 function stopVoice() {
     clearInterval(_voiceTimer);
     cancelAnimationFrame(_voiceVisRaf);
-    _voiceStream?.getTracks().forEach(t => t.stop());
-    if (_voiceRecorder?.state === "recording") _voiceRecorder.stop();
+    const wasRecording = _voiceRecorder?.state === "recording";
+    if (wasRecording) {
+        _voiceRecorder.stop();
+    } else {
+        _voiceStream?.getTracks().forEach(t => t.stop());
+        _voiceStream = null;
+        _voiceAudioCtx?.close?.().catch(() => {});
+        _voiceAudioCtx = null;
+        _voiceAnalyser = null;
+    }
     voiceRecordBtn.hidden = false;
     voiceStopBtn.hidden   = true;
-    if (_voiceRecorder?.state !== "inactive") voiceStateEl.textContent = "Processing…";
+    if (wasRecording) {
+        voiceStateEl.textContent = "Processing…";
+    } else if (!_voiceBlob) {
+        voiceStateEl.textContent = "Ready to record";
+    }
 }
 
 function _startVoiceViz() {
     const cvs = voiceVis;
+    if (!cvs || !_voiceAnalyser) return;
     const ctx = cvs.getContext("2d");
+    if (!ctx) return;
     const buf = new Uint8Array(_voiceAnalyser.frequencyBinCount);
     function draw() {
         _voiceVisRaf = requestAnimationFrame(draw);
@@ -1953,7 +2036,9 @@ function _startVoiceViz() {
 
 function _drawVoiceFlat() {
     const cvs = voiceVis;
+    if (!cvs) return;
     const ctx = cvs.getContext("2d");
+    if (!ctx) return;
     ctx.clearRect(0, 0, cvs.width, cvs.height);
     ctx.fillStyle = "rgba(91,141,239,0.25)";
     ctx.fillRect(0, cvs.height / 2 - 1, cvs.width, 2);

@@ -75,6 +75,7 @@ dependencies = [
     "uvicorn[standard]>=0.44.0",
     "python-multipart>=0.0.20",
     "websockets>=14.0",
+    "gradio_client>=1.13.0",
 ]
 
 [project.optional-dependencies]

@@ -99,6 +99,20 @@ async function run() {
   const lockedPaidCopy = await page.locator('#model-card-list [data-locked="true"] small').first().textContent();
   assert((lockedPaidCopy || "").includes("Please fund Red Team Kitchen"), "paid cards should ask for funding before unlock");
 
+  const rightRailAudit = await page.evaluate(() => ({
+    resetButtons: document.querySelectorAll("#reset-layout-btn").length,
+    gridItems: document.querySelectorAll(".grid-stack,.grid-stack-item").length,
+    collapsibleCards: document.querySelectorAll("details.cd-card").length,
+    rightText: document.querySelector(".panel-right")?.innerText || "",
+  }));
+  assert(rightRailAudit.resetButtons === 0, "right rail should not inject a reset layout button");
+  assert(rightRailAudit.gridItems === 0, "right rail should not be wrapped in GridStack placeholders");
+  assert(rightRailAudit.collapsibleCards === 0, "right rail should not hide results inside collapsible cards");
+  const rightText = rightRailAudit.rightText.toLowerCase();
+  assert(rightText.includes("current analysis shape"), "right rail should show current analysis context");
+  assert(rightText.includes("persona narrations"), "right rail should expose persona narrations");
+  assert(rightText.includes("network summary"), "right rail should expose the network summary tab");
+
   await page.locator("#paid-access-code").fill(PAID_CODE);
   await page.locator("#paid-access-btn").click();
   await page.locator(".purdue-mark").waitFor({ state: "visible" });

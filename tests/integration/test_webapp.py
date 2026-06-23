@@ -788,6 +788,14 @@ class TestSubmitScan:
         assert 'id="openrouter-economics"' in html
         assert 'id="or-free-roster"' in html
         assert "Text scans / $1" in html
+        assert "Current analysis shape" in html
+        assert "Persona narrations" in html
+        assert "Network summary" in html
+        assert "frame-level causality timeline" in html
+        assert "gridstack-all.js" not in html
+        assert "gridstack.min.css" not in html
+        assert "reset-layout-btn" not in html
+        assert "details.cd-card" not in html
         assert "navigator.mediaDevices.getUserMedia" in js
         assert "new MediaRecorder" in js
         assert 'fd.append("compute_target"' in js
