@@ -1292,7 +1292,7 @@ async function pollReadiness() {
         if (line) line.textContent = d.message || "TRIBE status checked.";
         if (btn) {
             btn.disabled = !d.can_warm_tribe;
-            btn.textContent = d.tribe_loaded ? "TRIBE v2 is warm" : "Warm TRIBE v2";
+            btn.textContent = d.tribe_loaded ? "Recheck TRIBE v2" : "Warm TRIBE v2";
         }
     } catch (err) {
         setText("pc-live-status", "offline");
@@ -1305,17 +1305,17 @@ async function pollReadiness() {
 
 document.getElementById("tribe-warm-btn")?.addEventListener("click", async () => {
     const btn = document.getElementById("tribe-warm-btn");
-    if (btn) { btn.disabled = true; btn.textContent = "Warming TRIBE v2…"; }
+    if (btn) { btn.disabled = true; btn.textContent = "Checking TRIBE v2..."; }
     try {
         const r = await fetch("/api/tribe/warm", { method: "POST" });
         const d = await r.json().catch(() => ({}));
         if (!r.ok || d.ok === false) {
-            appendEvent(`TRIBE warm-up rejected: ${d.message || r.status}`, "failed");
+            appendEvent(`TRIBE readiness check rejected: ${d.message || r.status}`, "failed");
         } else {
-            appendEvent("TRIBE warm-up accepted", "complete");
+            appendEvent("TRIBE readiness check accepted", "complete");
         }
     } catch (err) {
-        appendEvent(`TRIBE warm-up error: ${err.message}`, "failed");
+        appendEvent(`TRIBE readiness check error: ${err.message}`, "failed");
     } finally {
         pollReadiness();
     }
