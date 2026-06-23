@@ -287,9 +287,9 @@ function renderBoldRibbon() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. Yeo-7 polar wheel (D3) — one spoke per network
+// 3. Yeo-7 network summary (D3) — ranked contribution bars
 // ─────────────────────────────────────────────────────────────────────────────
-function renderPolarWheel() {
+function renderNetworkSummary() {
   const mount = document.getElementById("chart-polar");
   if (!mount || typeof d3 === "undefined") return;
   mount.innerHTML = "";
@@ -298,11 +298,11 @@ function renderPolarWheel() {
   const rois = result?.top_rois || [];
 
   if (!rois.length) {
-    mount.innerHTML = '<div class="empty-state">Submit a scan to see the network wheel.</div>';
+    mount.innerHTML = '<div class="empty-state">Submit a scan to see the network summary.</div>';
     return;
   }
 
-  // Count + value per network from the top ROIs
+  // Count + value per network from the top ROIs. Earlier ROIs get more weight.
   const tally = {};
   NETWORKS.forEach(n => tally[n] = 0);
   rois.forEach((roi, i) => {
@@ -310,55 +310,62 @@ function renderPolarWheel() {
     tally[net] = (tally[net] || 0) + (rois.length - i);   // weight by rank
   });
   const maxVal = Math.max(1, ...Object.values(tally));
-  const data = NETWORKS.map(n => ({ net: n, val: tally[n] / maxVal }));
+  const data = NETWORKS
+    .map(n => ({ net: n, raw: tally[n], val: tally[n] / maxVal }))
+    .filter(d => d.raw > 0)
+    .sort((a, b) => b.raw - a.raw);
 
   const W = mount.clientWidth || 320;
   const H = mount.clientHeight || 280;
-  const cx = W / 2, cy = H / 2;
-  const radius = Math.min(W, H) / 2 - 28;
-  const innerR = 18;
+  const m = { top: 18, right: 20, bottom: 16, left: 92 };
+  const rowH = Math.max(24, Math.min(34, (H - m.top - m.bottom) / Math.max(data.length, 1)));
+  const innerW = Math.max(80, W - m.left - m.right);
 
   const svg = d3.select(mount).append("svg")
     .attr("width", W).attr("height", H)
     .attr("viewBox", `0 0 ${W} ${H}`);
 
-  const g = svg.append("g").attr("transform", `translate(${cx},${cy})`);
+  const g = svg.append("g").attr("transform", `translate(${m.left},${m.top})`);
 
-  // Concentric rings
-  for (let r = 0.25; r <= 1.0; r += 0.25) {
-    g.append("circle").attr("class", "polar-grid")
-      .attr("r", innerR + (radius - innerR) * r);
-  }
+  g.selectAll("rect.network-track")
+    .data(data).enter().append("rect")
+    .attr("class", "network-track")
+    .attr("x", 0)
+    .attr("y", (_, i) => i * rowH + 6)
+    .attr("width", innerW)
+    .attr("height", Math.max(8, rowH - 14))
+    .attr("rx", 4)
+    .attr("fill", "rgba(255,255,255,0.07)");
 
-  const angleStep = (Math.PI * 2) / NETWORKS.length;
-  const arcGen = d3.arc()
-    .innerRadius(innerR)
-    .outerRadius(d => innerR + (radius - innerR) * d.val)
-    .startAngle((_, i) => i * angleStep - angleStep * 0.4)
-    .endAngle((_, i) => i * angleStep + angleStep * 0.4)
-    .padAngle(0.02);
-
-  g.selectAll("path.polar-spoke")
-    .data(data).enter().append("path")
-    .attr("class", "polar-spoke")
-    .attr("d", arcGen)
+  g.selectAll("rect.network-bar")
+    .data(data).enter().append("rect")
+    .attr("class", "network-bar")
+    .attr("x", 0)
+    .attr("y", (_, i) => i * rowH + 6)
+    .attr("height", Math.max(8, rowH - 14))
+    .attr("rx", 4)
     .attr("fill", d => NETWORK_COLORS[d.net])
-    .attr("opacity", 0)
+    .attr("width", 0)
     .transition().duration(500)
-    .delay((_, i) => i * 70)
-    .attr("opacity", 0.78);
+    .delay((_, i) => i * 55)
+    .attr("width", d => Math.max(8, innerW * d.val));
 
-  g.selectAll("text.polar-label")
+  g.selectAll("text.network-label")
     .data(data).enter().append("text")
-    .attr("class", "polar-label")
-    .attr("transform", (_, i) => {
-      const a = i * angleStep - Math.PI / 2;
-      const r = radius + 12;
-      return `translate(${Math.cos(a) * r}, ${Math.sin(a) * r})`;
-    })
-    .attr("text-anchor", "middle")
+    .attr("class", "roi-label")
+    .attr("x", -10)
+    .attr("y", (_, i) => i * rowH + rowH / 2)
+    .attr("text-anchor", "end")
     .attr("dy", "0.32em")
     .text(d => d.net);
+
+  g.selectAll("text.network-value")
+    .data(data).enter().append("text")
+    .attr("class", "roi-value")
+    .attr("x", d => Math.min(innerW - 4, Math.max(34, innerW * d.val + 7)))
+    .attr("y", (_, i) => i * rowH + rowH / 2)
+    .attr("dy", "0.32em")
+    .text(d => `${Math.round(d.val * 100)}%`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -374,7 +381,7 @@ function activateTab(name) {
   // Render the now-visible chart (no-op if data not present)
   if (name === "rois")   renderRoiBars();
   if (name === "ribbon") renderBoldRibbon();
-  if (name === "polar")  renderPolarWheel();
+  if (name === "polar")  renderNetworkSummary();
 }
 
 document.querySelectorAll(".data-tab").forEach(btn => {

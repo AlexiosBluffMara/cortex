@@ -1560,6 +1560,7 @@
             background: #050509;
         }
         .model-select {
+            display: none;
             width: 100%;
             border: 1px solid var(--border-strong);
             background: var(--surface2);
@@ -1592,7 +1593,7 @@
         }
         .model-filters {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 6px;
         }
         .model-filter {
@@ -1609,6 +1610,68 @@
             color: #fff;
             border-color: rgba(246,169,23,0.72);
             background: rgba(246,169,23,0.12);
+        }
+        .funding-unlock {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.035);
+            padding: 10px;
+            display: grid;
+            gap: 8px;
+        }
+        .funding-unlock label {
+            color: var(--muted);
+            font-size: 10px;
+            font-family: "JetBrains Mono", monospace;
+            text-transform: uppercase;
+        }
+        .funding-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 8px;
+        }
+        .funding-row input {
+            min-width: 0;
+            border: 1px solid var(--border);
+            background: rgba(0,0,0,0.18);
+            color: var(--text);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font: inherit;
+            font-size: 12px;
+        }
+        .funding-row button {
+            border: 1px solid rgba(246,169,23,0.6);
+            background: rgba(246,169,23,0.12);
+            color: var(--isu-yellow);
+            border-radius: 8px;
+            padding: 0 12px;
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        .funding-status {
+            min-height: 18px;
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.35;
+        }
+        .funding-status.unlocked {
+            color: var(--isu-yellow);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .purdue-mark {
+            width: 22px;
+            height: 22px;
+            display: inline-grid;
+            place-items: center;
+            border-radius: 4px;
+            border: 1px solid #cfb991;
+            background: #000;
+            color: #cfb991;
+            font: 900 14px/1 "Inter", sans-serif;
         }
         .model-search {
             display: grid;
@@ -1682,6 +1745,74 @@
             color: var(--muted);
             font-size: 10px;
             line-height: 1.35;
+        }
+        .model-card.locked {
+            opacity: 0.52;
+            filter: grayscale(0.45);
+            border-style: dashed;
+        }
+        .model-card.locked:hover {
+            border-color: rgba(246,169,23,0.72);
+            background: rgba(246,169,23,0.08);
+            box-shadow: inset 3px 0 0 rgba(246,169,23,0.72);
+        }
+        .model-chip.locked-chip {
+            color: var(--isu-yellow);
+            border-color: rgba(246,169,23,0.55);
+        }
+        .compute-targets {
+            display: grid;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .compute-option {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 9px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px;
+            background: rgba(255,255,255,0.032);
+            cursor: pointer;
+        }
+        .compute-option strong {
+            color: var(--text);
+            font-size: 12px;
+        }
+        .compute-option span {
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.35;
+        }
+        .compute-option.locked {
+            opacity: 0.62;
+        }
+        .analysis-context {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: rgba(0,0,0,0.18);
+            padding: 10px;
+            display: grid;
+            gap: 7px;
+            margin-bottom: 10px;
+        }
+        .analysis-context-title {
+            color: var(--text);
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+        .analysis-context-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.35;
+        }
+        .analysis-context-row strong {
+            color: var(--text);
+            text-align: right;
         }
         .cost-estimate,
         .openrouter-economics,
@@ -2143,24 +2274,31 @@
                     <div class="step-kicker">2 · Narrator</div>
                     <h2>Use OpenRouter for persona analysis</h2>
                     <p class="step-copy">Free OpenRouter models handle the writing. TRIBE keeps the local GPU. With at least $10 purchased and a positive balance, free models are documented at 1000 requests/day and 20 requests/minute; below that threshold the free-model cap is 50 requests/day.</p>
-                    <select id="narration-model-select" class="model-select">
+                    <select id="narration-model-select" class="model-select" aria-hidden="true" tabindex="-1">
                         <option value="openrouter:google/gemma-4-26b-a4b-it:free" selected>Gemma 4 26B A4B · OpenRouter free</option>
                     </select>
                     <div class="model-toolbar">
                         <div class="model-toolbar-row">
-                            <span class="model-toolbar-title">OpenRouter catalog</span>
+                            <span class="model-toolbar-title">Free OpenRouter catalog</span>
                             <span id="model-count" class="model-count">loading</span>
                         </div>
                         <div class="model-filters" role="tablist" aria-label="Model price group">
-                            <button type="button" class="model-filter active" data-model-filter="all">All</button>
-                            <button type="button" class="model-filter" data-model-filter="free">Free</button>
-                            <button type="button" class="model-filter" data-model-filter="paid">Paid</button>
+                            <button type="button" class="model-filter active" data-model-filter="free">Free</button>
+                            <button type="button" class="model-filter" data-model-filter="paid">Funded</button>
                             <button type="button" class="model-filter" data-model-filter="local">Local</button>
                         </div>
                         <label class="model-search">
                             <span>Search</span>
                             <input id="model-search" type="search" autocomplete="off" spellcheck="false" placeholder="Gemma, Hermes, Kimi, multimodal..." />
                         </label>
+                        <div class="funding-unlock" id="funding-unlock">
+                            <label for="paid-access-code">Funded model and cloud GPU access</label>
+                            <div class="funding-row">
+                                <input id="paid-access-code" type="password" autocomplete="off" placeholder="Enter access code" />
+                                <button id="paid-access-btn" type="button">Unlock</button>
+                            </div>
+                            <div id="funding-status" class="funding-status">Free OpenRouter models are public. Paid models and cloud GPU scans stay locked until funded access is enabled.</div>
+                        </div>
                     </div>
                     <div id="model-card-list" class="model-card-list"></div>
                     <div id="cost-estimate" class="cost-estimate">
@@ -2229,6 +2367,16 @@
                         <div><span>GPU</span><strong id="gpu-free-status">—</strong></div>
                         <div><span>TRIBE</span><strong id="tribe-ready-status">—</strong></div>
                     </div>
+                    <div class="compute-targets" id="compute-targets" aria-label="TRIBE compute target">
+                        <label class="compute-option">
+                            <input type="radio" name="compute-target" value="local" checked />
+                            <span><strong>Local RTX 5090</strong><br />Fastest when Seratonin is online. No cloud GPU spend.</span>
+                        </label>
+                        <label class="compute-option locked" id="cloud-compute-option">
+                            <input type="radio" name="compute-target" value="cloud_hf" />
+                            <span><strong>Cloud TRIBE worker</strong><br />Funded fallback for Hugging Face / serverless GPU once deployed.</span>
+                        </label>
+                    </div>
                     <button id="tribe-warm-btn" class="submit-btn" type="button">Warm TRIBE v2</button>
                     <p id="tribe-status-line" class="status-line">Checking TRIBE status…</p>
                 </section>
@@ -2283,6 +2431,7 @@
             <script>
             (function() {
                 const DEFAULT_MODEL = 'openrouter:google/gemma-4-26b-a4b-it:free';
+                const PAID_ACCESS_CODE = 'boileruphammerdown';
                 const TOKEN_ASSUMPTION = { prompt: 4800, completion: 4000 };
                 const FIXED = 0.00086;
                 const FALLBACK_MODELS = [
@@ -2295,8 +2444,9 @@
                     { id: 'local:gemma4:e4b', label: 'Gemma 4 E4B local', provider: 'Ollama', group: 'Local fallback', prompt_price: 0, completion_price: 0, notes: 'Use only if OpenRouter is unavailable; consumes local VRAM.' },
                 ];
                 let models = FALLBACK_MODELS;
-                let modelFilter = 'all';
+                let modelFilter = 'free';
                 let modelQuery = '';
+                let paidAccessUnlocked = false;
                 function fmt(v) {
                     if (v === 0) return '$0.00000';
                     if (v < 0.001) return '$' + v.toFixed(5);
@@ -2333,6 +2483,38 @@
                     if (raw.includes('free')) return 'free';
                     return Number(m.prompt_price || 0) || Number(m.completion_price || 0) ? 'paid' : 'free';
                 }
+                function requiresFunding(m) {
+                    return modelGroup(m) === 'paid';
+                }
+                function setFundingStatus(ok, message) {
+                    const status = document.getElementById('funding-status');
+                    if (!status) return;
+                    status.classList.toggle('unlocked', ok);
+                    status.innerHTML = ok
+                        ? `<span class="purdue-mark" aria-hidden="true">P</span><span>${message}</span>`
+                        : message;
+                }
+                function selectedComputeTarget() {
+                    const checked = document.querySelector('input[name="compute-target"]:checked');
+                    return checked?.value || 'local';
+                }
+                function syncComputeLock() {
+                    const cloud = document.getElementById('cloud-compute-option');
+                    if (cloud) cloud.classList.toggle('locked', !paidAccessUnlocked);
+                    document.querySelectorAll('input[name="compute-target"]').forEach(input => {
+                        if (input.value !== 'local') input.disabled = !paidAccessUnlocked;
+                    });
+                    if (!paidAccessUnlocked && selectedComputeTarget() !== 'local') {
+                        const local = document.querySelector('input[name="compute-target"][value="local"]');
+                        if (local) local.checked = true;
+                    }
+                    window._selectedComputeTarget = selectedComputeTarget();
+                }
+                function paidAccessCode() {
+                    return paidAccessUnlocked ? PAID_ACCESS_CODE : '';
+                }
+                window._cortexPaidAccessCode = paidAccessCode;
+                window._selectedComputeTarget = 'local';
                 function filteredModels() {
                     const q = modelQuery.trim().toLowerCase();
                     return models.filter(m => {
@@ -2372,16 +2554,27 @@
                         const active = m.id === selectedId ? ' active' : '';
                         const cost = modelCost(m);
                         const modes = (m.modalities || []).slice(0, 4);
-                        const chips = [modelGroup(m), ...modes].filter(Boolean).map(x => `<span class="model-chip">${x}</span>`).join('');
-                        return `<button type="button" class="model-card${active}" data-model="${m.id}"${active ? ' aria-current="true"' : ''}>
+                        const locked = requiresFunding(m) && !paidAccessUnlocked;
+                        const chips = [
+                            locked ? 'funded access' : modelGroup(m),
+                            ...modes,
+                        ].filter(Boolean).map((x, i) => `<span class="model-chip${locked && i === 0 ? ' locked-chip' : ''}">${x}</span>`).join('');
+                        const lockedCopy = locked
+                            ? 'Please fund Red Team Kitchen or enter funded access to use paid OpenRouter models.'
+                            : (m.notes || '');
+                        return `<button type="button" class="model-card${active}${locked ? ' locked' : ''}" data-model="${m.id}" data-locked="${locked ? 'true' : 'false'}"${active ? ' aria-current="true"' : ''}${locked ? ' aria-disabled="true"' : ''}>
                             <strong>${displayLabel(m)}</strong>
                             <span>${cost ? fmt(cost) : '$0.00000'} narration</span>
                             <div class="model-card-meta">${chips}</div>
-                            <small>${m.notes || ''}</small>
+                            <small>${lockedCopy}</small>
                         </button>`;
                     }).join('');
                     mount.querySelectorAll('[data-model]').forEach(btn => {
                         btn.addEventListener('click', () => {
+                            if (btn.dataset.locked === 'true') {
+                                setFundingStatus(false, 'Paid models are locked. Enter funded access or keep using the free OpenRouter models.');
+                                return;
+                            }
                             const sel = document.getElementById('narration-model-select');
                             if (sel) {
                                 sel.value = btn.dataset.model;
@@ -2412,6 +2605,8 @@
                     if (ceTotal) ceTotal.textContent = fmt(total);
                     window._selectedNarrationModel = val;
                     window._selectedNarrationLabel = displayLabel(selected);
+                    const analysisNarrator = document.getElementById('analysis-narrator');
+                    if (analysisNarrator) analysisNarrator.textContent = displayLabel(selected);
                     renderCards(val);
                 }
                 function renderEconomics(data) {
@@ -2505,6 +2700,35 @@
                             updateEstimate();
                         });
                     }
+                    const unlockBtn = document.getElementById('paid-access-btn');
+                    const unlockInput = document.getElementById('paid-access-code');
+                    function attemptUnlock() {
+                        const ok = (unlockInput?.value || '').trim() === PAID_ACCESS_CODE;
+                        paidAccessUnlocked = ok;
+                        if (ok) {
+                            setFundingStatus(true, 'Funded access unlocked. Paid OpenRouter and cloud GPU options are enabled for this browser session.');
+                        } else {
+                            setFundingStatus(false, 'Access code did not match. Free OpenRouter models remain available.');
+                        }
+                        syncComputeLock();
+                        updateEstimate();
+                    }
+                    unlockBtn?.addEventListener('click', attemptUnlock);
+                    unlockInput?.addEventListener('keydown', event => {
+                        if (event.key === 'Enter') {
+                            event.preventDefault();
+                            attemptUnlock();
+                        }
+                    });
+                    document.querySelectorAll('input[name="compute-target"]').forEach(input => {
+                        input.addEventListener('change', () => {
+                            if (input.value !== 'local' && !paidAccessUnlocked) {
+                                setFundingStatus(false, 'Cloud GPU scans are funded-only. Enter the access code or use the local RTX 5090 path.');
+                            }
+                            syncComputeLock();
+                        });
+                    });
+                    syncComputeLock();
                 });
                 if (document.readyState !== 'loading') loadCatalog();
             })();
@@ -2600,6 +2824,14 @@
                 <button class="narr-tab"        data-narr="ml_scientist" style="--tab-color:#4285F4" title="Senior ML research scientist, Chicago tech corridor">ML Scientist</button>
             </div>
 
+            <div class="analysis-context" id="analysis-context">
+                <div class="analysis-context-title">Current analysis shape</div>
+                <div class="analysis-context-row"><span>Stimulus</span><strong id="analysis-stimulus">waiting for input</strong></div>
+                <div class="analysis-context-row"><span>Brain model</span><strong id="analysis-compute">local TRIBE v2</strong></div>
+                <div class="analysis-context-row"><span>Narration</span><strong id="analysis-narrator">OpenRouter free model</strong></div>
+                <div class="analysis-context-row"><span>Roadmap</span><strong>frame-by-frame video causality next</strong></div>
+            </div>
+
             <div id="run-cost-badge" class="run-cost-badge hidden"></div>
 
             <div class="narration-body" id="narration-body">
@@ -2614,7 +2846,7 @@
                 <div class="data-tabs">
                     <button class="data-tab active" data-tab="rois">Top regions</button>
                     <button class="data-tab" data-tab="ribbon">3D BOLD ribbon</button>
-                    <button class="data-tab" data-tab="polar">Network wheel</button>
+                    <button class="data-tab" data-tab="polar">Network summary</button>
                 </div>
                 <div class="data-body">
                     <div class="data-pane active" id="pane-rois">
@@ -2626,7 +2858,7 @@
                     </div>
                     <div class="data-pane" id="pane-polar">
                         <div id="chart-polar" class="chart-mount"></div>
-                        <div class="chart-caption">Each spoke = one of the 7 functional networks. Length = peak amplitude across the scan.</div>
+                        <div class="chart-caption">Current summary of the strongest Yeo-7 network response. Future video analysis will align these peaks to frame-level stimulus descriptions.</div>
                     </div>
                 </div>
             </div>
@@ -2722,8 +2954,8 @@
 
     <!-- D3 v7 (UMD) for the data panel charts -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script type="module" src="/main.js?v=20260623-workflow-catalog"></script>
-    <script type="module" src="/charts.js"></script>
+    <script type="module" src="/main.js?v=20260623-funded-cloud"></script>
+    <script type="module" src="/charts.js?v=20260623-network-summary"></script>
 
     <!-- ── Robinhood-Legend-style draggable panels (gridstack) ─────────────── -->
     <script>

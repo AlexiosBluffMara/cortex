@@ -29,6 +29,16 @@ const ttFunc        = document.getElementById("tt-func");
 const ttZ           = document.getElementById("tt-z");
 const DEFAULT_NARRATION_MODEL = "openrouter:google/gemma-4-26b-a4b-it:free";
 
+function selectedComputeTarget() {
+    return window._selectedComputeTarget || "local";
+}
+
+function paidAccessCode() {
+    return typeof window._cortexPaidAccessCode === "function"
+        ? window._cortexPaidAccessCode()
+        : "";
+}
+
 function setupWorkflowNav() {
     const scroller = document.querySelector(".intake-scroll");
     const links = Array.from(document.querySelectorAll(".workflow-jump a[href^='#']"));
@@ -801,12 +811,40 @@ function _setNarrationText(divId, text, isPlaceholder) {
     el.appendChild(p);
 }
 
+function analysisModeLabel(mode, filename) {
+    if (mode === "tribe_video") return "video + audio through TRIBE";
+    if (mode === "tribe_audio") return "voice/audio through TRIBE";
+    if (mode === "tribe_text") return "text through TRIBE events";
+    if (mode === "tribe_text_bridge_image") return "image bridged to TRIBE text events";
+    if (mode === "tribe_text_bridge_document") return "document bridged to TRIBE text events";
+    if (filename) return filename;
+    return "waiting for input";
+}
+
+function computeTargetLabel(target) {
+    if (target === "cloud_hf") return "cloud TRIBE · Hugging Face path";
+    if (target === "cloud_modal") return "cloud TRIBE · Modal path";
+    if (target === "cloud_runpod") return "cloud TRIBE · RunPod path";
+    if (target === "cloud_auto") return "cloud TRIBE · auto";
+    return "local TRIBE v2 · Seratonin RTX 5090";
+}
+
+function updateAnalysisContext(result = {}) {
+    const stimulus = document.getElementById("analysis-stimulus");
+    const compute = document.getElementById("analysis-compute");
+    const narrator = document.getElementById("analysis-narrator");
+    if (stimulus) stimulus.textContent = analysisModeLabel(result.analysis_mode, result.filename || st.lastFilename);
+    if (compute) compute.textContent = computeTargetLabel(result.compute_target || selectedComputeTarget());
+    if (narrator) narrator.textContent = selectedNarrationLabel();
+}
+
 function renderNarration(result) {
     st.scanResult = result;
     // Publish to window for the data-panel charts (charts.js reads these)
     window.lastScanResult = result;
     window.dispatchEvent(new CustomEvent("cortex:scan-complete", { detail: { result } }));
     narrationModel.textContent = selectedNarrationLabel();
+    updateAnalysisContext(result);
 
     if (result.status === "complete" && result.seconds_elapsed != null) {
         const tribeSec = result.seconds_elapsed || 0;
@@ -1507,6 +1545,8 @@ async function submitMediaFile(file, { btnEl, resetLabel } = {}) {
     fd.append("tier",            tierInput.value);
     fd.append("source",          "webui");
     fd.append("narration_model", window._selectedNarrationModel || DEFAULT_NARRATION_MODEL);
+    fd.append("compute_target",   selectedComputeTarget());
+    fd.append("paid_access_code", paidAccessCode());
 
     try {
         const resp = await fetch("/api/scan", { method: "POST", body: fd });
@@ -1516,6 +1556,7 @@ async function submitMediaFile(file, { btnEl, resetLabel } = {}) {
         } else {
             st.scanId = body.scan_id;
             st.lastFilename = file.name;
+            updateAnalysisContext({ ...body, filename: file.name });
             appendEvent(`accepted: ${body.scan_id}`, "complete");
             showOverlay("queued");
         }
@@ -1838,6 +1879,8 @@ textSubmitBtn?.addEventListener("click", async () => {
     fd.append("tier",            tierInput.value);
     fd.append("source",          "webui");
     fd.append("narration_model", window._selectedNarrationModel || DEFAULT_NARRATION_MODEL);
+    fd.append("compute_target",   selectedComputeTarget());
+    fd.append("paid_access_code", paidAccessCode());
 
     try {
         const resp = await fetch("/api/text-scan", { method: "POST", body: fd });
@@ -1846,6 +1889,8 @@ textSubmitBtn?.addEventListener("click", async () => {
             appendEvent(`rejected: ${body.message ?? body.detail ?? "error"}`, "failed");
         } else {
             st.scanId = body.scan_id;
+            st.lastFilename = "<text stimulus>";
+            updateAnalysisContext({ ...body, filename: "<text stimulus>" });
             appendEvent(`text scan accepted: ${body.scan_id}`, "complete");
             showOverlay("narrating"); // typed text is queued through TRIBE's text-events path
         }

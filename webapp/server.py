@@ -103,6 +103,10 @@ OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
 OPENROUTER_DEFAULT_MODEL = "google/gemma-4-26b-a4b-it:free"
 OPENROUTER_MEDIA_MAX_MB = float(_os.environ.get("OPENROUTER_MEDIA_MAX_MB", "8"))
 OPENROUTER_MODEL_CACHE_TTL_S = int(_os.environ.get("OPENROUTER_MODEL_CACHE_TTL_S", "1800"))
+CORTEX_PAID_ACCESS_CODE = _os.environ.get("CORTEX_PAID_ACCESS_CODE", "boileruphammerdown")
+CORTEX_CLOUD_TRIBE_ENDPOINT = (_os.environ.get("CORTEX_CLOUD_TRIBE_ENDPOINT", "") or "").rstrip("/")
+CORTEX_CLOUD_TRIBE_PROVIDER = _os.environ.get("CORTEX_CLOUD_TRIBE_PROVIDER", "huggingface-zero-gpu")
+CLOUD_COMPUTE_TARGETS = {"cloud_auto", "cloud_hf", "cloud_modal", "cloud_runpod"}
 
 OPENROUTER_FREE_LIMITS = {
     "requests_per_minute": 20,
@@ -112,6 +116,75 @@ OPENROUTER_FREE_LIMITS = {
     "account_note": "Free models require a positive credit balance; at least $10 purchased raises the daily free-model limit.",
     "source": "https://openrouter.ai/docs/api/reference/limits",
 }
+
+
+def _spend_access_granted(access_code: str | None) -> bool:
+    return bool(access_code and CORTEX_PAID_ACCESS_CODE and access_code == CORTEX_PAID_ACCESS_CODE)
+
+
+def _narration_model_requires_paid_access(model_id: str) -> bool:
+    raw = (model_id or "").strip().lower()
+    if not raw:
+        return False
+    if raw.startswith("local:"):
+        return False
+    if raw in {"openrouter:openrouter/free", "openrouter/free"}:
+        return False
+    if raw.startswith("openrouter:"):
+        return not raw.endswith(":free")
+    return raw.startswith(("gemini:", "anthropic:", "openai:"))
+
+
+def _compute_target_requires_paid_access(compute_target: str | None) -> bool:
+    return (compute_target or "local").strip().lower() in CLOUD_COMPUTE_TARGETS
+
+
+def _normalize_compute_target(compute_target: str | None) -> str:
+    target = (compute_target or "local").strip().lower()
+    if target in {"", "seratonin", "rtx5090", "local_gpu"}:
+        return "local"
+    if target in {"auto", "cloud", "huggingface", "hf", "modal", "runpod"}:
+        return {
+            "auto": "cloud_auto",
+            "cloud": "cloud_auto",
+            "huggingface": "cloud_hf",
+            "hf": "cloud_hf",
+            "modal": "cloud_modal",
+            "runpod": "cloud_runpod",
+        }[target]
+    if target in {"local", *CLOUD_COMPUTE_TARGETS}:
+        return target
+    return "local"
+
+
+def _paid_access_rejection(reason: str) -> JSONResponse:
+    return JSONResponse(
+        {
+            "ok": False,
+            "status": "paid_access_required",
+            "error_code": "paid_access_required",
+            "message": reason,
+            "recovery_action": "Enter the Cortex funded-access code before using paid OpenRouter models or cloud GPU inference.",
+        },
+        status_code=403,
+    )
+
+
+def _cloud_tribe_not_configured(compute_target: str) -> JSONResponse:
+    return JSONResponse(
+        {
+            "ok": False,
+            "status": "cloud_tribe_not_configured",
+            "error_code": "cloud_tribe_not_configured",
+            "compute_target": compute_target,
+            "provider": CORTEX_CLOUD_TRIBE_PROVIDER,
+            "message": (
+                "Cloud TRIBE inference is not configured yet. Local RTX 5090 scans still work; "
+                "set CORTEX_CLOUD_TRIBE_ENDPOINT after deploying the TRIBE worker."
+            ),
+        },
+        status_code=503,
+    )
 
 NARRATION_MODEL_CATALOG = [
     {
@@ -1117,6 +1190,51 @@ def create_app(
             ],
         }
 
+    @app.get("/api/compute-options")
+    async def compute_options() -> dict[str, Any]:
+        """Return local/cloud TRIBE execution choices for the WebUI."""
+        gpu = _scheduler.vram_report()
+        cloud_configured = bool(CORTEX_CLOUD_TRIBE_ENDPOINT)
+        return {
+            "default": "local",
+            "local": {
+                "id": "local",
+                "label": "Local RTX 5090",
+                "available": bool(gpu.get("tribe_fits") or gpu.get("state") == "tribe_active"),
+                "state": gpu.get("state"),
+                "free_gb": gpu.get("free_gb"),
+                "cost_note": "No cloud GPU spend; depends on Seratonin being online.",
+            },
+            "cloud": {
+                "configured": cloud_configured,
+                "provider": CORTEX_CLOUD_TRIBE_PROVIDER,
+                "endpoint_configured": cloud_configured,
+                "targets": [
+                    {
+                        "id": "cloud_hf",
+                        "label": "Hugging Face ZeroGPU / Endpoint",
+                        "requires_paid_access": True,
+                        "configured": cloud_configured and CORTEX_CLOUD_TRIBE_PROVIDER.startswith("huggingface"),
+                        "cost_note": "ZeroGPU is the lowest-cost experiment path; paid L4/A10G/A100 hardware can sleep or scale to zero.",
+                    },
+                    {
+                        "id": "cloud_modal",
+                        "label": "Modal serverless GPU",
+                        "requires_paid_access": True,
+                        "configured": cloud_configured and CORTEX_CLOUD_TRIBE_PROVIDER == "modal",
+                        "cost_note": "Serverless per-second GPU billing with monthly starter credits.",
+                    },
+                    {
+                        "id": "cloud_runpod",
+                        "label": "RunPod serverless GPU",
+                        "requires_paid_access": True,
+                        "configured": cloud_configured and CORTEX_CLOUD_TRIBE_PROVIDER == "runpod",
+                        "cost_note": "Pay-per-use GPU worker; good for request-driven inference once the worker image is built.",
+                    },
+                ],
+            },
+        }
+
     @app.get("/api/openrouter/status")
     async def openrouter_status() -> dict[str, Any]:
         """Check OpenRouter key health without exposing the key or spending completion credits."""
@@ -1447,6 +1565,8 @@ def create_app(
         tier: int = Form(default=1, ge=0, le=6),
         source: str = Form(default="webui"),
         narration_model: str = Form(default=f"openrouter:{OPENROUTER_DEFAULT_MODEL}"),
+        compute_target: str = Form(default="local"),
+        paid_access_code: str = Form(default=""),
         external_scan_id: str = Form(default=""),
     ) -> JSONResponse:
         if not file.filename:
@@ -1458,6 +1578,19 @@ def create_app(
             err = invalid_file_type(file.filename, component="webapp")
             return JSONResponse(err.to_dict(), status_code=400)
         analysis_mode = _analysis_mode_for_ext(ext)
+        compute_target = _normalize_compute_target(compute_target)
+        paid_access = _spend_access_granted(paid_access_code)
+        if _narration_model_requires_paid_access(narration_model) and not paid_access:
+            return _paid_access_rejection("Paid OpenRouter models require funded access.")
+        if _compute_target_requires_paid_access(compute_target) and not paid_access:
+            return _paid_access_rejection("Cloud GPU TRIBE inference requires funded access.")
+        selected_proxy_url = (
+            CORTEX_CLOUD_TRIBE_ENDPOINT
+            if _compute_target_requires_paid_access(compute_target)
+            else TRIBE_PROXY_URL
+        )
+        if _compute_target_requires_paid_access(compute_target) and not selected_proxy_url:
+            return _cloud_tribe_not_configured(compute_target)
 
         # Stream upload to disk while enforcing the size cap. Track oversize
         # via a flag so we exit the `with` block before unlinking — on Windows,
@@ -1493,8 +1626,8 @@ def create_app(
         # backend and store a reference. Image/document scans are included
         # because the backend bridges them into TRIBE text-event stimuli.
         # ────────────────────────────────────────────────────────────────────
-        if TRIBE_PROXY_URL and ext in TRIBE_NEEDED_EXTS:
-            log.info("[webapp] proxying TRIBE scan %s (%s) → %s", scan_id, ext, TRIBE_PROXY_URL)
+        if selected_proxy_url and ext in TRIBE_NEEDED_EXTS:
+            log.info("[webapp] proxying TRIBE scan %s (%s) → %s", scan_id, ext, selected_proxy_url)
             try:
                 import httpx as _httpx
                 async with _httpx.AsyncClient(timeout=30.0) as client:
@@ -1504,9 +1637,10 @@ def create_app(
                         "tier": str(tier),
                         "source": f"proxy-from-bigapple:{source}",
                         "narration_model": narration_model,
+                        "compute_target": "local",
                     }
                     r = await client.post(
-                        f"{TRIBE_PROXY_URL}/api/scan",
+                        f"{selected_proxy_url}/api/scan",
                         files=files_payload,
                         data=data_payload,
                     )
@@ -1531,6 +1665,8 @@ def create_app(
                         "tier": tier,
                         "source": source,
                         "narration_model": narration_model,
+                        "compute_target": compute_target,
+                        "paid_access": paid_access,
                         "size_mb": round(size / (1024 * 1024), 2),
                         "proxied": True,
                         "analysis_mode": analysis_mode,
@@ -1548,11 +1684,25 @@ def create_app(
                         "status": "queued",
                         "proxied": True,
                         "analysis_mode": analysis_mode,
+                        "compute_target": compute_target,
                     },
                     status_code=202,
                 )
             except Exception as exc:
-                log.error("[webapp] TRIBE proxy failed (%s) — falling back to local: %s", scan_id, exc)
+                log.error("[webapp] TRIBE proxy failed (%s): %s", scan_id, exc)
+                if _compute_target_requires_paid_access(compute_target):
+                    target.unlink(missing_ok=True)
+                    return JSONResponse(
+                        {
+                            "ok": False,
+                            "status": "cloud_tribe_unavailable",
+                            "error_code": "cloud_tribe_unavailable",
+                            "compute_target": compute_target,
+                            "message": f"Cloud TRIBE worker did not accept the scan: {str(exc)[:180]}",
+                        },
+                        status_code=502,
+                    )
+                log.info("[webapp] split-stack proxy failed (%s) — falling back to local", scan_id)
                 # If proxy is unreachable, fall through to local processing
                 # (which will fail on MPS-only hosts but at least surface a real error).
 
@@ -1565,6 +1715,8 @@ def create_app(
                 "tier": tier,
                 "source": source,
                 "narration_model": narration_model,
+                "compute_target": compute_target,
+                "paid_access": paid_access,
                 "size_mb": round(size / (1024 * 1024), 2),
                 "analysis_mode": analysis_mode,
             },
@@ -1590,7 +1742,13 @@ def create_app(
         )
 
         return JSONResponse(
-            {"ok": True, "scan_id": scan_id, "status": "queued", "analysis_mode": analysis_mode},
+            {
+                "ok": True,
+                "scan_id": scan_id,
+                "status": "queued",
+                "analysis_mode": analysis_mode,
+                "compute_target": compute_target,
+            },
             status_code=202,
         )
 
@@ -2196,10 +2354,20 @@ def create_app(
         tier: int = Form(default=1, ge=0, le=6),
         source: str = Form(default="webui"),
         narration_model: str = Form(default=f"openrouter:{OPENROUTER_DEFAULT_MODEL}"),
+        compute_target: str = Form(default="local"),
+        paid_access_code: str = Form(default=""),
     ) -> JSONResponse:
         clean_text = text.strip()
         if not clean_text:
             return JSONResponse({"error": "empty text"}, status_code=400)
+        compute_target = _normalize_compute_target(compute_target)
+        paid_access = _spend_access_granted(paid_access_code)
+        if _narration_model_requires_paid_access(narration_model) and not paid_access:
+            return _paid_access_rejection("Paid OpenRouter models require funded access.")
+        if _compute_target_requires_paid_access(compute_target) and not paid_access:
+            return _paid_access_rejection("Cloud GPU TRIBE inference requires funded access.")
+        if _compute_target_requires_paid_access(compute_target) and not CORTEX_CLOUD_TRIBE_ENDPOINT:
+            return _cloud_tribe_not_configured(compute_target)
         scan_id = uuid.uuid4().hex[:12]
         target = UPLOAD_DIR / f"{scan_id}.txt"
         target.write_text(clean_text[:4000], encoding="utf-8")
@@ -2212,6 +2380,8 @@ def create_app(
                 "tier": tier,
                 "source": source,
                 "narration_model": narration_model,
+                "compute_target": compute_target,
+                "paid_access": paid_access,
                 "text": clean_text[:1000],
                 "analysis_mode": "tribe_text",
             },
@@ -2223,7 +2393,13 @@ def create_app(
             {"type": "scan_queued", "scan_id": scan_id, "filename": "<text stimulus>"}
         )
         return JSONResponse(
-            {"ok": True, "scan_id": scan_id, "status": "queued", "analysis_mode": "tribe_text"},
+            {
+                "ok": True,
+                "scan_id": scan_id,
+                "status": "queued",
+                "analysis_mode": "tribe_text",
+                "compute_target": compute_target,
+            },
             status_code=202,
         )
 

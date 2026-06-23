@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import sys
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -291,6 +292,28 @@ class TestControlPlane:
         assert server_mod._narration_uses_cloud_model("gemini:gemini-2.5-flash")
         assert not server_mod._narration_uses_cloud_model("local:gemma4:e4b")
 
+    def test_paid_access_helpers_gate_spend_paths(self):
+        from webapp import server as server_mod
+
+        assert server_mod._spend_access_granted("boileruphammerdown")
+        assert not server_mod._spend_access_granted("wrong")
+        assert not server_mod._narration_model_requires_paid_access(
+            "openrouter:google/gemma-4-26b-a4b-it:free"
+        )
+        assert server_mod._narration_model_requires_paid_access(
+            "openrouter:google/gemma-4-26b-a4b-it"
+        )
+        assert server_mod._compute_target_requires_paid_access("cloud_hf")
+        assert not server_mod._compute_target_requires_paid_access("local")
+
+    def test_compute_options_report_cloud_configuration(self, client):
+        resp = client.get("/api/compute-options")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["default"] == "local"
+        assert body["local"]["available"] is True
+        assert body["cloud"]["targets"][0]["requires_paid_access"] is True
+
     def test_cloud_error_narrations_get_useful_tribe_fallback(self):
         from webapp import server as server_mod
 
@@ -359,6 +382,47 @@ class TestSubmitScan:
         assert len(body["scan_id"]) == 12  # uuid4().hex[:12]
         record = client.get(f"/api/scan/{body['scan_id']}").json()
         assert record["narration_model"] == "openrouter:google/gemma-4-26b-a4b-it:free"
+        assert record["compute_target"] == "local"
+
+    def test_rejects_paid_openrouter_without_funded_access(self, client):
+        files = {"file": ("clip.mp4", io.BytesIO(b"\x00" * 1024), "video/mp4")}
+        data = {"narration_model": "openrouter:google/gemma-4-26b-a4b-it"}
+        resp = client.post("/api/scan", files=files, data=data)
+        assert resp.status_code == 403
+        body = resp.json()
+        assert body["error_code"] == "paid_access_required"
+        assert "Paid OpenRouter" in body["message"]
+
+    def test_allows_paid_openrouter_with_funded_access(self, client):
+        files = {"file": ("clip.mp4", io.BytesIO(b"\x00" * 1024), "video/mp4")}
+        data = {
+            "narration_model": "openrouter:google/gemma-4-26b-a4b-it",
+            "paid_access_code": "boileruphammerdown",
+        }
+        resp = client.post("/api/scan", files=files, data=data)
+        assert resp.status_code == 202
+        body = resp.json()
+        record = client.get(f"/api/scan/{body['scan_id']}").json()
+        assert record["paid_access"] is True
+        assert record["narration_model"] == "openrouter:google/gemma-4-26b-a4b-it"
+
+    def test_rejects_cloud_gpu_without_funded_access(self, client):
+        files = {"file": ("clip.mp4", io.BytesIO(b"\x00" * 1024), "video/mp4")}
+        resp = client.post("/api/scan", files=files, data={"compute_target": "cloud_hf"})
+        assert resp.status_code == 403
+        assert resp.json()["error_code"] == "paid_access_required"
+
+    def test_cloud_gpu_with_access_reports_not_configured(self, client):
+        files = {"file": ("clip.mp4", io.BytesIO(b"\x00" * 1024), "video/mp4")}
+        resp = client.post(
+            "/api/scan",
+            files=files,
+            data={"compute_target": "cloud_hf", "paid_access_code": "boileruphammerdown"},
+        )
+        assert resp.status_code == 503
+        body = resp.json()
+        assert body["error_code"] == "cloud_tribe_not_configured"
+        assert body["compute_target"] == "cloud_hf"
 
     def test_rejects_oversized_upload(self, client):
         # 51MB exceeds the 50MB cap
@@ -415,6 +479,30 @@ class TestSubmitScan:
         assert record["narration_model"] == "openrouter:google/gemma-4-26b-a4b-it:free"
         assert record["filename"] == "<text stimulus>"
         assert "bright red apple" in record["text"]
+
+    def test_text_scan_rejects_paid_model_without_access(self, client):
+        resp = client.post(
+            "/api/text-scan",
+            data={
+                "text": "A bright red apple rotates beside a lake.",
+                "narration_model": "openrouter:google/gemma-4-26b-a4b-it",
+            },
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error_code"] == "paid_access_required"
+
+    def test_frontend_exposes_camera_voice_and_funded_controls(self):
+        html = Path("webapp/public/index.html").read_text(encoding="utf-8")
+        js = Path("webapp/public/main.js").read_text(encoding="utf-8")
+
+        assert 'id="camera-open-btn"' in html
+        assert 'id="voice-record-btn"' in html
+        assert 'id="paid-access-code"' in html
+        assert 'name="compute-target"' in html
+        assert "navigator.mediaDevices.getUserMedia" in js
+        assert "new MediaRecorder" in js
+        assert 'fd.append("compute_target"' in js
+        assert 'fd.append("paid_access_code"' in js
 
 
 # ---------------------------------------------------------------------------
