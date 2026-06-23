@@ -23,3 +23,12 @@ Expected output:
 
 - scan JSON metadata
 - a `.npy` file shaped like `(T, 20484)` with fsaverage5 vertex BOLD values
+
+Export a Space root from the Cortex repo with:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/export_huggingface_space.ps1 -Clean
+```
+
+Upload `build/huggingface-space` as the Space root. Keep fake mode enabled
+until the Space logs show that TRIBE dependencies, weights, and CUDA are ready.

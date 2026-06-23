@@ -27,6 +27,9 @@ Implemented cloud artifacts:
   ZeroGPU experiments.
 - `cloud/huggingface_space/SPACE_README.md` is the Space card/front matter to
   copy into a Hugging Face Space root.
+- `scripts/export_huggingface_space.ps1` exports a ready Space directory under
+  `build/huggingface-space` with `app.py`, `README.md`, `requirements.txt`,
+  `cloud/`, and `cortex/` included.
 
 The FastAPI worker is what Cortex can call directly today. The ZeroGPU adapter
 is a no-cost experiment target, but it is not the same HTTP contract because
@@ -61,6 +64,12 @@ CUDA readiness details.
    `CORTEX_WORKER_MODE=fake`, then switching to `real` only after dependencies
    and weights load inside the Space. This tests whether TRIBE can tolerate
    ZeroGPU duration, queueing, and Gradio constraints.
+   Export the uploadable directory with:
+
+   ```powershell
+   pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/export_huggingface_space.ps1 -Clean
+   ```
+
 3. Deploy `cloud/tribe_worker` as a FastAPI worker on the cheapest paid
    HTTP-compatible GPU surface once we need the production webapp to call it
    directly. For sparse demos, try Modal first because of monthly starter
