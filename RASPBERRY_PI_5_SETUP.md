@@ -10,13 +10,13 @@ This is one of the most pitchable parts of the system: **"a $80 single-board com
 
 | Role | What it does | Why the RPi 5 specifically |
 | --- | --- | --- |
-| **Inference Tier 4** | Short-prompt fallback when 5090 + Mac are busy | BitNet b1.58 2B-4T runs at 8-11 tok/s on CPU |
+| **Inference Tier 4** | Short-prompt fallback when the 5090 is busy or offline | BitNet b1.58 2B-4T runs at 8-11 tok/s on CPU |
 | **Always-on coordinator** | Lightweight FastAPI proxy + cron jobs | 12 W draw, 24/7 OK; no fan on the 8 GB version |
 | **Live dashboard host** | 4K monitor in living room shows real-time demo metrics | RPi 5 has dual 4K HDMI out, plays nicely with Plymouth |
 | **Edge classifier** | "Is this video safe?" gate runs locally on every demo submission | Free, fast, runs even when network's down |
-| **Restic backup target** | NVMe-backed Restic repo | Cheap, off-machine from desktop+Mac, encrypted |
+| **Restic backup target** | NVMe-backed Restic repo | Cheap, off-machine from the desktop, encrypted |
 
-For competitions: single-line pitch is **"distributed inference cluster: RTX 5090 (1.4 PFLOPS) + M4 Max (38 TOPS) + Raspberry Pi 5 (CPU only, 1.58-bit weights) — same router, different price points, demo runs even when the GPU is on fire"**.
+For competitions: single-line pitch is **"local-first inference: RTX 5090 for the real work, optional cloud TRIBE when funded, and Raspberry Pi 5 for tiny edge tasks — same router, different price points, demo still degrades gracefully."**
 
 For production: it's the cheapest insurance against your two main machines being down. As long as the RPi is up, *something* responds.
 
@@ -39,7 +39,7 @@ You probably already have a USB keyboard and HDMI cable lying around. The only m
 
 ## Network topology — what to actually do
 
-Your bedroom has the WiFi router and the desktop+Mac. RPi is in the living room. You asked: **ethernet vs WiFi vs Tailscale**.
+Your bedroom has the WiFi router and the desktop. RPi is in the living room. You asked: **ethernet vs WiFi vs Tailscale**.
 
 ### Recommendation: **WiFi + Tailscale, ethernet only if you decide to**
 
@@ -51,11 +51,9 @@ Your bedroom has the WiFi router and the desktop+Mac. RPi is in the living room.
 
 **When to add ethernet later:** if you start moving the full TRIBE input video corpus (~50 GB) between machines, then yes ethernet. But for the core inference + dashboard role, WiFi is fine.
 
-**Tailscale on top of either:** all three machines (seratonin, seratonin, the RPi) talk to each other only via Tailscale IPs (`100.x.x.x`). This way:
-- The cloudflared tunnel ingress rules can target `http://100.x.x.x:11434` directly
-- No port forwarding on your home router
-- Encrypted by default (WireGuard)
-- Works the same whether you're on WiFi at home or using your phone's hotspot
+**Private overlay optional:** the Pi should not be part of the public Cortex route.
+Use local LAN or a private overlay only for maintenance, and keep public traffic on
+Cloudflare-backed routes.
 
 ### If you want ethernet anyway
 

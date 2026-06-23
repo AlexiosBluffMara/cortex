@@ -1,6 +1,6 @@
-# Cortex — URL map (2026-05-04)
+# Cortex — URL map (2026-06-23)
 
-> All `redteamkitchen.com` URLs are also reachable as `cortex.redteamkitchen.com` via the Cloudflare Tunnel. Use the clean alias in tweets / docs; use the Tailscale URL for ironclad uptime when CF caching might bite.
+> `cortex.redteamkitchen.com` is the clean public alias. Use Cloudflare Pages, Workers, Tunnel, or the configured cloud TRIBE worker for web access. Retired laptop and legacy direct URLs are not part of the supported architecture.
 
 ## Public web
 
@@ -10,7 +10,7 @@
 | **https://cortex.redteamkitchen.com/gallery.html** | Public gallery of every completed scan — thumbnails, top regions, peak time, persona narrations, downloadable `.npy` arrays. | Anyone curious what's been scanned. Click any card to load it into the 3D viewer. |
 | **https://cortex.redteamkitchen.com/personas.html** | Explanation of each of the 4 personas — who they are, what institution they're anchored to, what register they write in, why the 4-voice pattern was chosen. | People who want to understand WHY there are 4 narrations and how they differ. |
 | **https://cortex.redteamkitchen.com/specs.html** | Technical specs — TRIBE v2 architecture (V-JEPA2 + wav2vec-BERT 2.0 + Llama-3.2-3B encoders), 20,484-vertex fsaverage5 output @ 2 Hz, hardware mix, model affinity, cost per scan. | Engineers, academics, anyone vetting the stack. |
-| **https://cortex.redteamkitchen.com/status** | Live fleet dashboard — both nodes, all services, recent scans, watchdog state. Polls `/api/fleet-health` every 2 s, scans every 5 s. | Operators. Live diagnostic. |
+| **https://cortex.redteamkitchen.com/status** | Live fleet dashboard — local node, configured cloud worker, services, recent scans, watchdog state. Polls `/api/fleet-health` every 2 s, scans every 5 s. | Operators. Live diagnostic. |
 | **https://redteamkitchen.com** | Marketing landing for Red Team Kitchen / Alexios Bluff Mara LLC. The umbrella above Cortex. | Anyone arriving from a non-Cortex link. |
 
 ## Public API
@@ -18,7 +18,7 @@
 | URL | Returns | Use |
 |---|---|---|
 | `/api/health` | GPU state, queue depth, version | Quick liveness check |
-| `/api/fleet-health` | Both nodes + router + Ollama + OpenRouter, all in one JSON | Status page, watchdog, monitoring |
+| `/api/fleet-health` | Local GPU node + configured cloud TRIBE worker + router/Ollama/OpenRouter, all in one JSON | Status page, watchdog, monitoring |
 | `/api/scans?limit=N&status=all` | Most recent N scans across the fleet | Gallery feed |
 | `/api/scan/{id}` | Full scan record incl. narrations, ROIs, timings | Direct scan link |
 | `/api/scan` (POST multipart) | Submit a new scan — `file` + `tier` (0–6) + `source` | Programmatic submit |
@@ -39,7 +39,7 @@
 
 | URL | Purpose |
 |---|---|
-| `http://100.98.19.87:8773` | Seratonin (RTX 5090) backend direct |
-| `http://127.0.0.1:11434` | Seratonin Ollama direct (Tailscale only) |
+| `http://127.0.0.1:8773` | Seratonin (RTX 5090) backend direct |
+| `http://127.0.0.1:11434` | Seratonin Ollama direct |
 | `http://localhost:8766/healthz` | Inference router on Sera |
 | `http://localhost:8780/status` | Fleet watchdog status JSON |

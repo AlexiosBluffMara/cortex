@@ -1,6 +1,6 @@
 """device.py — single source of truth for GPU/accelerator selection.
 
-Abstracts CUDA (NVIDIA, e.g. RTX 5090) vs MPS (Apple Silicon, e.g. M4 Max)
+Abstracts CUDA (NVIDIA, e.g. RTX 5090) vs MPS (Apple Silicon)
 vs CPU. Every other module in the package should import `DEVICE`,
 `DEVICE_KIND`, and the `free_vram_gb()` / `used_vram_gb()` / `empty_cache()`
 helpers from here instead of touching `torch.cuda` or `nvidia-smi` directly.

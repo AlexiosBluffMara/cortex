@@ -92,7 +92,7 @@ panel semantics.
 | `http://127.0.0.1:8765` | No | `webapp/server.py` | Local lab app and canonical live development target. |
 
 Public copy should say: live scans require Seratonin's RTX 5090 or a configured
-cloud TRIBE worker. The old Tailscale Funnel routes are retired.
+cloud TRIBE worker. Retired laptop routes are not supported.
 
 ## Compute Modes
 

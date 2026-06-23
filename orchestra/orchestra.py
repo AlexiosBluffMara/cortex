@@ -56,7 +56,7 @@ DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 @dataclass
 class Backend:
     name: str
-    kind: str   # "mlx" | "ollama" | "bitnet"
+    kind: str   # "ollama" | "bitnet"
     url: str
     model: str
 
@@ -93,21 +93,6 @@ def db() -> sqlite3.Connection:
 PROBE_PROMPT = "Reply with just one word: OK"
 
 
-async def probe_mlx(b: Backend, client: httpx.AsyncClient) -> dict:
-    body = {
-        "model": b.model,
-        "messages": [{"role": "user", "content": PROBE_PROMPT}],
-        "max_tokens": 8, "temperature": 0,
-    }
-    t0 = time.perf_counter()
-    r = await client.post(f"{b.url}/v1/chat/completions", json=body, timeout=15)
-    dt = (time.perf_counter() - t0) * 1000
-    r.raise_for_status()
-    j = r.json()
-    toks = j.get("usage", {}).get("completion_tokens", 0) or 8
-    return {"latency_ms": dt, "toks": toks, "tok_per_s": toks * 1000 / max(dt, 1)}
-
-
 async def probe_ollama(b: Backend, client: httpx.AsyncClient) -> dict:
     body = {"model": b.model, "prompt": PROBE_PROMPT, "stream": False,
             "options": {"num_predict": 8, "temperature": 0}}
@@ -130,7 +115,7 @@ async def probe_bitnet(b: Backend, client: httpx.AsyncClient) -> dict:
     return {"latency_ms": dt, "toks": 0, "tok_per_s": 0.0}
 
 
-PROBES = {"mlx": probe_mlx, "ollama": probe_ollama, "bitnet": probe_bitnet}
+PROBES = {"ollama": probe_ollama, "bitnet": probe_bitnet}
 
 
 async def probe(b: Backend, client: httpx.AsyncClient) -> tuple[bool, dict, str]:
@@ -225,8 +210,8 @@ class CastSpeaker:
             LOG.warning("pychromecast not installed: %s", exc)
             return
 
-        # PRIMARY PATH: direct IP, no mDNS. Required because launchd-spawned
-        # processes on macOS can't get multicast UDP for Bonjour/Zeroconf.
+        # PRIMARY PATH: direct IP, no mDNS. Required because service-spawned
+        # processes may not get multicast UDP for Bonjour/Zeroconf.
         if CAST_DEVICE_IP:
             try:
                 import uuid as _uuid

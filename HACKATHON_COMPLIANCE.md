@@ -427,7 +427,7 @@ Gemma is a trademark of Google LLC. Not endorsed by Google.
 
 The Kaggle Writeup form requires:
 - **Title** (≤ ~80 chars). Suggestion: *"Mercury: $0/month Gemma 4 agent for any classroom, any device"*
-- **Subtitle** (≤ ~120 chars). Suggestion: *"Local-first AI tutoring on a teacher's MacBook. Apache 2.0 weights. 7 surfaces. 0 API spend."*
+- **Subtitle** (≤ ~120 chars). Suggestion: *"Local-first AI tutoring on commodity hardware. Apache 2.0 weights. 7 surfaces. 0 API spend."*
 - **Track** dropdown — pick **Digital Equity & Inclusivity**.
 - **Cover image** — required. Make a 1280×720 PNG with the Mercury logo + Gemma + the slogan.
 
@@ -508,13 +508,13 @@ Three commands. Good. **Verify each works on a fresh machine before deadline.** 
 
 For Cortex, the README at `D:/cortex/README.md` should have an equivalent three-to-five-command quick-start. Verify.
 
-**Pin dependencies:** Mercury's `pyproject.toml` and Cortex's `pyproject.toml` should use exact versions or at least minor-pinned (`~=`) versions for `mlx-vlm`, `unsloth`, `ollama`, `httpx`, etc. As of 2026-05-06, MLX-vlm is on 0.5.0 per `SUBMISSION_GEMMA4.md` — pin it.
+**Pin dependencies:** Mercury's `pyproject.toml` and Cortex's `pyproject.toml` should use exact versions or at least minor-pinned (`~=`) versions for `unsloth`, `ollama`, `httpx`, etc.
 
 **`requirements.txt` / `requirements.lock`:** add a frozen lockfile (`uv pip compile pyproject.toml -o requirements.lock`). Per user's `feedback_use_uv.md` rule, use `uv` not pip.
 
 **Hardware profile description:** add to README:
-- Mercury developed and tested on: Windows 11 RTX 5090 (32 GB GDDR7), macOS M4 Max (48 GB unified), Raspberry Pi 5 (8 GB). Minimum: anything that can run Ollama + Gemma 4 E2B (5 GB).
-- Cortex developed and tested on: Windows 11 RTX 5090 (32 GB GDDR7) for TRIBE v2 + Gemma 4 E4B; M4 Max for cloud-fallback inference. Minimum: 24 GB VRAM CUDA or 32 GB unified macOS for full pipeline.
+- Mercury developed and tested on: Windows 11 RTX 5090 (32 GB GDDR7) and Raspberry Pi 5 (8 GB) for edge experiments. Minimum: anything that can run Ollama + Gemma 4 E2B (5 GB).
+- Cortex developed and tested on: Windows 11 RTX 5090 (32 GB GDDR7) for TRIBE v2 + Gemma 4 E4B, with OpenRouter/cloud TRIBE as the supported remote path. Minimum: 24 GB VRAM CUDA for the full local pipeline.
 
 **Build evidence the judges can sanity-check:**
 - Mercury repo already has a `BENCHMARKS.md` and a `kimi_proof/` directory — keep these.

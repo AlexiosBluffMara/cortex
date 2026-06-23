@@ -115,15 +115,6 @@ def cmd_export_gguf(ckpt: str, quant: str, register: bool):
         yield "\n".join(buf[-200:])
 
 
-def cmd_export_mlx(ckpt: str, bits: int):
-    cmd = [sys.executable, "scripts/export_mlx.py", "--ckpt", ckpt, "--bits", str(int(bits))]
-    log = ROOT / "logs" / f"mlx-{datetime.now().strftime('%Y%m%d-%H%M')}.log"
-    buf = []
-    for line in stream_subprocess(cmd, log):
-        buf.append(line)
-        yield "\n".join(buf[-200:])
-
-
 def cmd_deploy():
     cmd = ["bash", "scripts/deploy.sh"]
     log = ROOT / "logs" / f"deploy-{datetime.now().strftime('%Y%m%d-%H%M')}.log"
@@ -179,20 +170,12 @@ def build_ui():
                 gr.Button("Export GGUF", variant="primary").click(
                     cmd_export_gguf, [ckpt_g, quant, reg], gguf_log)
 
-            with gr.Tab("4. Export MLX (Seratonin)"):
-                ckpt_m = gr.Dropdown(choices=list_checkpoints, label="Checkpoint",
-                                     allow_custom_value=True)
-                bits = gr.Dropdown(choices=[4, 8], value=4, label="Quant bits")
-                mlx_log = gr.Textbox(label="log", lines=14, interactive=False)
-                gr.Button("Export MLX", variant="primary").click(
-                    cmd_export_mlx, [ckpt_m, bits], mlx_log)
-
-            with gr.Tab("5. Deploy"):
+            with gr.Tab("4. Deploy"):
                 deploy_log = gr.Textbox(label="log", lines=18, interactive=False)
-                gr.Button("Deploy to Seratonin Ollama + Seratonin MLX",
+                gr.Button("Deploy to Seratonin Ollama",
                           variant="primary").click(cmd_deploy, [], deploy_log)
 
-            with gr.Tab("6. Artifacts"):
+            with gr.Tab("5. Artifacts"):
                 with gr.Row():
                     with gr.Column():
                         gr.Markdown("### Datasets")

@@ -22,17 +22,17 @@ Drop any video / audio / image / PDF / text file into the demo. TRIBE v2 (V-JEPA
 
 **What's new since the last post**
 • Cloud-first inference via OpenRouter (Gemma 4 31B free tier, ~840 ms TTFB)
-• 26B / e4b warm locally on the M4 Max + 5090 respectively, with full failover
+• e4b warm locally on the 5090 when Seratonin is online, with OpenRouter available for cloud narration
 • Persona narrations now run in parallel (4 in-flight via `asyncio.gather` + Ollama `NUM_PARALLEL=4`) — went from sequential 4×N seconds to max(N) seconds
-• 5090 sustains ~325 tok/s aggregate, M4 Max ~130 tok/s
+• 5090 sustains ~325 tok/s aggregate on local narration
 • Fleet watchdog auto-restarts dead services on the 5090
 • ISU-themed Apple-style frontend with drag-resize panels (gridstack) — every section is collapsible, layout persists per-user
 • Distinct, stimulus-specific narrations — each persona now leads with a concrete observation about THE FILE, not a generic "the brain shows…"
 
 **Numbers**
-• Local cost: ~$0.011 / scan (5090 amortised) vs ~$0.32 on a GCP L4
-• Two-node fleet: Seratonin (RTX 5090, Chicago) + Seratonin (M4 Max, Chicago)
-• Cloudflare Tunnel + Tailscale Funnel for public ingress
+• Local cost: ~$0.011 / scan (5090 amortised) vs funded cloud GPU spend when enabled
+• Fleet: Seratonin (RTX 5090, Chicago) + optional cloud TRIBE worker
+• Cloudflare Tunnel / Pages for public ingress
 • 11+ scans in the gallery, 4 narrations each, all reachable from one URL
 
 **Stack**

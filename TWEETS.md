@@ -1,6 +1,6 @@
 # Cortex — tweet bank (2026-05-04)
 
-Pick the angle that fits the day. All copy is under 280 chars and includes `https://cortex.redteamkitchen.com` (clean alias) — substitute for the raw Tailscale URL where you need ironclad uptime: `https://redteamkitchen.com`.
+Pick the angle that fits the day. All copy is under 280 chars and uses `https://cortex.redteamkitchen.com` as the clean public alias.
 
 ---
 
@@ -23,20 +23,20 @@ Pick the angle that fits the day. All copy is under 280 chars and includes `http
 
 4. **stack:**
    • TRIBE v2 (V-JEPA2 + wav2vec-BERT 2.0 + Llama-3.2-3B encoders → 20,484 vertices @ 2 Hz)
-   • Gemma 4 narrations (cloud-first 31B via OpenRouter, e4b warm on Sera with TRIBE, 26b warm on M4 Max)
+   • Gemma 4 narrations (OpenRouter first, local e4b when Seratonin is available)
    • 3D brain in Three.js, drag-resize panels via gridstack
    live: https://cortex.redteamkitchen.com
 
-5. **5090 + M4 Max as a 2-node fleet.**
-   • Sera does TRIBE + Gemma e4b (multimodal native)
-   • Seratonin holds Gemma 26b warm + serves the public
-   • Cloudflare Tunnel + Tailscale Funnel for ingress
-   • Watchdog auto-heals dead services
+5. **5090 + cloud fallback as the live fleet.**
+   • Seratonin does TRIBE + local narration when online
+   • OpenRouter handles low-cost cloud narration
+   • A configured cloud TRIBE worker can handle funded scans
+   • Cloudflare is the public ingress
    status: https://cortex.redteamkitchen.com/status
 
 6. **parallelised the persona narration loop with `asyncio.gather` + Ollama NUM_PARALLEL=4.**
    went from sequential 4×N seconds → max(N) seconds per scan.
-   325 tok/s aggregate on the 5090, 130 tok/s on the M4 Max. cloud-first to OpenRouter for the snappy first byte.
+   325 tok/s aggregate on the 5090. cloud-first to OpenRouter for the snappy first byte.
 
 ## Demo prompt / community
 
@@ -58,7 +58,6 @@ Pick the angle that fits the day. All copy is under 280 chars and includes `http
 
 11. **fleet status, real and live:**
     🟢 Sera RTX 5090 — TRIBE warm, Gemma e4b, 11.2 GB VRAM
-    🟢 Seratonin M4 Max — Gemma 26b warm, 22 GB
     🟢 OpenRouter — Gemma 4 31B cloud-first
     🟢 Cloudflare Tunnel — public ingress
     https://cortex.redteamkitchen.com/status

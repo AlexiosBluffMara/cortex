@@ -7,8 +7,7 @@
 #   2. abort if dataset has fewer than MIN_NEW examples (avoid retraining on stale data)
 #   3. train a LoRA on top of base Gemma 4 e4b
 #   4. export GGUF + register in Ollama (Seratonin)
-#   5. export MLX, scp to Seratonin, reload mlx_lm.server
-#   6. run smoke probes against both backends and log results
+#   5. run smoke probes and log results
 
 set -euo pipefail
 BASE="/mnt/d/cortex/training"
@@ -44,9 +43,6 @@ python scripts/train_lora.py \
 python scripts/export_gguf.py \
     --ckpt "checkpoints/mercury-gemma4-e4b-LATEST" \
     --register
-
-python scripts/export_mlx.py \
-    --ckpt "checkpoints/mercury-gemma4-e4b-LATEST"
 
 # 4. deploy
 bash scripts/deploy.sh "$DATE"

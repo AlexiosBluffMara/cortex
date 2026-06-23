@@ -250,11 +250,10 @@ async function pollScans() {
 }
 
 async function pollWatchdog() {
-  // Best-effort fetch from Seratonin's watchdog port. Cross-origin so we use
-  // the public Cortex hostname; falls silent if Seratonin is not reachable.
+  // Best-effort fetch from the local watchdog port. Retired laptop and
+  // Tailscale routes are intentionally not probed here.
   const candidates = [
     "http://localhost:8780/status",
-    "http://100.98.19.87:8780/status",
   ];
   for (const url of candidates) {
     try {

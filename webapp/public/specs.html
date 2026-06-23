@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="dark" />
-<title>Cortex · Hardware specs (Seratonin · Mini Apple · Baby Pi)</title>
-<meta name="description" content="The physical machines that run Cortex and Mercury — Seratonin (RTX 5090), Mini Apple, and the in-progress Baby Pi." />
+<title>Cortex · Hardware specs (Seratonin · Cloud Worker · Baby Pi)</title>
+<meta name="description" content="The physical machines and optional cloud worker that run Cortex and Mercury — Seratonin (RTX 5090), Cloud TRIBE, and the in-progress Baby Pi." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -39,7 +39,6 @@
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:1.4rem;max-width:1280px;margin:0 auto;padding:1rem 1.5rem 4rem}
 
   .machine{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column;border-top:3px solid var(--accent)}
-  .machine.miniapple{border-top-color:var(--isu-blue)}
   .machine.babypi{border-top-color:#9c0d1d;opacity:0.7}
 
   .machine .head{padding:1.2rem 1.4rem 0.8rem;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
@@ -76,10 +75,10 @@
 </header>
 
 <section class="hero">
-  <h1>The <span class="accent">physical machines</span> behind Cortex &amp; Mercury</h1>
-  <p>Seratonin is the production GPU box, Mini Apple is the research node near ISU,
-     and Baby Pi is still being prepared. Together with the optional cloud TRIBE worker,
-     this is the compute fleet that runs the demo on this site.</p>
+  <h1>The <span class="accent">compute stack</span> behind Cortex &amp; Mercury</h1>
+  <p>Seratonin is the production GPU box, Baby Pi is still being prepared for edge
+     utilities, and the optional cloud TRIBE worker is the fallback path when the
+     local PC is unavailable. Retired laptop routes are no longer part of Cortex.</p>
 </section>
 
 <main class="grid">
@@ -109,27 +108,6 @@
     </div>
   </article>
 
-  <article class="machine miniapple">
-    <div class="head">
-      <div>
-        <div class="name">Mini Apple</div>
-        <div class="role">ISU research node · Apple Silicon · <strong>Bloomington–Normal, IL</strong></div>
-      </div>
-      <span class="badge">● standby · research node</span>
-    </div>
-    <dl class="specs">
-      <dt>Chip</dt>     <dd>Apple Silicon (Mac mini class)</dd>
-      <dt>OS</dt>       <dd>macOS Sequoia 15.x · Ollama on Metal</dd>
-      <dt>Network</dt>  <dd>Local/private research node</dd>
-      <dt>Location</dt> <dd>Near ISU campus, Normal IL — used for in-person research meetings with collaborators (Mangolika Bhattacharya, Sally Xie, Rosangela Follmann)</dd>
-      <dt>Role</dt>     <dd>Tertiary node. Available as a third Ollama backend if both Chicago machines are saturated.</dd>
-    </dl>
-    <div class="role-box">
-      <strong>Why it exists:</strong> live demo + collaboration sessions at ISU don't have to round-trip
-      to Chicago. It is not part of the public inference pool unless explicitly promoted.
-    </div>
-  </article>
-
   <article class="machine babypi">
     <div class="head">
       <div>
@@ -152,7 +130,7 @@
 </main>
 
 <footer class="footer">
-  Cortex · Red Team Kitchen · Ascended Base Lab, Chicago IL · ISU research node, Bloomington–Normal IL
+  Cortex · Red Team Kitchen · Ascended Base Lab, Chicago IL · Cloudflare-backed public surface
 </footer>
 
 </body>

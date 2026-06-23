@@ -60,6 +60,3 @@ export:
       {{ end }}<start_of_turn>model
       """
       PARAMETER stop "<end_of_turn>"
-  mlx:
-    quant_bits: 4
-    target: "exports/"

@@ -18,19 +18,11 @@ Mercury runs (agentic_opd / hermes_swe / web_research / terminal_test envs)
        │   ↓
   checkpoints/mercury-gemma4-e4b-<DATE>/  # adapter weights + tokenizer
        │
-       ├── scripts/export_gguf.py   # merge LoRA, convert to GGUF Q4_K_M
-       │      ↓
-       │   exports/mercury-gemma4-e4b-<DATE>.gguf
-       │      ↓
-       │   ollama create mercury:e4b -f Modelfile  (Seratonin Ollama)
-       │
-       └── scripts/export_mlx.py    # merge LoRA, convert to MLX 4-bit
+       └── scripts/export_gguf.py   # merge LoRA, convert to GGUF Q4_K_M
               ↓
-           exports/mercury-gemma4-e4b-<DATE>-mlx/
+           exports/mercury-gemma4-e4b-<DATE>.gguf
               ↓
-           scp → Seratonin ~/.cache/huggingface/hub/
-              ↓
-           launchctl reload ai.mlx.server  (Seratonin MLX :8090)
+           ollama create mercury:e4b -f Modelfile  (Seratonin Ollama)
 ```
 
 The inference router (`inference_router/router.py`) hot-picks whichever model
@@ -55,9 +47,8 @@ python scripts/extract_trajectories.py \
 # 2. Train (writes checkpoints/)
 python scripts/train_lora.py --config configs/mercury-gemma4-e4b-lora.yaml
 
-# 3. Export both formats
+# 3. Export
 python scripts/export_gguf.py --ckpt checkpoints/mercury-gemma4-e4b-LATEST
-python scripts/export_mlx.py  --ckpt checkpoints/mercury-gemma4-e4b-LATEST
 
 # 4. Deploy
 bash scripts/deploy.sh

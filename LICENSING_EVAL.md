@@ -30,7 +30,7 @@ Soumit asked about "GCP VPC version." That's Google's enterprise networking laye
 **You don't need any of it.** What you actually need:
 - **Encrypted mesh between your machines** → Tailscale (free, WireGuard).
 - **Private DNS** → Tailscale's MagicDNS (free).
-- **Identity-keyed access** → Tailscale SSH + Tailscale Funnel (free).
+- **Identity-keyed access** → Cloudflare Access or private LAN-only admin routes.
 - **Public ingress** → Cloudflare Tunnel (free).
 
 If any project ever genuinely needs GCP VPC (e.g. you're being paid by an enterprise customer who requires it), revisit. Until then, the Cloudflare + Tailscale stack is strictly better and $360/mo cheaper.

@@ -196,14 +196,10 @@ curl -s -H "Authorization: Bearer $TOK" \
   | jq -r '.result | "tunnel: \(.status), conns: \(.connections|length)"'
 EOF
 
-# SSH shortcuts
+# SSH shortcut
 cat > ~/.shortcuts/seratonin <<'EOF'
 #!/data/data/com.termux/files/usr/bin/bash
-ssh -o StrictHostKeyChecking=accept-new soumit@100.98.19.87
-EOF
-cat > ~/.shortcuts/seratonin <<'EOF'
-#!/data/data/com.termux/files/usr/bin/bash
-ssh -o StrictHostKeyChecking=accept-new soumit@127.0.0.1
+echo "Use the Cloudflare-backed Cortex dashboard for ops. Direct retired Tailscale routes are not configured here."
 EOF
 cat > ~/.shortcuts/baby-pi <<'EOF'
 #!/data/data/com.termux/files/usr/bin/bash

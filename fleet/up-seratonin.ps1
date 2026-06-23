@@ -66,4 +66,4 @@ StartDetached "mercury-dash" $MerVe @("dashboard","--host","0.0.0.0","--port","9
 
 Write-Host ""
 Write-Host "Seratonin stack starting. Run 'bash fleet/status.sh' to verify."
-Write-Host "Public URL (when funnel up): https://seratonin.scylla-betta.ts.net"
+Write-Host "Public URL is Cloudflare-only when configured; legacy direct routes are retired."

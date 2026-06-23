@@ -33,7 +33,7 @@ OUT_DEFAULT = Path(r"D:\cortex\assets")
 
 # Demo prompts
 TUI_PROMPT = (
-    "I'm running entirely on Gemma 4 E4B via native MLX on an M4 Max. "
+    "I'm running on Gemma 4 E4B through the local Red Team Kitchen stack. "
     "In one sentence, tell me why local-first AI matters for digital equity."
 )
 WEB_PROMPT = (
@@ -75,7 +75,7 @@ def run_tui_in_window(prompt: str) -> None:
     cmd_str = f'"{MERCURY}" -z "{prompt}"'
     # Title the window so it's recognizable
     subprocess.Popen(
-        f'start "Mercury TUI — Gemma 4 E4B via MLX" cmd /k "{cmd_str}"',
+        f'start "Mercury TUI — Gemma 4 E4B local" cmd /k "{cmd_str}"',
         shell=True,
     )
 

@@ -15,7 +15,7 @@
 - **Optional live route:** [cortex.redteamkitchen.com](https://cortex.redteamkitchen.com) only works when Seratonin, the watchdog, and the Cloudflare Tunnel are online.
 - **Live ops runbook:** [`docs/CORTEX_LIVE_OPS.md`](docs/CORTEX_LIVE_OPS.md)
 
-The old Tailscale Funnel URLs (`*.scylla-betta.ts.net`) are retired and should not be used in public copy. Cortex can still be shown live from the local PC, but the resilient public version should publish selected gallery videos, thumbnails, scan metadata, and recordings from Cloudflare Pages/R2. Treat the upload app as lab mode, not as an always-on public promise.
+Retired laptop and legacy public routes should not be used in public copy. Cortex can still be shown live from the local PC, but the resilient public version should publish selected gallery videos, thumbnails, scan metadata, and recordings from Cloudflare Pages/R2. Treat the upload app as lab mode, not as an always-on public promise.
 
 ---
 
