@@ -21,6 +21,7 @@ pytestmark = pytest.mark.integration
 @pytest.fixture
 def fake_queue():
     q = MagicMock()
+    q.submissions = []
     q.status.return_value = {
         "queue_depth": 0,
         "processing": False,
@@ -31,11 +32,20 @@ def fake_queue():
     }
 
     async def _submit(request_type, payload, priority, source):
+        q.submissions.append(
+            {
+                "request_type": request_type,
+                "payload": payload,
+                "priority": priority,
+                "source": source,
+            }
+        )
         if request_type == RequestType.BRAIN_SCAN:
             r = MagicMock()
             r.top_rois = ["ROI_1", "ROI_2"]
             r.peak_t = 42
             r.seconds_elapsed = 4.2
+            r.preds = None
             return r
         return "narration text"
 
@@ -47,7 +57,7 @@ def fake_queue():
 def fake_scheduler():
     s = MagicMock()
     s.state = GPUState.IDLE
-    s.vram_report.return_value = {
+    idle_report = {
         "state": "idle",
         "total_gb": 32.0,
         "used_gb": 2.0,
@@ -56,6 +66,18 @@ def fake_scheduler():
         "gemma_e4b_fits": True,
         "swap_metrics": {"total_swaps": 0, "avg_swap_time_s": 0.0, "oom_recoveries": 0},
     }
+    s.vram_report.return_value = idle_report
+
+    async def _ensure_tribe():
+        s.state = GPUState.TRIBE_ACTIVE
+        s.vram_report.return_value = {
+            **idle_report,
+            "state": "tribe_active",
+            "used_gb": 10.0,
+            "free_gb": 21.5,
+        }
+
+    s.ensure_tribe = AsyncMock(side_effect=_ensure_tribe)
     s.on_state_change = MagicMock()
     return s
 
@@ -69,8 +91,13 @@ def app(fake_queue, fake_scheduler, monkeypatch):
     if "torch" not in sys.modules:
         sys.modules["torch"] = MagicMock()
 
-    from webapp.server import create_app
-    return create_app(queue=fake_queue, scheduler=fake_scheduler)
+    from webapp import server as server_mod
+
+    monkeypatch.setattr(server_mod, "_GCP_AVAILABLE", False)
+    monkeypatch.setattr(server_mod, "_describe_media_for_prompt", AsyncMock(return_value="test media context"))
+    monkeypatch.setattr(server_mod, "_narrate_with_model", AsyncMock(return_value="narration text"))
+    monkeypatch.setattr(server_mod, "_fetch_openrouter_free_models", AsyncMock(return_value=[]))
+    return server_mod.create_app(queue=fake_queue, scheduler=fake_scheduler)
 
 
 @pytest.fixture
@@ -101,6 +128,134 @@ class TestHealth:
         assert gpu["tribe_fits"] is True
 
 
+class TestControlPlane:
+    def test_narration_models_defaults_to_openrouter_gemma(self, client):
+        resp = client.get("/api/narration-models")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["default_model"] == "openrouter:google/gemma-4-26b-a4b-it:free"
+        assert body["catalog_source"] == "static_fallback"
+        assert body["openrouter_free_limits"]["daily_with_10_credits"] == 1000
+        model_ids = {m["id"] for m in body["models"]}
+        assert "openrouter:google/gemma-4-26b-a4b-it:free" in model_ids
+        assert "local:gemma4:e4b" in model_ids
+
+    def test_openrouter_payload_builds_free_catalog(self):
+        from webapp import server as server_mod
+
+        payload = {
+            "data": [
+                {
+                    "id": "paid/model",
+                    "name": "Paid: Model",
+                    "context_length": 4096,
+                    "architecture": {"input_modalities": ["text"]},
+                    "pricing": {"prompt": "0.000001", "completion": "0.000002"},
+                },
+                {
+                    "id": "openrouter/free",
+                    "name": "OpenRouter: Auto Free",
+                    "context_length": 200000,
+                    "architecture": {"input_modalities": ["text", "image"]},
+                    "pricing": {"prompt": "0", "completion": "0"},
+                },
+                {
+                    "id": "google/gemma-4-26b-a4b-it:free",
+                    "name": "Google: Gemma 4 26B A4B  (free)",
+                    "context_length": 262144,
+                    "architecture": {"input_modalities": ["image", "text", "video"]},
+                    "pricing": {"prompt": "0", "completion": "0"},
+                },
+            ]
+        }
+        models = server_mod._openrouter_free_models_from_payload(payload)
+        assert [m["id"] for m in models[:2]] == [
+            "openrouter:google/gemma-4-26b-a4b-it:free",
+            "openrouter:openrouter/free",
+        ]
+        assert "openrouter:paid/model" not in {m["id"] for m in models}
+        assert models[0]["prompt_price"] == 0.0
+
+    def test_narration_models_uses_live_openrouter_catalog(self, client, monkeypatch):
+        from webapp import server as server_mod
+
+        live_models = [
+            {
+                "id": "openrouter:google/gemma-4-26b-a4b-it:free",
+                "label": "Gemma 4 26B A4B",
+                "provider": "OpenRouter",
+                "group": "Free",
+                "default": True,
+                "modalities": ["image", "text", "video"],
+                "context_length": 262144,
+                "prompt_price": 0.0,
+                "completion_price": 0.0,
+                "notes": "test live model",
+            },
+            {
+                "id": "openrouter:test/free-text:free",
+                "label": "Test Free Text",
+                "provider": "OpenRouter",
+                "group": "Free",
+                "modalities": ["text"],
+                "context_length": 8192,
+                "prompt_price": 0.0,
+                "completion_price": 0.0,
+                "notes": "test live model",
+            },
+        ]
+        monkeypatch.setattr(server_mod, "_fetch_openrouter_free_models", AsyncMock(return_value=live_models))
+        resp = client.get("/api/narration-models")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["catalog_source"] == "openrouter_live"
+        assert body["catalog_count"] == 2
+        model_ids = {m["id"] for m in body["models"]}
+        assert "openrouter:test/free-text:free" in model_ids
+        assert "local:gemma4:e4b" in model_ids
+
+    def test_openrouter_status_is_sanitized(self, client, monkeypatch):
+        from webapp import server as server_mod
+
+        monkeypatch.setattr(
+            server_mod,
+            "_openrouter_key_status",
+            AsyncMock(return_value={"ok": False, "status": "not_configured", "message": "missing"}),
+        )
+        resp = client.get("/api/openrouter/status")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "not_configured"
+        assert "default_model" in body
+        assert "api_key" not in body
+
+    def test_tribe_status_reports_warmable_when_idle(self, client):
+        resp = client.get("/api/tribe/status")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["pc_online"] is True
+        assert body["can_warm_tribe"] is True
+        assert body["tribe_ready"] is False
+
+    def test_warm_tribe_calls_scheduler(self, client, fake_scheduler):
+        resp = client.post("/api/tribe/warm")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["status"] == "tribe_ready"
+        fake_scheduler.ensure_tribe.assert_awaited_once()
+
+    def test_text_metadata_context_preserves_stimulus_text(self, tmp_path):
+        from webapp import server as server_mod
+
+        stimulus = tmp_path / "stimulus.txt"
+        stimulus.write_text("A video transcript about thunder and neon lights.", encoding="utf-8")
+        context = server_mod._media_metadata_context(stimulus)
+        assert "modality: text" in context
+        assert "thunder and neon lights" in context
+        assert "TRIBE v2 received through its text events path" in context
+
+
 # ---------------------------------------------------------------------------
 # Scan submission
 # ---------------------------------------------------------------------------
@@ -126,6 +281,8 @@ class TestSubmitScan:
         assert body["status"] == "queued"
         assert "scan_id" in body
         assert len(body["scan_id"]) == 12  # uuid4().hex[:12]
+        record = client.get(f"/api/scan/{body['scan_id']}").json()
+        assert record["narration_model"] == "openrouter:google/gemma-4-26b-a4b-it:free"
 
     def test_rejects_oversized_upload(self, client):
         # 51MB exceeds the 50MB cap
@@ -146,6 +303,21 @@ class TestSubmitScan:
         # Tier 99 is out of range; FastAPI returns 422 (validation error)
         resp = client.post("/api/scan", files=files, data={"tier": "99"})
         assert resp.status_code == 422
+
+    def test_text_scan_routes_to_tribe_text_mode(self, client):
+        resp = client.post(
+            "/api/text-scan",
+            data={"text": "A bright red apple rotates beside a lake.", "source": "webui"},
+        )
+        assert resp.status_code == 202
+        body = resp.json()
+        assert body["analysis_mode"] == "tribe_text"
+
+        record = client.get(f"/api/scan/{body['scan_id']}").json()
+        assert record["analysis_mode"] == "tribe_text"
+        assert record["narration_model"] == "openrouter:google/gemma-4-26b-a4b-it:free"
+        assert record["filename"] == "<text stimulus>"
+        assert "bright red apple" in record["text"]
 
 
 # ---------------------------------------------------------------------------
@@ -283,4 +455,6 @@ class TestStatic:
         body = resp.text
         # Lock identifying markers to catch accidental rebrand regressions.
         assert "Cortex" in body
-        assert "Gemma is a trademark of Google LLC" in body
+        assert "TRIBE v2" in body
+        assert "OpenRouter" in body
+        assert "Show the brain what someone sees, hears, or reads." in body

@@ -105,7 +105,7 @@
             min-height: 0; min-width: 0;
         }
         .panel-section { padding: 16px; border-bottom: 1px solid var(--border); }
-        .panel-title { font-size: 11px; font-family: "Open Sans", sans-serif; font-weight: 600; letter-spacing: -0.01em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+        .panel-title { font-size: 11px; font-family: "Open Sans", sans-serif; font-weight: 600; letter-spacing: 0; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
 
         .scan-form { display: flex; flex-direction: column; gap: 10px; }
         .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
@@ -1066,7 +1066,7 @@
             -webkit-backdrop-filter: blur(24px) saturate(160%);
             border-bottom: 1px solid var(--border);
         }
-        .brand { font-weight: 800; letter-spacing: -0.02em; }
+        .brand { font-weight: 800; letter-spacing: 0; }
         .brand-mark {
             background: var(--grad-hero);
             -webkit-background-clip: text; background-clip: text;
@@ -1211,7 +1211,7 @@
         #live-stream::-webkit-scrollbar-thumb { background: var(--accent-soft); border-radius: 4px; }
         #live-stream::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
-        body, button, input, select { letter-spacing: -0.005em; }
+        body, button, input, select { letter-spacing: 0; }
 
         details.cd-card > .cd-body {
             opacity: 0; transform: translateY(-4px);
@@ -1338,6 +1338,247 @@
         #three-root { position: relative; z-index: 2; }
         .view-toolbar, .hemi-toolbar, .colorbar-wrap, .playback-bar,
         .pipeline-badge, #network-bar, #region-tooltip { z-index: 5; }
+
+        /* ── Operator workflow panel ── */
+        .panel-left { overflow: hidden; }
+        .intake-scroll {
+            height: 100%;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(204,0,0,0.75) transparent;
+        }
+        .intake-scroll::-webkit-scrollbar { width: 8px; }
+        .intake-scroll::-webkit-scrollbar-track { background: transparent; }
+        .intake-scroll::-webkit-scrollbar-thumb { background: rgba(204,0,0,0.55); border-radius: 8px; }
+        .intake-hero {
+            padding: 2px 2px 4px;
+        }
+        .intake-hero h1 {
+            font-size: 22px;
+            line-height: 1.12;
+            letter-spacing: 0;
+            margin-bottom: 10px;
+        }
+        .intake-hero p:not(.panel-title),
+        .step-copy {
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.55;
+        }
+        .workflow-jump {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 6px;
+        }
+        .workflow-jump a {
+            color: var(--text);
+            text-decoration: none;
+            text-align: center;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.035);
+            border-radius: 8px;
+            padding: 8px 4px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .workflow-jump a:hover { border-color: var(--accent); color: #fff; }
+        .workflow-step {
+            border: 1px solid var(--border);
+            background: rgba(20,21,28,0.82);
+            border-radius: 8px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .workflow-step h2 {
+            font-size: 16px;
+            line-height: 1.25;
+            letter-spacing: 0;
+        }
+        .step-kicker {
+            font-family: "JetBrains Mono", monospace;
+            font-size: 10px;
+            color: var(--isu-yellow);
+            text-transform: uppercase;
+        }
+        .workflow-step .mode-tabs {
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.035);
+            border-radius: 8px;
+            padding: 3px;
+            gap: 2px;
+        }
+        .workflow-step .mode-tab {
+            border: 0;
+            border-radius: 6px;
+            padding: 8px 5px;
+            margin: 0;
+            letter-spacing: 0;
+            text-transform: none;
+            font-size: 11px;
+        }
+        .workflow-step .mode-tab.active {
+            background: rgba(204,0,0,0.22);
+            color: #fff;
+        }
+        .input-mode-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .input-mode-strip span {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            color: var(--muted);
+            padding: 4px 8px;
+            font-size: 10px;
+            font-family: "JetBrains Mono", monospace;
+        }
+        .capture-drawer {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: rgba(0,0,0,0.12);
+            padding: 0;
+        }
+        .capture-drawer summary {
+            cursor: pointer;
+            padding: 10px 12px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .capture-drawer[open] summary {
+            color: var(--text);
+            border-bottom: 1px solid var(--border);
+        }
+        .capture-tabs {
+            margin: 10px 10px 0;
+        }
+        .workflow-step .mode-panel {
+            padding: 0;
+            gap: 12px;
+        }
+        .capture-drawer .mode-panel {
+            padding: 10px;
+        }
+        .workflow-step .drop-zone {
+            padding: 18px 14px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.035);
+        }
+        .workflow-step .input-preview video,
+        .workflow-step .input-preview img {
+            max-height: 220px;
+            object-fit: contain;
+            background: #050509;
+        }
+        .model-select {
+            width: 100%;
+            border: 1px solid var(--border-strong);
+            background: var(--surface2);
+            color: var(--text);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font: inherit;
+            font-size: 12px;
+        }
+        .model-card-list {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            max-height: 280px;
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+        .model-card {
+            width: 100%;
+            text-align: left;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.035);
+            color: var(--text);
+            border-radius: 8px;
+            padding: 10px;
+            display: grid;
+            gap: 4px;
+            cursor: pointer;
+        }
+        .model-card:hover,
+        .model-card.active { border-color: var(--accent); background: rgba(204,0,0,0.13); }
+        .model-card strong { font-size: 12px; line-height: 1.25; }
+        .model-card span,
+        .model-card small {
+            color: var(--muted);
+            font-size: 10px;
+            line-height: 1.35;
+        }
+        .cost-estimate,
+        .readiness-grid {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: rgba(0,0,0,0.18);
+            overflow: hidden;
+        }
+        .cost-estimate > div,
+        .readiness-grid > div {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 9px 10px;
+            border-bottom: 1px solid var(--border);
+            font-size: 11px;
+        }
+        .cost-estimate > div:last-child,
+        .readiness-grid > div:last-child { border-bottom: 0; }
+        .cost-estimate span,
+        .readiness-grid span { color: var(--muted); }
+        .cost-estimate strong,
+        .readiness-grid strong {
+            color: var(--text);
+            text-align: right;
+            font-family: "JetBrains Mono", monospace;
+            font-size: 11px;
+        }
+        .cost-estimate .total strong { color: var(--isu-yellow); }
+        .status-line {
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.45;
+        }
+        .system-step details { display: grid; gap: 12px; }
+        .system-step summary {
+            cursor: pointer;
+            color: var(--text);
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .system-step .telemetry,
+        .system-step .run-timing {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: rgba(0,0,0,0.16);
+            padding: 12px;
+        }
+        .system-step .event-log {
+            max-height: 180px;
+            flex: 0 0 auto;
+            padding: 8px 0;
+        }
+        .system-step .live-stream { max-height: 180px; }
+
+        @media (min-width: 1280px) {
+            .layout {
+                grid-template-columns: minmax(360px, 0.85fr) minmax(480px, 1.4fr) minmax(330px, 0.9fr);
+            }
+        }
+        @media (max-width: 1100px) {
+            .workflow-jump { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
     </style>
 
     <!-- gridstack.js (drag + resize panels, Robinhood-Legend-style) — self-hosted -->
@@ -1358,16 +1599,6 @@
     <script>
     (function () {
       const COLLAPSIBLE_TARGETS = [
-        { sel: "#event-log",          title: "Pipeline events",   open: true,
-          badge: () => {
-            const c = document.querySelectorAll("#event-log li").length;
-            return c ? c + "" : "";
-          } },
-        { sel: ".telemetry",          title: "System monitor",    open: true },
-        { sel: "#live-stream",        title: "Live activity stream", open: true },
-        { sel: "#run-timing",         title: "Last scan timing",  open: false },
-        { sel: ".mode-tabs",          title: "Submit a scan",     open: true,
-          alsoMove: ".mode-panel" },
         // Default-COLLAPSED until a scan completes — opens automatically via
         // the cortex:scan-complete event handler at the bottom.
         { sel: ".narration-tabs",     title: "Persona narrations",open: false,
@@ -1524,223 +1755,272 @@
     </header>
 
     <div class="layout">
-        <!-- ── Left: pipeline events (top, dominant) + input modes (bottom) ── -->
+        <!-- ── Left: human-first scan workflow ── -->
         <aside class="panel-left">
+            <div class="intake-scroll">
+                <section class="intake-hero" aria-labelledby="intake-title">
+                    <p class="panel-title">Cortex live demo</p>
+                    <h1 id="intake-title">Show the brain what someone sees, hears, or reads.</h1>
+                    <p>TRIBE v2 stays on the RTX 5090 for BOLD prediction. Persona narration defaults to OpenRouter so local VRAM stays open for the brain model.</p>
+                </section>
 
-            <!-- Event log — promoted to top of column to match the viewer-focused layout -->
-            <div id="event-log-section" class="panel-section" style="flex:1;display:flex;flex-direction:column;overflow:hidden;border-bottom:1px solid var(--border);min-height:0;">
-                <p class="panel-title">Pipeline events</p>
-                <ol id="event-log" class="event-log"></ol>
+                <nav class="workflow-jump" aria-label="Workflow sections">
+                    <a href="#input-step">Input</a>
+                    <a href="#model-step">Narrator</a>
+                    <a href="#demo-step">Live</a>
+                    <a href="#logs-step">Logs</a>
+                </nav>
 
-                <!-- Live activity stream — sanitized real-time backend log, no usernames or paths -->
-                <p class="panel-title" style="margin-top:14px">Live activity stream</p>
-                <div id="live-stream" class="live-stream" aria-live="polite">
-                    <div class="ls-empty">Waiting for backend activity…</div>
-                </div>
+                <section class="workflow-step" id="input-step">
+                    <div class="step-kicker">1 · Input</div>
+                    <h2>Choose the stimulus</h2>
+                    <p class="step-copy">Upload video with sound, an image, or audio, or type text. Video, audio, and text run through TRIBE v2 when supported; still images use OpenRouter visual context.</p>
 
-                <!-- Live telemetry: GPU/CPU/RAM across both nodes (refreshes every 2s) -->
-                <div class="telemetry">
-                    <h3><span class="pulse"></span>System monitor</h3>
-                    <div class="telemetry-node" data-node="seratonin">
-                        <div class="name">Seratonin <span class="badge">…</span></div>
-                        <div class="metric-row"><span class="lbl">GPU</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— %</span></div>
-                        <div class="metric-row"><span class="lbl">VRAM</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— GB</span></div>
-                        <div class="metric-row"><span class="lbl">Queue</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— jobs</span></div>
+                    <div class="mode-tabs" role="tablist" aria-label="Input mode">
+                        <button class="mode-tab active" data-mode="file" role="tab">Upload media</button>
+                        <button class="mode-tab" data-mode="text" role="tab">Type text</button>
                     </div>
-                    <div class="telemetry-node" data-node="bigapple">
-                        <div class="name">Big Apple <span class="badge">…</span></div>
-                        <div class="metric-row"><span class="lbl">GPU</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— %</span></div>
-                        <div class="metric-row"><span class="lbl">RAM</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— GB</span></div>
-                        <div class="metric-row"><span class="lbl">Queue</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— jobs</span></div>
+
+                    <div class="input-mode-strip" aria-label="Supported uploads">
+                        <span>Video + sound</span>
+                        <span>Image</span>
+                        <span>Audio</span>
+                        <span>PDF/Text</span>
                     </div>
-                </div>
 
-                <!-- Per-scan timing for the most recent run -->
-                <div class="run-timing" id="run-timing" style="display:none">
-                    <h3>Last scan timing</h3>
-                    <div class="row"><span class="lbl">TRIBE inference</span><span class="val" id="rt-tribe">—</span></div>
-                    <div class="row"><span class="lbl">Narration ×4</span>     <span class="val" id="rt-narr">—</span></div>
-                    <div class="row total"><span class="lbl">Total</span>      <span class="val" id="rt-total">—</span></div>
-                    <div class="row"><span class="lbl">Top region</span>      <span class="val" id="rt-roi">—</span></div>
-                    <div class="row"><span class="lbl">Peak time</span>       <span class="val" id="rt-peak">—</span></div>
-                    <div class="row" style="display:block; margin-top:8px;">
-                        <span class="lbl" style="display:block; margin-bottom:4px;">Per-persona</span>
-                        <div id="rt-personas" style="display:flex; flex-wrap:wrap; gap:6px; font-size:11px;"></div>
+                    <div class="mode-panel active" id="mode-file" role="tabpanel">
+                        <div id="drop-zone" class="drop-zone">
+                            <div class="drop-icon">↑</div>
+                            <div class="drop-label">Drop media here or browse</div>
+                            <div class="drop-types">MP4/WebM/MOV with audio · PNG/JPG/WebP · WAV/MP3/M4A · PDF/TXT</div>
+                            <input type="file" id="scan-file" name="file" accept="video/*,audio/*,image/*,.txt,.md,.srt,.vtt,.html,.htm,.pdf" class="drop-input" />
+                            <div id="drop-selected" class="drop-selected hidden"></div>
+                        </div>
+                        <div id="input-preview" class="input-preview hidden"></div>
+                        <button type="button" id="scan-submit" class="submit-btn" disabled>Analyze media</button>
                     </div>
-                </div>
-            </div>
 
-            <!-- Mode selector tabs -->
-            <div class="mode-tabs">
-                <button class="mode-tab active" data-mode="file">File</button>
-                <button class="mode-tab" data-mode="camera">Camera</button>
-                <button class="mode-tab" data-mode="voice">Voice</button>
-                <button class="mode-tab" data-mode="text">Text</button>
-            </div>
+                    <div class="mode-panel" id="mode-text" role="tabpanel">
+                        <label class="field">
+                            <span>Text stimulus</span>
+                            <textarea id="text-input" rows="8"
+                                placeholder="Paste a sentence, prompt, poem, scene description, or thought to model as a reading/thinking stimulus."></textarea>
+                        </label>
+                        <button id="text-submit-btn" class="submit-btn">Analyze text</button>
+                    </div>
 
-            <!-- File upload -->
-            <div class="mode-panel active" id="mode-file">
-                <div id="drop-zone" class="drop-zone">
-                    <div class="drop-icon">⬆</div>
-                    <div class="drop-label">Drop a file or click to browse</div>
-                    <div class="drop-types">Video · Audio · Image · PDF · Text</div>
-                    <input type="file" id="scan-file" name="file" accept="video/*,audio/*,image/*,.txt,.md,.srt,.vtt,.html,.htm,.pdf" class="drop-input" />
-                    <div id="drop-selected" class="drop-selected hidden"></div>
-                </div>
-                <div id="input-preview" class="input-preview hidden"></div>
-                <button type="button" id="scan-submit" class="submit-btn" disabled>Analyze</button>
-            </div>
+                    <details class="capture-drawer">
+                        <summary>Capture from this device</summary>
+                        <div class="mode-tabs capture-tabs" role="tablist" aria-label="Capture mode">
+                            <button class="mode-tab" data-mode="camera" role="tab">Camera</button>
+                            <button class="mode-tab" data-mode="voice" role="tab">Voice</button>
+                        </div>
 
-            <!-- Camera capture -->
-            <div class="mode-panel" id="mode-camera">
-                <div class="camera-wrap">
-                    <video id="camera-video" autoplay playsinline muted></video>
-                    <canvas id="camera-canvas" hidden></canvas>
-                </div>
-                <div class="mode-actions">
-                    <button id="camera-open-btn">Open camera</button>
-                    <button id="camera-capture-btn" hidden>Capture</button>
-                    <button id="camera-retake-btn" hidden>Retake</button>
-                </div>
-                <button id="camera-submit-btn" class="submit-btn" hidden>Analyze photo</button>
-            </div>
+                        <div class="mode-panel" id="mode-camera" role="tabpanel">
+                            <div class="camera-wrap">
+                                <video id="camera-video" autoplay playsinline muted></video>
+                                <canvas id="camera-canvas" hidden></canvas>
+                            </div>
+                            <div class="mode-actions">
+                                <button id="camera-open-btn">Open camera</button>
+                                <button id="camera-capture-btn" hidden>Capture</button>
+                                <button id="camera-retake-btn" hidden>Retake</button>
+                            </div>
+                            <button id="camera-submit-btn" class="submit-btn" hidden>Analyze photo</button>
+                        </div>
 
-            <!-- Voice recording -->
-            <div class="mode-panel" id="mode-voice">
-                <canvas id="voice-vis" width="288" height="52"></canvas>
-                <div class="voice-info-row">
-                    <span id="voice-state-label">Ready to record</span>
-                    <span id="voice-timer" class="voice-timer-text">0:00</span>
-                </div>
-                <div class="mode-actions">
-                    <button id="voice-record-btn">Record</button>
-                    <button id="voice-stop-btn" hidden>Stop</button>
-                </div>
-                <button id="voice-submit-btn" class="submit-btn" hidden>Analyze recording</button>
-            </div>
+                        <div class="mode-panel" id="mode-voice" role="tabpanel">
+                            <canvas id="voice-vis" width="288" height="52"></canvas>
+                            <div class="voice-info-row">
+                                <span id="voice-state-label">Ready to record</span>
+                                <span id="voice-timer" class="voice-timer-text">0:00</span>
+                            </div>
+                            <div class="mode-actions">
+                                <button id="voice-record-btn">Record</button>
+                                <button id="voice-stop-btn" hidden>Stop</button>
+                            </div>
+                            <button id="voice-submit-btn" class="submit-btn" hidden>Analyze recording</button>
+                        </div>
+                    </details>
+                </section>
 
-            <!-- Text input -->
-            <div class="mode-panel" id="mode-text">
-                <label class="field">
-                    <span>Describe a thought or stimulus</span>
-                    <textarea id="text-input" rows="7"
-                        placeholder="e.g. watching fireworks, solving a maths problem, listening to jazz…"></textarea>
-                </label>
-                <button id="text-submit-btn" class="submit-btn">Analyze text</button>
-            </div>
+                <section class="workflow-step" id="model-step">
+                    <div class="step-kicker">2 · Narrator</div>
+                    <h2>Use OpenRouter for persona analysis</h2>
+                    <p class="step-copy">Free OpenRouter models handle the writing. TRIBE keeps the local GPU. With at least $10 purchased and a positive balance, free models are documented at 1000 requests/day and 20 requests/minute.</p>
+                    <select id="narration-model-select" class="model-select">
+                        <option value="openrouter:google/gemma-4-26b-a4b-it:free" selected>Gemma 4 26B A4B · OpenRouter free</option>
+                    </select>
+                    <div id="model-card-list" class="model-card-list"></div>
+                    <div id="cost-estimate" class="cost-estimate">
+                        <div><span>Model</span><strong id="ce-model">Gemma 4 26B A4B · free</strong></div>
+                        <div><span>Narration</span><strong id="ce-narration">$0.00000</strong></div>
+                        <div><span>Local TRIBE estimate</span><strong>$0.00086</strong></div>
+                        <div class="total"><span>Total / scan</span><strong id="ce-total">$0.00086</strong></div>
+                    </div>
+                    <p id="openrouter-status-line" class="status-line">Checking OpenRouter…</p>
+                </section>
 
-            <!-- Narration tier (hidden — every persona has its own tier baked in,
-                 the slider was UX dead weight. Kept in DOM so existing JS that reads
-                 #scan-tier doesn't crash. Default value 4 is the per-scan
-                 fallback used for non-persona narration paths.) -->
-            <div class="tier-section" style="display:none">
-                <input type="range" id="scan-tier" min="0" max="6" value="4" />
-                <output id="tier-display">4</output>
-            </div>
-            <div class="tier-section">
+                <section class="workflow-step" id="demo-step">
+                    <div class="step-kicker">3 · Live demo readiness</div>
+                    <h2>Prepare TRIBE v2 on Seratonin</h2>
+                    <p class="step-copy">The demo needs this PC online, Cortex running, and enough free VRAM. Warming TRIBE loads the model before the audience is waiting.</p>
+                    <div class="readiness-grid">
+                        <div><span>PC</span><strong id="pc-live-status">checking</strong></div>
+                        <div><span>GPU</span><strong id="gpu-free-status">—</strong></div>
+                        <div><span>TRIBE</span><strong id="tribe-ready-status">—</strong></div>
+                    </div>
+                    <button id="tribe-warm-btn" class="submit-btn" type="button">Warm TRIBE v2</button>
+                    <p id="tribe-status-line" class="status-line">Checking TRIBE status…</p>
+                </section>
 
-                <!-- Narration model selector -->
-                <p class="panel-title" style="margin-top:12px">Narration model</p>
-                <select id="narration-model-select" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;padding:6px 8px;cursor:pointer;">
-                    <optgroup label="── Local · RTX 5090 (free) ──">
-                        <option value="local:gemma4:e4b" selected>Gemma 4 E4B · Local — $0.00 / scan</option>
-                        <option value="local:gemma4:26b">Gemma 4 26B · Local — $0.00 / scan</option>
-                    </optgroup>
-                    <optgroup label="── OpenRouter · Free Gemma (1K req/day) ──">
-                        <option value="openrouter:google/gemma-4-26b-a4b-it:free">Gemma 4 26B MoE · free — $0.00</option>
-                        <option value="openrouter:google/gemma-4-31b-it:free">Gemma 4 31B · free — $0.00</option>
-                    </optgroup>
-                    <optgroup label="── OpenRouter · Paid ──">
-                        <option value="openrouter:google/gemma-4-26b-a4b-it">Gemma 4 26B MoE · paid</option>
-                        <option value="openrouter:moonshotai/kimi-k2.5-turbo">Kimi K2.5 Turbo</option>
-                        <option value="openrouter:deepseek/deepseek-chat-v3-0324">DeepSeek V3</option>
-                        <option value="openrouter:qwen/qwen3-235b-a22b">Qwen 3 235B A22B</option>
-                        <option value="openrouter:openai/gpt-4.1-mini">GPT-4.1 mini</option>
-                        <option value="openrouter:anthropic/claude-haiku-4-5">Claude Haiku 4</option>
-                    </optgroup>
-                    <optgroup label="── Gemini 3.1 (explicit request only) ──">
-                        <option value="gemini:gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite — ~$0.00035 / scan</option>
-                        <option value="gemini:gemini-3.1-pro-preview">Gemini 3.1 Pro — ~$0.0056 / scan</option>
-                    </optgroup>
-                </select>
+                <section class="workflow-step system-step" id="logs-step">
+                    <details>
+                        <summary>System monitor and logs</summary>
+                        <div class="telemetry">
+                            <h3><span class="pulse"></span>System monitor</h3>
+                            <div class="telemetry-node" data-node="seratonin">
+                                <div class="name">Seratonin <span class="badge">…</span></div>
+                                <div class="metric-row"><span class="lbl">GPU</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— %</span></div>
+                                <div class="metric-row"><span class="lbl">VRAM</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— GB</span></div>
+                                <div class="metric-row"><span class="lbl">Queue</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— jobs</span></div>
+                            </div>
+                            <div class="telemetry-node" data-node="bigapple">
+                                <div class="name">Big Apple <span class="badge">…</span></div>
+                                <div class="metric-row"><span class="lbl">GPU</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— %</span></div>
+                                <div class="metric-row"><span class="lbl">RAM</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— GB</span></div>
+                                <div class="metric-row"><span class="lbl">Queue</span><div class="bar"><div class="fill" style="width:0%"></div></div><span class="val">— jobs</span></div>
+                            </div>
+                        </div>
 
-                <!-- Real-time cost estimator -->
-                <div id="cost-estimate" style="margin-top:8px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:11px;line-height:1.7;color:var(--muted);">
-                    <div style="display:flex;justify-content:space-between;"><span>Model</span><span id="ce-model" style="color:var(--text);font-weight:600;text-align:right;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Gemma 4 E4B · Local</span></div>
-                    <div style="display:flex;justify-content:space-between;"><span>Narration cost</span><span id="ce-narration" style="color:var(--text);font-weight:600;">$0.00000</span></div>
-                    <div style="display:flex;justify-content:space-between;"><span>TRIBE v2 electricity</span><span style="color:var(--text);font-weight:600;">$0.00006</span></div>
-                    <div style="display:flex;justify-content:space-between;"><span>HW depreciation</span><span style="color:var(--text);font-weight:600;">$0.00080</span></div>
-                    <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:4px;padding-top:4px;"><span style="font-weight:700;color:var(--text);">Total / scan</span><span id="ce-total" style="color:var(--accent);font-weight:700;">$0.00086</span></div>
+                        <div class="run-timing" id="run-timing" style="display:none">
+                            <h3>Last scan timing</h3>
+                            <div class="row"><span class="lbl">TRIBE inference</span><span class="val" id="rt-tribe">—</span></div>
+                            <div class="row"><span class="lbl">Narration ×4</span><span class="val" id="rt-narr">—</span></div>
+                            <div class="row total"><span class="lbl">Total</span><span class="val" id="rt-total">—</span></div>
+                            <div class="row"><span class="lbl">Top region</span><span class="val" id="rt-roi">—</span></div>
+                            <div class="row"><span class="lbl">Peak time</span><span class="val" id="rt-peak">—</span></div>
+                            <div class="row" style="display:block; margin-top:8px;">
+                                <span class="lbl" style="display:block; margin-bottom:4px;">Per-persona</span>
+                                <div id="rt-personas" style="display:flex; flex-wrap:wrap; gap:6px; font-size:11px;"></div>
+                            </div>
+                        </div>
+
+                        <p class="panel-title">Pipeline events</p>
+                        <ol id="event-log" class="event-log"></ol>
+                        <p class="panel-title">Live activity stream</p>
+                        <div id="live-stream" class="live-stream" aria-live="polite">
+                            <div class="ls-empty">Waiting for backend activity…</div>
+                        </div>
+                    </details>
+                </section>
+
+                <div class="tier-section" style="display:none">
+                    <input type="range" id="scan-tier" min="0" max="6" value="4" />
+                    <output id="tier-display">4</output>
                 </div>
             </div>
 
             <script>
             (function() {
-                // Per-token cost in USD (input+output blended, ~8800 tokens per scan: 4×(~1200 in + 1000 out))
-                // 4 personas × ~2200 tokens each = 8800 total
-                const TOKENS = 8800;
-                const FIXED = 0.00006 + 0.00080; // electricity + depreciation
-                const RATES = {
-                    // local — free
-                    'local:gemma4:e4b':  0,
-                    'local:gemma4:26b':  0,
-                    // gemini — per-token blended $/tok
-                    'gemini:gemini-3.1-flash-lite-preview': 0.00000004,  // ~$0.04/1M
-                    'gemini:gemini-3.1-pro-preview':        0.00000064,  // ~$0.64/1M
-                    // openrouter free
-                    'openrouter:google/gemma-4-26b-a4b-it:free': 0,
-                    'openrouter:google/gemma-4-31b-it:free':      0,
-                    // openrouter paid ($/tok blended)
-                    'openrouter:google/gemma-4-26b-a4b-it':         0.00000020,
-                    'openrouter:moonshotai/kimi-k2.5-turbo':        0.00000100,
-                    'openrouter:deepseek/deepseek-chat-v3-0324':    0.00000027,
-                    'openrouter:qwen/qwen3-235b-a22b':              0.00000060,
-                    'openrouter:openai/gpt-4.1-mini':               0.00000040,
-                    'openrouter:anthropic/claude-haiku-4-5':        0.00000080,
-                };
-                const LABELS = {
-                    'local:gemma4:e4b':  'Gemma 4 E4B · Local',
-                    'local:gemma4:26b':  'Gemma 4 26B · Local',
-                    'gemini:gemini-3.1-flash-lite-preview': 'Gemini 3.1 Flash Lite',
-                    'gemini:gemini-3.1-pro-preview':        'Gemini 3.1 Pro',
-                    'openrouter:google/gemma-4-26b-a4b-it:free': 'Gemma 4 26B MoE · free',
-                    'openrouter:google/gemma-4-31b-it:free':      'Gemma 4 31B · free',
-                    'openrouter:google/gemma-4-26b-a4b-it':         'Gemma 4 26B MoE',
-                    'openrouter:moonshotai/kimi-k2.5-turbo':        'Kimi K2.5 Turbo',
-                    'openrouter:deepseek/deepseek-chat-v3-0324':    'DeepSeek V3',
-                    'openrouter:qwen/qwen3-235b-a22b':              'Qwen 3 235B A22B',
-                    'openrouter:openai/gpt-4.1-mini':               'GPT-4.1 mini',
-                    'openrouter:anthropic/claude-haiku-4-5':        'Claude Haiku 4',
-                };
+                const DEFAULT_MODEL = 'openrouter:google/gemma-4-26b-a4b-it:free';
+                const TOKEN_ASSUMPTION = { prompt: 4800, completion: 4000 };
+                const FIXED = 0.00086;
+                const FALLBACK_MODELS = [
+                    { id: DEFAULT_MODEL, label: 'Gemma 4 26B A4B', provider: 'OpenRouter', group: 'Free', prompt_price: 0, completion_price: 0, notes: 'Default cloud narrator; preserves local VRAM for TRIBE.' },
+                    { id: 'openrouter:google/gemma-4-31b-it:free', label: 'Gemma 4 31B', provider: 'OpenRouter', group: 'Free', prompt_price: 0, completion_price: 0, notes: 'Stronger free Gemma option when available.' },
+                    { id: 'openrouter:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', label: 'Nemotron 3 Nano Omni', provider: 'OpenRouter', group: 'Free', prompt_price: 0, completion_price: 0, notes: 'Free multimodal fallback for audio/video source descriptions.' },
+                    { id: 'openrouter:nousresearch/hermes-3-llama-3.1-405b:free', label: 'Hermes 3 405B', provider: 'OpenRouter', group: 'Free', prompt_price: 0, completion_price: 0, notes: 'Text-only Nous/Hermes comparison.' },
+                    { id: 'openrouter:google/gemma-4-26b-a4b-it', label: 'Gemma 4 26B A4B paid', provider: 'OpenRouter', group: 'Paid', prompt_price: 0.00000006, completion_price: 0.00000033, notes: 'Paid fallback if the free endpoint is rate-limited.' },
+                    { id: 'openrouter:moonshotai/kimi-k2.5', label: 'Kimi K2.5', provider: 'OpenRouter', group: 'Paid', prompt_price: 0.000000375, completion_price: 0.000002025, notes: 'Kimi comparison model for the hackathon lineage.' },
+                    { id: 'local:gemma4:e4b', label: 'Gemma 4 E4B local', provider: 'Ollama', group: 'Local fallback', prompt_price: 0, completion_price: 0, notes: 'Use only if OpenRouter is unavailable; consumes local VRAM.' },
+                ];
+                let models = FALLBACK_MODELS;
                 function fmt(v) {
                     if (v === 0) return '$0.00000';
                     if (v < 0.001) return '$' + v.toFixed(5);
                     return '$' + v.toFixed(4);
                 }
+                function modelCost(m) {
+                    if (m.estimated_narration_cost_usd != null) return Number(m.estimated_narration_cost_usd);
+                    return (Number(m.prompt_price || 0) * TOKEN_ASSUMPTION.prompt)
+                         + (Number(m.completion_price || 0) * TOKEN_ASSUMPTION.completion);
+                }
+                function displayLabel(m) {
+                    const provider = m.provider ? ` · ${m.provider}` : '';
+                    const group = m.group ? ` · ${m.group}` : '';
+                    return `${m.label || m.id}${provider}${group}`;
+                }
+                function renderCards(selectedId) {
+                    const mount = document.getElementById('model-card-list');
+                    if (!mount) return;
+                    mount.innerHTML = models.slice(0, 6).map(m => {
+                        const active = m.id === selectedId ? ' active' : '';
+                        const cost = modelCost(m);
+                        const modes = (m.modalities || []).slice(0, 3).join('/');
+                        return `<button type="button" class="model-card${active}" data-model="${m.id}">
+                            <strong>${displayLabel(m)}</strong>
+                            <span>${cost ? fmt(cost) : '$0.00000'} narration · ${modes || m.provider || ''}</span>
+                            <small>${m.notes || ''}</small>
+                        </button>`;
+                    }).join('');
+                    mount.querySelectorAll('[data-model]').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const sel = document.getElementById('narration-model-select');
+                            if (sel) {
+                                sel.value = btn.dataset.model;
+                                updateEstimate();
+                            }
+                        });
+                    });
+                }
+                function populateSelect(defaultModel) {
+                    const sel = document.getElementById('narration-model-select');
+                    if (!sel) return;
+                    sel.innerHTML = models.map(m => {
+                        const selected = m.id === defaultModel ? ' selected' : '';
+                        return `<option value="${m.id}"${selected}>${displayLabel(m)}</option>`;
+                    }).join('');
+                }
                 function updateEstimate() {
                     const sel = document.getElementById('narration-model-select');
-                    const val = sel ? sel.value : 'local:gemma4:e4b';
-                    const rate = RATES[val] !== undefined ? RATES[val] : 0;
-                    const narration = rate * TOKENS;
+                    const val = sel ? sel.value : DEFAULT_MODEL;
+                    const selected = models.find(m => m.id === val) || FALLBACK_MODELS[0];
+                    const narration = modelCost(selected);
                     const total = narration + FIXED;
                     const ceModel = document.getElementById('ce-model');
                     const ceNarr  = document.getElementById('ce-narration');
                     const ceTotal = document.getElementById('ce-total');
-                    if (ceModel) ceModel.textContent = LABELS[val] || val;
+                    if (ceModel) ceModel.textContent = displayLabel(selected);
                     if (ceNarr)  ceNarr.textContent  = fmt(narration);
                     if (ceTotal) ceTotal.textContent = fmt(total);
-                    // also expose on window so main.js can read it
                     window._selectedNarrationModel = val;
+                    window._selectedNarrationLabel = displayLabel(selected);
+                    renderCards(val);
+                }
+                async function loadCatalog() {
+                    try {
+                        const r = await fetch('/api/narration-models', { cache: 'no-store' });
+                        if (r.ok) {
+                            const data = await r.json();
+                            models = data.models && data.models.length ? data.models : FALLBACK_MODELS;
+                            populateSelect(data.default_model || DEFAULT_MODEL);
+                        } else {
+                            populateSelect(DEFAULT_MODEL);
+                        }
+                    } catch (_) {
+                        populateSelect(DEFAULT_MODEL);
+                    }
+                    updateEstimate();
                 }
                 document.addEventListener('DOMContentLoaded', function() {
                     const sel = document.getElementById('narration-model-select');
                     if (sel) {
                         sel.addEventListener('change', updateEstimate);
-                        updateEstimate();
+                        loadCatalog();
                     }
                 });
-                // run immediately too (for module scripts that load before DOMContentLoaded fires)
-                if (document.readyState !== 'loading') updateEstimate();
+                if (document.readyState !== 'loading') loadCatalog();
             })();
             </script>
 
@@ -1876,7 +2156,7 @@
             <div class="cost-panel-header">
                 <span class="cost-icon">⚡</span>
                 <h2>Local Pipeline</h2>
-                <span class="cost-subtitle">RTX 5090 · Gemma 4 E4B · TRIBE v2 local</span>
+                <span class="cost-subtitle">RTX 5090 · TRIBE v2 local · OpenRouter narration</span>
             </div>
             <div class="cost-stats-grid">
                 <div class="cost-stat-card">
@@ -1908,13 +2188,13 @@
         <div class="cost-panel cost-panel-right">
             <div class="cost-panel-header">
                 <span class="cost-icon">☁</span>
-                <h2>Cloud Pipeline</h2>
-                <span class="cost-subtitle">Vertex AI · Gemma 4 27B · TRIBE v2 cloud GPU</span>
+                <h2>Off-PC Estimate</h2>
+                <span class="cost-subtitle">Hypothetical hosted TRIBE GPU · OpenRouter narration</span>
             </div>
             <div class="cost-stats-grid">
                 <div class="cost-stat-card">
                     <div class="cost-stat-val">A100 GPU</div>
-                    <div class="cost-stat-key">cloud inference</div>
+                    <div class="cost-stat-key">hosted inference reference</div>
                 </div>
                 <div class="cost-stat-card">
                     <div class="cost-stat-val">$3.67 / hr</div>
@@ -1931,16 +2211,16 @@
             </div>
             <div class="cost-breakdown-list">
                 <div class="cost-breakdown-row">
-                    <span>TRIBE inference (cloud A100, ~30s)</span>
+                    <span>TRIBE inference (hosted GPU, ~30s)</span>
                     <span class="cost-breakdown-val">≈ 3.06 ¢</span>
                 </div>
                 <div class="cost-breakdown-row">
-                    <span>Gemma 4 27B input (~600 tok)</span>
-                    <span class="cost-breakdown-val">≈ 0.021 ¢</span>
+                    <span>OpenRouter free-model narration</span>
+                    <span class="cost-breakdown-val">0 ¢ while within free limits</span>
                 </div>
                 <div class="cost-breakdown-row">
-                    <span>Gemma 4 27B output (~400 tok)</span>
-                    <span class="cost-breakdown-val">≈ 0.042 ¢</span>
+                    <span>Current default</span>
+                    <span class="cost-breakdown-val">local TRIBE + OpenRouter narration</span>
                 </div>
                 <div class="cost-breakdown-row total-row">
                     <span>Total per run</span>
@@ -1956,7 +2236,7 @@
 
     <!-- D3 v7 (UMD) for the data panel charts -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script type="module" src="/main.js"></script>
+    <script type="module" src="/main.js?v=20260623"></script>
     <script type="module" src="/charts.js"></script>
 
     <!-- ── Robinhood-Legend-style draggable panels (gridstack) ─────────────── -->
@@ -1966,7 +2246,7 @@
       function init() {
         if (typeof GridStack === "undefined") return setTimeout(init, 200);
 
-        ["panel-left", "panel-right"].forEach(side => {
+        ["panel-right"].forEach(side => {
           const root = document.querySelector("." + side);
           if (!root || root.dataset.gsApplied === "1") return;
           root.dataset.gsApplied = "1";
@@ -2033,7 +2313,7 @@
           btn.onmouseout  = () => { btn.style.color = "var(--muted)";
                                      btn.style.borderColor = "var(--border)"; };
           btn.onclick = () => {
-            ["panel-left","panel-right"].forEach(s => localStorage.removeItem("cortex.layout."+s));
+          ["panel-right"].forEach(s => localStorage.removeItem("cortex.layout."+s));
             location.reload();
           };
           topbar.appendChild(btn);

@@ -27,6 +27,7 @@ const ttName        = document.getElementById("tt-name");
 const ttMeta        = document.getElementById("tt-meta");
 const ttFunc        = document.getElementById("tt-func");
 const ttZ           = document.getElementById("tt-z");
+const DEFAULT_NARRATION_MODEL = "openrouter:google/gemma-4-26b-a4b-it:free";
 
 // ---------------------------------------------------------------------------
 // Device detection
@@ -55,7 +56,7 @@ pipelineTabs.forEach(btn => {
             pipelineBadge.className = `pipeline-badge ${currentPipeline}`;
             pipelineBadge.textContent = currentPipeline === 'local'
                 ? '⚡ Local · RTX 5090'
-                : '☁ Cloud · Vertex AI';
+                : '☁ OpenRouter · cloud narration';
             resize();
         }
     });
@@ -632,16 +633,11 @@ function buildNetworkToggles() {
 // ---------------------------------------------------------------------------
 // Right panel — narration + ROI breakdown
 // ---------------------------------------------------------------------------
-const TIER_MODELS = [
-    "Gemma 4 E4B","Gemma 4 E4B","Gemma 4 E4B","Gemma 4 E4B",
-    "Gemma 4 26B","Gemma 4 31B","Gemma 4 31B",
-];
-const PERSONA_MODELS = {
-    student:      "Gemma 4 E4B (OpenRouter free)",
-    ml_scientist:"Gemma 4 26B MoE (Seratonin RTX 5090)",
-    clinician:   "Gemma 4 31B (Big Apple M4 Max)",
-    patient:     "Gemma 4 E4B (OpenRouter free)",
-};
+function selectedNarrationLabel() {
+    return window._selectedNarrationLabel
+        || document.getElementById("narration-model-select")?.selectedOptions?.[0]?.textContent?.trim()
+        || "Gemma 4 26B A4B · OpenRouter free";
+}
 
 function _setNarrationText(divId, text, isPlaceholder) {
     const el = document.getElementById(divId);
@@ -658,11 +654,7 @@ function renderNarration(result) {
     // Publish to window for the data-panel charts (charts.js reads these)
     window.lastScanResult = result;
     window.dispatchEvent(new CustomEvent("cortex:scan-complete", { detail: { result } }));
-    // Show active persona model or tier-based model
-    const activeTab = document.querySelector(".narr-tab.active")?.dataset.narr;
-    narrationModel.textContent = PERSONA_MODELS[activeTab]
-        ?? TIER_MODELS[result.tier ?? st.tier]
-        ?? "Gemma 4 · TRIBE v2";
+    narrationModel.textContent = selectedNarrationLabel();
 
     if (result.status === "complete" && result.seconds_elapsed != null) {
         const tribeSec = result.seconds_elapsed || 0;
@@ -848,13 +840,15 @@ async function loadBoldForScan(scanId) {
         if (isMobile) drawMobileFrame(f0);
         appendEvent(`BOLD: ${trace.n_t} TRs × ${trace.n_regions} regions (simulated), opened at t=${f0}`, "complete");
         // Publish for the data-panel charts (3D BOLD ribbon)
-        if (trace.regions && trace.values) {
-            // Flatten trace.values (T x R) into a Float32Array
+        const regionIds = trace.region_ids || trace.regions || [];
+        const rows = trace.bold || trace.values || [];
+        if (regionIds.length && rows.length) {
+            // Flatten rows (T x R) into a Float32Array
             const flat = new Float32Array(trace.n_t * trace.n_regions);
             for (let t = 0; t < trace.n_t; t++) {
-                for (let r = 0; r < trace.n_regions; r++) flat[t * trace.n_regions + r] = trace.values[t][r];
+                for (let r = 0; r < trace.n_regions; r++) flat[t * trace.n_regions + r] = rows[t][r];
             }
-            const networks = trace.regions.map(roi => {
+            const networks = regionIds.map(roi => {
                 const m = String(roi).match(/_(Vis|SomMot|DorsAttn|SalVentAttn|Limbic|Cont|Default)_/);
                 return m ? m[1] : "Default";
             });
@@ -976,10 +970,25 @@ function onWs(msg) {
         case "scan_narrations_ready":
             if (msg.narrations) {
                 renderNarration({ narrations: msg.narrations });
-                appendEvent(`narrations ready (Sam · Priya · Dr. Park · Chris)`, "complete");
+                appendEvent(`narrations ready (student · patient · clinician · ML scientist)`, "complete");
                 const ns = Object.keys(msg.narrations || {});
                 pushStream("gemma", `narrations ready: ${ns.join(" · ")}`);
             }
+            break;
+        case "tribe_warm_started":
+            appendEvent("TRIBE warm-up started", "progress");
+            pushStream("tribe", "warming TRIBE v2 on Seratonin");
+            pollReadiness();
+            break;
+        case "tribe_warm_complete":
+            appendEvent("TRIBE v2 ready", "complete");
+            pushStream("tribe", "TRIBE v2 loaded and ready");
+            pollReadiness();
+            break;
+        case "tribe_warm_failed":
+            appendEvent(`TRIBE warm-up failed: ${msg.message ?? "unknown"}`, "failed");
+            pushStream("error", `TRIBE warm-up failed: ${(msg.message ?? "unknown").slice(0, 80)}`);
+            pollReadiness();
             break;
         case "scan_failed":
             appendEvent(`scan failed: ${msg.error?.message ?? "?"}`, "failed");
@@ -1075,9 +1084,7 @@ async function pollNodeStatus() {
         if (r.ok) {
             const d = await r.json();
             const ba = d.ollama_backends?.["http://100.93.240.52:11434"];
-            const or = d.openrouter;
             setNode("bigapple",   ba ? "up" : "down");
-            setNode("openrouter", or ? "up" : "down");
         }
     } catch (e) { /* ignore — router may be down independently */ }
 }
@@ -1089,6 +1096,82 @@ function setNode(name, state) {
 }
 setInterval(pollNodeStatus, 5000);
 setTimeout(pollNodeStatus, 500);
+
+function setText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+}
+
+async function pollOpenRouterStatus() {
+    const line = document.getElementById("openrouter-status-line");
+    if (!line) return;
+    try {
+        const r = await fetch("/api/openrouter/status", { cache: "no-store" });
+        const d = await r.json();
+        if (!r.ok || d.ok === false || d.status === "invalid_key") {
+            line.textContent = `OpenRouter needs attention: ${d.message || d.status || "unavailable"}`;
+            setNode("openrouter", "down");
+            return;
+        }
+        if (d.status === "configured") {
+            line.textContent = "OpenRouter key is configured and account status is reachable.";
+            setNode("openrouter", "up");
+        } else {
+            line.textContent = "OpenRouter key is not configured yet; scans will show TRIBE output without cloud narration.";
+            setNode("openrouter", "down");
+        }
+    } catch (err) {
+        line.textContent = `OpenRouter status unavailable: ${err.message}`;
+        setNode("openrouter", "down");
+    }
+}
+
+async function pollReadiness() {
+    const btn = document.getElementById("tribe-warm-btn");
+    const line = document.getElementById("tribe-status-line");
+    try {
+        const r = await fetch("/api/tribe/status", { cache: "no-store" });
+        const d = await r.json();
+        const gpu = d.gpu || {};
+        setText("pc-live-status", d.pc_online ? "online" : "offline");
+        setText("gpu-free-status", gpu.free_gb != null ? `${Number(gpu.free_gb).toFixed(1)} GB free` : "unknown");
+        setText("tribe-ready-status", d.tribe_ready ? "loaded" : d.can_warm_tribe ? "ready to warm" : "not ready");
+        if (line) line.textContent = d.message || "TRIBE status checked.";
+        if (btn) {
+            btn.disabled = !d.can_warm_tribe;
+            btn.textContent = d.tribe_loaded ? "TRIBE v2 is warm" : "Warm TRIBE v2";
+        }
+    } catch (err) {
+        setText("pc-live-status", "offline");
+        setText("gpu-free-status", "unknown");
+        setText("tribe-ready-status", "unreachable");
+        if (line) line.textContent = `Cortex backend unavailable: ${err.message}`;
+        if (btn) btn.disabled = true;
+    }
+}
+
+document.getElementById("tribe-warm-btn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("tribe-warm-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Warming TRIBE v2…"; }
+    try {
+        const r = await fetch("/api/tribe/warm", { method: "POST" });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || d.ok === false) {
+            appendEvent(`TRIBE warm-up rejected: ${d.message || r.status}`, "failed");
+        } else {
+            appendEvent("TRIBE warm-up accepted", "complete");
+        }
+    } catch (err) {
+        appendEvent(`TRIBE warm-up error: ${err.message}`, "failed");
+    } finally {
+        pollReadiness();
+    }
+});
+
+setInterval(pollReadiness, 5000);
+setTimeout(pollReadiness, 700);
+setInterval(pollOpenRouterStatus, 30000);
+setTimeout(pollOpenRouterStatus, 900);
 
 function showOverlay(phase) {
     // Don't reappear on top of an auto-loaded scan — direct-link viewers
@@ -1161,12 +1244,9 @@ function esc(s) {
 // ---------------------------------------------------------------------------
 const LOCAL_GPU_W       = 575;    // RTX 5090 TDP
 const ELECTRICITY_RATE  = 0.15;   // USD per kWh
-const CLOUD_A100_RATE   = 3.67;   // USD per hour for A100 on GCP
-const CLOUD_TRIBE_S     = 30;     // estimated TRIBE inference seconds on cloud
-const CLOUD_GEMMA_IN_K  = 0.6;    // input tokens in thousands
-const CLOUD_GEMMA_OUT_K = 0.4;    // output tokens in thousands
-const CLOUD_GEMMA_IN_C  = 0.035;  // cents per 1K input tokens (Gemma 27B on Vertex)
-const CLOUD_GEMMA_OUT_C = 0.105;  // cents per 1K output tokens
+const CLOUD_A100_RATE   = 3.67;   // USD per hour for a hosted GPU reference
+const CLOUD_TRIBE_S     = 30;     // estimated TRIBE inference seconds off-PC
+const OPENROUTER_FREE_C = 0;      // current default narration cost inside free-model limits
 const runHistory = [];
 
 function localCostCents(totalSeconds) {
@@ -1175,8 +1255,7 @@ function localCostCents(totalSeconds) {
 
 function cloudCostCents(tribeSec) {
     const tribe  = (CLOUD_A100_RATE / 3600 * tribeSec) * 100;  // cents
-    const gemma  = CLOUD_GEMMA_IN_K * CLOUD_GEMMA_IN_C + CLOUD_GEMMA_OUT_K * CLOUD_GEMMA_OUT_C;
-    return tribe + gemma;
+    return tribe + OPENROUTER_FREE_C;
 }
 
 function recordRun(scanId, filename, tribeSec, gemmaSec) {
@@ -1252,8 +1331,8 @@ async function submitMediaFile(file, { btnEl, resetLabel } = {}) {
         const url = URL.createObjectURL(file);
         if (file.type.startsWith("video/")) {
             const vid = document.createElement("video");
-            vid.src = url; vid.muted = true; vid.controls = false;
-            vid.autoplay = true; vid.loop = true; vid.playsInline = true;
+            vid.src = url; vid.muted = false; vid.controls = true;
+            vid.autoplay = false; vid.loop = false; vid.preload = "metadata"; vid.playsInline = true;
             previewEl.appendChild(vid);
         } else if (file.type.startsWith("image/")) {
             const img = document.createElement("img");
@@ -1274,7 +1353,7 @@ async function submitMediaFile(file, { btnEl, resetLabel } = {}) {
     fd.append("file",            file);
     fd.append("tier",            tierInput.value);
     fd.append("source",          "webui");
-    fd.append("narration_model", window._selectedNarrationModel || "local:gemma4:e4b");
+    fd.append("narration_model", window._selectedNarrationModel || DEFAULT_NARRATION_MODEL);
 
     try {
         const resp = await fetch("/api/scan", { method: "POST", body: fd });
@@ -1320,8 +1399,8 @@ async function submitMediaFile(file, { btnEl, resetLabel } = {}) {
             const url = URL.createObjectURL(file);
             if (file.type.startsWith("video/")) {
                 const vid = document.createElement("video");
-                vid.src = url; vid.muted = true; vid.controls = false;
-                vid.autoplay = true; vid.loop = true; vid.playsInline = true;
+                vid.src = url; vid.muted = false; vid.controls = true;
+                vid.autoplay = false; vid.loop = false; vid.preload = "metadata"; vid.playsInline = true;
                 previewEl.appendChild(vid);
             } else if (file.type.startsWith("image/")) {
                 const img = document.createElement("img");
@@ -1372,6 +1451,8 @@ const modePanels = document.querySelectorAll(".mode-panel");
 function switchMode(mode) {
     modeTabs.forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
     modePanels.forEach(p => p.classList.toggle("active", p.id === `mode-${mode}`));
+    const captureDrawer = document.querySelector(".capture-drawer");
+    if (captureDrawer) captureDrawer.open = mode === "camera" || mode === "voice";
     if (mode !== "camera") stopCamera();
     if (mode !== "voice")  stopVoice();
 }
@@ -1594,13 +1675,16 @@ textSubmitBtn?.addEventListener("click", async () => {
 
     textSubmitBtn.disabled     = true;
     textSubmitBtn.textContent  = "Submitting…";
-    _setNarrationText("narration-college", "Analyzing text stimulus…", true);
+    _setNarrationText("narration-student", "Analyzing text stimulus…", true);
+    _setNarrationText("narration-patient", "Generating…", true);
+    _setNarrationText("narration-clinician", "Generating…", true);
+    _setNarrationText("narration-ml_scientist", "Generating…", true);
 
     const fd = new FormData();
     fd.append("text",            text);
     fd.append("tier",            tierInput.value);
     fd.append("source",          "webui");
-    fd.append("narration_model", window._selectedNarrationModel || "local:gemma4:e4b");
+    fd.append("narration_model", window._selectedNarrationModel || DEFAULT_NARRATION_MODEL);
 
     try {
         const resp = await fetch("/api/text-scan", { method: "POST", body: fd });
@@ -1696,7 +1780,7 @@ function animate() {
             pipelineTabs.forEach(b => b.classList.toggle('active', b === cloudTab));
             currentPipeline = 'cloud';
             pipelineBadge.className   = 'pipeline-badge cloud';
-            pipelineBadge.textContent = '☁ Cloud · Vertex AI';
+            pipelineBadge.textContent = '☁ OpenRouter · cloud narration';
         }
         drawMobileFrame(undefined);
     }

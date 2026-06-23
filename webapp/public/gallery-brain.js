@@ -339,11 +339,13 @@ function renderPreview(preview, now) {
 }
 
 function showFallback(preview, message) {
-  const sourceUrl = preview.wrap.dataset.sourceUrl || TEST_IMAGE_URL;
   const sourceKind = preview.wrap.dataset.sourceKind || "image";
+  const sourceUrl = sourceKind === "image" && preview.wrap.dataset.sourceUrl
+    ? preview.wrap.dataset.sourceUrl
+    : TEST_IMAGE_URL;
   const label = sourceKind === "image" ? "source image fallback" : "test image fallback";
   preview.wrap.classList.add("source-image");
-  preview.wrap.innerHTML = `<img src="${escapeAttr(sourceUrl || TEST_IMAGE_URL)}" alt=""><span class="media-badge">${label}</span><span class="media-status">${escapeAttr(message || "brain render failed")}</span>`;
+  preview.wrap.innerHTML = `<img src="${escapeAttr(sourceUrl)}" alt=""><span class="media-badge">${label}</span><span class="media-status">${escapeAttr(message || "brain render unavailable")}</span>`;
 }
 
 function createPreview(canvas) {

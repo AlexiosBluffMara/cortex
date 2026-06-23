@@ -22,6 +22,7 @@ Run locally::
 from __future__ import annotations
 
 import asyncio
+import base64
 import mimetypes
 import time
 import uuid
@@ -97,6 +98,173 @@ import os as _os
 TRIBE_PROXY_URL = (_os.environ.get("CORTEX_TRIBE_PROXY", "") or "").rstrip("/")
 TRIBE_NEEDED_EXTS = ALLOWED_VIDEO | ALLOWED_AUDIO | ALLOWED_TEXT | ALLOWED_DOCUMENT
 # (image scans use Gemma vision directly — no TRIBE needed)
+
+OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
+OPENROUTER_DEFAULT_MODEL = "google/gemma-4-26b-a4b-it:free"
+OPENROUTER_MEDIA_MAX_MB = float(_os.environ.get("OPENROUTER_MEDIA_MAX_MB", "8"))
+OPENROUTER_MODEL_CACHE_TTL_S = int(_os.environ.get("OPENROUTER_MODEL_CACHE_TTL_S", "1800"))
+
+OPENROUTER_FREE_LIMITS = {
+    "requests_per_minute": 20,
+    "daily_without_10_credits": 50,
+    "daily_with_10_credits": 1000,
+    "credits_required_for_1000_per_day": 10,
+    "account_note": "Free models require a positive credit balance; at least $10 purchased raises the daily free-model limit.",
+    "source": "https://openrouter.ai/docs/api/reference/limits",
+}
+
+NARRATION_MODEL_CATALOG = [
+    {
+        "id": "openrouter:google/gemma-4-26b-a4b-it:free",
+        "label": "Gemma 4 26B A4B",
+        "provider": "OpenRouter",
+        "group": "Free",
+        "default": True,
+        "modalities": ["text", "image", "video"],
+        "context_length": 262144,
+        "prompt_price": 0.0,
+        "completion_price": 0.0,
+        "notes": "Best default for Cortex narration: Gemma through OpenRouter, no local Gemma VRAM.",
+    },
+    {
+        "id": "openrouter:google/gemma-4-31b-it:free",
+        "label": "Gemma 4 31B",
+        "provider": "OpenRouter",
+        "group": "Free",
+        "modalities": ["text", "image", "video"],
+        "context_length": 262144,
+        "prompt_price": 0.0,
+        "completion_price": 0.0,
+        "notes": "Stronger free Gemma option when available.",
+    },
+    {
+        "id": "openrouter:openrouter/free",
+        "label": "Free Models Router",
+        "provider": "OpenRouter",
+        "group": "Free",
+        "modalities": ["text", "image"],
+        "context_length": 200000,
+        "prompt_price": 0.0,
+        "completion_price": 0.0,
+        "notes": "Lets OpenRouter pick an available free model that matches the request.",
+    },
+    {
+        "id": "openrouter:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "label": "Nemotron 3 Nano Omni",
+        "provider": "OpenRouter",
+        "group": "Free",
+        "modalities": ["text", "image", "audio", "video"],
+        "context_length": 256000,
+        "prompt_price": 0.0,
+        "completion_price": 0.0,
+        "notes": "Free multimodal fallback for audio/video source descriptions.",
+    },
+    {
+        "id": "openrouter:nousresearch/hermes-3-llama-3.1-405b:free",
+        "label": "Hermes 3 405B",
+        "provider": "OpenRouter",
+        "group": "Free",
+        "modalities": ["text"],
+        "context_length": 131072,
+        "prompt_price": 0.0,
+        "completion_price": 0.0,
+        "notes": "Text-only free Nous/Hermes option.",
+    },
+    {
+        "id": "openrouter:openai/gpt-oss-120b:free",
+        "label": "gpt-oss 120B",
+        "provider": "OpenRouter",
+        "group": "Free",
+        "modalities": ["text"],
+        "context_length": 131072,
+        "prompt_price": 0.0,
+        "completion_price": 0.0,
+        "notes": "Free text model for comparison.",
+    },
+    {
+        "id": "openrouter:meta-llama/llama-3.3-70b-instruct:free",
+        "label": "Llama 3.3 70B",
+        "provider": "OpenRouter",
+        "group": "Free",
+        "modalities": ["text"],
+        "context_length": 131072,
+        "prompt_price": 0.0,
+        "completion_price": 0.0,
+        "notes": "Free general-purpose text model.",
+    },
+    {
+        "id": "openrouter:google/gemma-4-26b-a4b-it",
+        "label": "Gemma 4 26B A4B",
+        "provider": "OpenRouter",
+        "group": "Paid",
+        "modalities": ["text", "image", "video"],
+        "context_length": 262144,
+        "prompt_price": 0.00000006,
+        "completion_price": 0.00000033,
+        "notes": "Paid fallback if the free Gemma endpoint is rate-limited.",
+    },
+    {
+        "id": "openrouter:moonshotai/kimi-k2.5",
+        "label": "Kimi K2.5",
+        "provider": "OpenRouter",
+        "group": "Paid",
+        "modalities": ["text", "image"],
+        "context_length": 262144,
+        "prompt_price": 0.000000375,
+        "completion_price": 0.000002025,
+        "notes": "Kimi comparison model for the Cortex hackathon lineage.",
+    },
+    {
+        "id": "openrouter:deepseek/deepseek-chat-v3-0324",
+        "label": "DeepSeek V3",
+        "provider": "OpenRouter",
+        "group": "Paid",
+        "modalities": ["text"],
+        "context_length": 163840,
+        "prompt_price": 0.00000020,
+        "completion_price": 0.00000077,
+        "notes": "Low-cost text fallback.",
+    },
+    {
+        "id": "openrouter:qwen/qwen3-235b-a22b",
+        "label": "Qwen3 235B A22B",
+        "provider": "OpenRouter",
+        "group": "Paid",
+        "modalities": ["text"],
+        "context_length": 262144,
+        "prompt_price": 0.000000455,
+        "completion_price": 0.00000182,
+        "notes": "Large MoE text fallback.",
+    },
+    {
+        "id": "local:gemma4:e4b",
+        "label": "Gemma 4 E4B local",
+        "provider": "Ollama",
+        "group": "Local fallback",
+        "modalities": ["text", "image"],
+        "context_length": 8192,
+        "prompt_price": 0.0,
+        "completion_price": 0.0,
+        "notes": "Only use when OpenRouter is unavailable; consumes local VRAM.",
+    },
+]
+
+OPENROUTER_FREE_MODEL_PRIORITY = [
+    OPENROUTER_DEFAULT_MODEL,
+    "google/gemma-4-31b-it:free",
+    "openrouter/free",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "nvidia/nemotron-nano-12b-v2-vl:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "openai/gpt-oss-120b:free",
+]
+_OPENROUTER_MODEL_CACHE: dict[str, Any] = {
+    "expires_at": 0.0,
+    "models": [],
+    "error": None,
+    "refreshed_at": None,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +374,354 @@ class WebSocketHub:
     @property
     def connection_count(self) -> int:
         return len(self._clients)
+
+
+def _load_openrouter_api_key() -> str:
+    """Load OpenRouter API key without exposing it to clients or logs."""
+    api_key = _os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if api_key:
+        return api_key
+    env_path = Path.home() / ".hermes" / ".env"
+    if env_path.exists():
+        try:
+            for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if line.strip().startswith("OPENROUTER_API_KEY="):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+        except Exception:
+            return ""
+    return ""
+
+
+def _safe_openrouter_message(data: Any) -> str:
+    try:
+        msg = (data or {}).get("error", {}).get("message", "")
+        return str(msg)[:180]
+    except Exception:
+        return ""
+
+
+async def _openrouter_key_status() -> dict[str, Any]:
+    """Check the configured OpenRouter key without spending model credits."""
+    api_key = _load_openrouter_api_key()
+    if not api_key:
+        return {
+            "configured": False,
+            "ok": False,
+            "status": "missing_key",
+            "message": "OPENROUTER_API_KEY is not configured.",
+        }
+    try:
+        import httpx as _httpx
+        async with _httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(
+                f"{OPENROUTER_API_BASE}/key",
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+        if resp.status_code == 200:
+            data = resp.json().get("data", {})
+            safe = {
+                "label": data.get("label"),
+                "limit": data.get("limit"),
+                "usage": data.get("usage"),
+                "limit_remaining": data.get("limit_remaining"),
+                "is_free_tier": data.get("is_free_tier"),
+                "rate_limit": data.get("rate_limit"),
+            }
+            return {"configured": True, "ok": True, "status": "ready", "key": safe}
+        return {
+            "configured": True,
+            "ok": False,
+            "status": "invalid_key" if resp.status_code in {401, 403} else "error",
+            "http_status": resp.status_code,
+            "message": _safe_openrouter_message(resp.json() if resp.content else {}),
+        }
+    except Exception as exc:
+        return {
+            "configured": True,
+            "ok": False,
+            "status": "unreachable",
+            "message": str(exc)[:180],
+        }
+
+
+def _price_to_float(value: Any) -> float:
+    try:
+        if value in (None, ""):
+            return 0.0
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _openrouter_model_is_free(model: dict[str, Any]) -> bool:
+    raw_id = str(model.get("id") or "")
+    if raw_id.endswith(":free") or raw_id == "openrouter/free":
+        return True
+    pricing = model.get("pricing") or {}
+    raw_prices = [pricing.get(key) for key in ("prompt", "completion", "request", "image", "audio") if key in pricing]
+    return bool(raw_prices) and all(_price_to_float(price) == 0.0 for price in raw_prices)
+
+
+def _clean_openrouter_label(model: dict[str, Any]) -> str:
+    raw_id = str(model.get("id") or "")
+    label = str(model.get("name") or raw_id)
+    if ":" in label:
+        label = label.split(":", 1)[1]
+    label = label.replace("(free)", "").replace("(Free)", "")
+    label = " ".join(label.split()).strip()
+    return label or raw_id
+
+
+def _catalog_item_from_openrouter_model(model: dict[str, Any]) -> dict[str, Any]:
+    raw_id = str(model.get("id") or "")
+    architecture = model.get("architecture") or {}
+    pricing = model.get("pricing") or {}
+    modalities = list(architecture.get("input_modalities") or ["text"])
+    context_length = int(model.get("context_length") or (model.get("top_provider") or {}).get("context_length") or 0)
+    modality_text = ", ".join(modalities) if modalities else "text"
+    return {
+        "id": f"openrouter:{raw_id}",
+        "label": _clean_openrouter_label(model),
+        "provider": "OpenRouter",
+        "group": "Free",
+        "default": raw_id == OPENROUTER_DEFAULT_MODEL,
+        "modalities": modalities,
+        "context_length": context_length,
+        "prompt_price": _price_to_float(pricing.get("prompt")),
+        "completion_price": _price_to_float(pricing.get("completion")),
+        "notes": f"Live OpenRouter free model. Inputs: {modality_text}.",
+    }
+
+
+def _prioritize_openrouter_free_models(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    priority = {model_id: index for index, model_id in enumerate(OPENROUTER_FREE_MODEL_PRIORITY)}
+
+    def _rank(item: dict[str, Any]) -> tuple[int, int, str]:
+        raw_id = str(item.get("id", "")).removeprefix("openrouter:")
+        modalities = set(item.get("modalities") or [])
+        modality_rank = 0 if "video" in modalities else 1 if "image" in modalities else 2 if "audio" in modalities else 3
+        return (priority.get(raw_id, 500), modality_rank, str(item.get("label") or raw_id).lower())
+
+    return sorted(models, key=_rank)
+
+
+def _dedupe_model_catalog(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for item in models:
+        model_id = str(item.get("id") or "")
+        if not model_id or model_id in seen:
+            continue
+        seen.add(model_id)
+        deduped.append(item)
+    return deduped
+
+
+def _openrouter_free_models_from_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_models = payload.get("data") or []
+    if not isinstance(raw_models, list):
+        return []
+    models = [
+        _catalog_item_from_openrouter_model(model)
+        for model in raw_models
+        if isinstance(model, dict) and model.get("id") and _openrouter_model_is_free(model)
+    ]
+    prioritized = _prioritize_openrouter_free_models(_dedupe_model_catalog(models))
+    default_catalog_id = f"openrouter:{OPENROUTER_DEFAULT_MODEL}"
+    if not any(item["id"] == default_catalog_id for item in prioritized):
+        static_default = next((m for m in NARRATION_MODEL_CATALOG if m["id"] == default_catalog_id), None)
+        if static_default:
+            prioritized.insert(0, dict(static_default))
+    return prioritized
+
+
+async def _fetch_openrouter_free_models(force_refresh: bool = False) -> list[dict[str, Any]]:
+    now = time.time()
+    if (
+        not force_refresh
+        and _OPENROUTER_MODEL_CACHE["models"]
+        and float(_OPENROUTER_MODEL_CACHE["expires_at"] or 0) > now
+    ):
+        return list(_OPENROUTER_MODEL_CACHE["models"])
+    import httpx as _httpx
+
+    async with _httpx.AsyncClient(timeout=8.0) as client:
+        resp = await client.get(f"{OPENROUTER_API_BASE}/models")
+    resp.raise_for_status()
+    models = _openrouter_free_models_from_payload(resp.json())
+    _OPENROUTER_MODEL_CACHE.update({
+        "expires_at": now + OPENROUTER_MODEL_CACHE_TTL_S,
+        "models": models,
+        "error": None,
+        "refreshed_at": int(now),
+    })
+    return list(models)
+
+
+def _static_paid_and_local_models() -> list[dict[str, Any]]:
+    return [
+        dict(item)
+        for item in NARRATION_MODEL_CATALOG
+        if item.get("group") != "Free" or str(item.get("id", "")).startswith("local:")
+    ]
+
+
+async def _narration_model_catalog() -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    try:
+        live_free_models = await _fetch_openrouter_free_models()
+    except Exception as exc:
+        _OPENROUTER_MODEL_CACHE["error"] = str(exc)[:180]
+        live_free_models = []
+
+    if live_free_models:
+        models = _dedupe_model_catalog(live_free_models + _static_paid_and_local_models())
+        meta = {
+            "catalog_source": "openrouter_live",
+            "catalog_count": len(live_free_models),
+            "catalog_refreshed_at": _OPENROUTER_MODEL_CACHE.get("refreshed_at"),
+            "catalog_error": None,
+        }
+        return models, meta
+
+    return list(NARRATION_MODEL_CATALOG), {
+        "catalog_source": "static_fallback",
+        "catalog_count": len(NARRATION_MODEL_CATALOG),
+        "catalog_refreshed_at": None,
+        "catalog_error": _OPENROUTER_MODEL_CACHE.get("error"),
+    }
+
+
+def _estimate_catalog_item_cost(
+    item: dict[str, Any],
+    prompt_tokens: int = 4800,
+    completion_tokens: int = 4000,
+) -> float:
+    return (
+        _price_to_float(item.get("prompt_price")) * prompt_tokens
+        + _price_to_float(item.get("completion_price")) * completion_tokens
+    )
+
+
+def _estimate_narration_cost(model_id: str, prompt_tokens: int = 4800, completion_tokens: int = 4000) -> float:
+    """Estimate four-persona narration cost for UI display."""
+    item = next((m for m in NARRATION_MODEL_CATALOG if m["id"] == model_id), None)
+    if not item:
+        return 0.0
+    return _estimate_catalog_item_cost(item, prompt_tokens, completion_tokens)
+
+
+
+def _media_metadata_context(media_path: Path) -> str:
+    """Cheap, local media summary used when multimodal cloud description is unavailable."""
+    suffix = media_path.suffix.lower()
+    if suffix in ALLOWED_TEXT:
+        text = media_path.read_text(encoding="utf-8", errors="replace").strip()
+        return (
+            "Source media metadata:\n"
+            f"- file: {media_path.name}\n"
+            "- modality: text\n"
+            f"- characters: {len(text)}\n"
+            f"- content_excerpt: {text[:1400]!r}\n"
+            "Use this text as the semantic stimulus that TRIBE v2 received through its text events path."
+        )
+    try:
+        from cortex import media_processor as _mp
+        info = _mp.probe(media_path)
+        return (
+            "Source media metadata:\n"
+            f"- file: {media_path.name}\n"
+            f"- modality: {'video' if info.width else 'audio' if info.has_audio else 'file'}\n"
+            f"- duration_s: {info.duration_s:.2f}\n"
+            f"- video: {info.width}x{info.height} at {info.fps:.2f} fps, codec={info.codec or 'none'}\n"
+            f"- audio: {'present' if info.has_audio else 'absent'}, codec={info.audio_codec or 'none'}, sample_rate={info.audio_sample_rate or 0}\n"
+            "Use this metadata to preserve modality awareness; do not claim a full semantic media understanding unless a description is provided."
+        )
+    except Exception:
+        kind = (
+            "image" if suffix in ALLOWED_IMAGE else
+            "video" if suffix in ALLOWED_VIDEO else
+            "audio" if suffix in ALLOWED_AUDIO else
+            "text/document"
+        )
+        return f"Source media metadata: file={media_path.name}; modality={kind}; detailed probe unavailable."
+
+
+def _openrouter_content_for_media(media_path: Path) -> tuple[str, list[dict[str, Any]] | None]:
+    suffix = media_path.suffix.lower()
+    mime = mimetypes.guess_type(str(media_path))[0] or "application/octet-stream"
+    raw_b64 = base64.b64encode(media_path.read_bytes()).decode("ascii")
+    prompt = (
+        "Describe this Cortex stimulus for a neuroscience brain-response demo. "
+        "Focus on what a viewer/hearer is experiencing, including motion, objects, text, speech, music, and emotional tone. "
+        "Do not diagnose anyone. Keep it under 160 words."
+    )
+    if suffix in ALLOWED_IMAGE:
+        return OPENROUTER_DEFAULT_MODEL, [
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{raw_b64}"}},
+        ]
+    if suffix in ALLOWED_VIDEO:
+        return OPENROUTER_DEFAULT_MODEL, [
+            {"type": "text", "text": prompt + " Include the soundtrack or speech if the model can perceive it."},
+            {"type": "video_url", "video_url": {"url": f"data:{mime};base64,{raw_b64}"}},
+        ]
+    if suffix in ALLOWED_AUDIO:
+        audio_format = suffix.lstrip(".") or "wav"
+        if audio_format == "m4a":
+            audio_format = "mp4"
+        return "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", [
+            {"type": "text", "text": prompt},
+            {"type": "input_audio", "input_audio": {"data": raw_b64, "format": audio_format}},
+        ]
+    return OPENROUTER_DEFAULT_MODEL, None
+
+
+async def _describe_media_for_prompt(media_path: Path) -> str:
+    """Generate a bounded multimodal source description without loading local Gemma."""
+    metadata = _media_metadata_context(media_path)
+    if _os.environ.get("CORTEX_DISABLE_OPENROUTER_MEDIA_CONTEXT", "").lower() in {"1", "true", "yes"}:
+        return metadata
+    api_key = _load_openrouter_api_key()
+    if not api_key:
+        return metadata + "\nOpenRouter multimodal source description: unavailable (no API key configured)."
+    max_bytes = int(OPENROUTER_MEDIA_MAX_MB * 1024 * 1024)
+    try:
+        if media_path.stat().st_size > max_bytes:
+            return (
+                metadata
+                + f"\nOpenRouter multimodal source description: skipped because media exceeds {OPENROUTER_MEDIA_MAX_MB:g} MB."
+            )
+        model, content = _openrouter_content_for_media(media_path)
+        if content is None:
+            return metadata
+        import httpx as _httpx
+        body = {
+            "model": model,
+            "messages": [{"role": "user", "content": content}],
+            "max_tokens": 260,
+            "temperature": 0.2,
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "https://cortex.redteamkitchen.com",
+            "X-Title": "Cortex",
+        }
+        async with _httpx.AsyncClient(timeout=90) as client:
+            resp = await client.post(
+                f"{OPENROUTER_API_BASE}/chat/completions",
+                json=body,
+                headers=headers,
+            )
+        if resp.status_code >= 400:
+            return metadata + f"\nOpenRouter multimodal source description: unavailable ({resp.status_code})."
+        data = resp.json()
+        text = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+        text = str(text).strip()
+        if not text:
+            return metadata
+        return metadata + f"\nOpenRouter multimodal source description ({model}):\n{text[:1400]}"
+    except Exception as exc:
+        return metadata + f"\nOpenRouter multimodal source description: unavailable ({str(exc)[:120]})."
 
 
 # ---------------------------------------------------------------------------
@@ -344,6 +860,111 @@ def create_app(
         except Exception:
             pass
         return {"ok": False, "ollama_backends": {}, "openrouter": False}
+
+    @app.get("/api/narration-models")
+    async def narration_models() -> dict[str, Any]:
+        """Return the UI-safe narration model catalog and current free-tier assumptions."""
+        models, catalog_meta = await _narration_model_catalog()
+        return {
+            "default_model": f"openrouter:{OPENROUTER_DEFAULT_MODEL}",
+            **catalog_meta,
+            "estimated_tokens_per_scan": {
+                "prompt": 4800,
+                "completion": 4000,
+                "total": 8800,
+                "assumption": "Four personas, roughly 1200 prompt + 1000 output tokens each.",
+            },
+            "fixed_local_cost_estimate_usd": {
+                "tribe_electricity": 0.00006,
+                "hardware_depreciation": 0.00080,
+                "total": 0.00086,
+            },
+            "openrouter_free_limits": OPENROUTER_FREE_LIMITS,
+            "funding_guidance": {
+                "minimum_to_unlock_1000_free_requests_per_day": 10,
+                "current_user_reported_credit_usd": 15,
+                "recommendation": "Keep at least $10 purchased and keep balance positive. With about $15 funded, use free models first and reserve paid models for rate-limit or quality fallback.",
+            },
+            "models": [
+                {**m, "estimated_narration_cost_usd": round(_estimate_catalog_item_cost(m), 6)}
+                for m in models
+            ],
+        }
+
+    @app.get("/api/openrouter/status")
+    async def openrouter_status() -> dict[str, Any]:
+        """Check OpenRouter key health without exposing the key or spending completion credits."""
+        status = await _openrouter_key_status()
+        return {
+            **status,
+            "free_limits": OPENROUTER_FREE_LIMITS,
+            "default_model": f"openrouter:{OPENROUTER_DEFAULT_MODEL}",
+        }
+
+    @app.get("/api/tribe/status")
+    async def tribe_status() -> dict[str, Any]:
+        gpu = _scheduler.vram_report()
+        queue_status = _queue.status()
+        queue_busy = bool(queue_status.get("active_request") or queue_status.get("processing") or queue_status.get("queue_depth"))
+        state = gpu.get("state") or getattr(_scheduler.state, "value", str(_scheduler.state))
+        return {
+            "ok": True,
+            "pc_online": True,
+            "gpu": gpu,
+            "queue": queue_status,
+            "state": state,
+            "queue_busy": queue_busy,
+            "tribe_loaded": state == "tribe_active",
+            "tribe_ready": state == "tribe_active" and not queue_busy,
+            "can_warm_tribe": bool(gpu.get("tribe_fits") or state == "tribe_active") and not queue_busy,
+            "message": (
+                "TRIBE v2 is loaded and ready."
+                if state == "tribe_active" and not queue_busy
+                else "GPU is available for TRIBE v2."
+                if bool(gpu.get("tribe_fits")) and not queue_busy
+                else "GPU or queue is busy; wait before warming TRIBE v2."
+            ),
+        }
+
+    @app.post("/api/tribe/warm")
+    async def warm_tribe() -> JSONResponse:
+        """Load TRIBE v2 into accelerator memory if the queue and VRAM allow it.
+
+        This is intentionally the same capability a scan already uses, exposed
+        as a demo-readiness button so the operator can warm the model before
+        going live.
+        """
+        queue_status = _queue.status()
+        queue_busy = bool(queue_status.get("active_request") or queue_status.get("processing") or queue_status.get("queue_depth"))
+        if queue_busy:
+            return JSONResponse(
+                {"ok": False, "status": "busy", "message": "A scan is already running or queued.", "queue": queue_status},
+                status_code=409,
+            )
+        gpu = _scheduler.vram_report()
+        state = gpu.get("state") or getattr(_scheduler.state, "value", str(_scheduler.state))
+        if not (gpu.get("tribe_fits") or state == "tribe_active"):
+            return JSONResponse(
+                {"ok": False, "status": "insufficient_vram", "message": "TRIBE v2 does not currently fit in free VRAM.", "gpu": gpu},
+                status_code=409,
+            )
+        if not hasattr(_scheduler, "ensure_tribe"):
+            return JSONResponse(
+                {"ok": False, "status": "unsupported_scheduler", "message": "This scheduler cannot warm TRIBE v2."},
+                status_code=501,
+            )
+        await app.state.hub.broadcast({"type": "tribe_warm_started"})
+        try:
+            await _scheduler.ensure_tribe()
+            gpu_after = _scheduler.vram_report()
+            await app.state.hub.broadcast({"type": "tribe_warm_complete", "gpu": gpu_after})
+            return JSONResponse({"ok": True, "status": "tribe_ready", "gpu": gpu_after})
+        except Exception as exc:
+            await app.state.hub.broadcast({"type": "tribe_warm_failed", "message": str(exc)[:160]})
+            return JSONResponse(
+                {"ok": False, "status": "warm_failed", "message": str(exc)[:240], "gpu": _scheduler.vram_report()},
+                status_code=500,
+            )
 
     @app.get("/api/fleet-health")
     async def fleet_health() -> dict[str, Any]:
@@ -599,7 +1220,7 @@ def create_app(
         file: UploadFile = File(...),
         tier: int = Form(default=1, ge=0, le=6),
         source: str = Form(default="webui"),
-        narration_model: str = Form(default="local:gemma4:26b"),
+        narration_model: str = Form(default=f"openrouter:{OPENROUTER_DEFAULT_MODEL}"),
         external_scan_id: str = Form(default=""),
     ) -> JSONResponse:
         if not file.filename:
@@ -1339,11 +1960,14 @@ def create_app(
         text: str = Form(...),
         tier: int = Form(default=1, ge=0, le=6),
         source: str = Form(default="webui"),
-        narration_model: str = Form(default="local:gemma4:26b"),
+        narration_model: str = Form(default=f"openrouter:{OPENROUTER_DEFAULT_MODEL}"),
     ) -> JSONResponse:
-        if not text.strip():
+        clean_text = text.strip()
+        if not clean_text:
             return JSONResponse({"error": "empty text"}, status_code=400)
         scan_id = uuid.uuid4().hex[:12]
+        target = UPLOAD_DIR / f"{scan_id}.txt"
+        target.write_text(clean_text[:4000], encoding="utf-8")
         await app.state.registry.put(
             scan_id,
             {
@@ -1353,16 +1977,20 @@ def create_app(
                 "tier": tier,
                 "source": source,
                 "narration_model": narration_model,
-                "text": text.strip()[:1000],
+                "text": clean_text[:1000],
+                "analysis_mode": "tribe_text",
             },
         )
         asyncio.create_task(
-            _run_text_scan_background(app, scan_id, text.strip()[:1000], tier, source, narration_model)
+            _run_scan_background(app, scan_id, str(target), tier, source, narration_model)
         )
         await app.state.hub.broadcast(
             {"type": "scan_queued", "scan_id": scan_id, "filename": "<text stimulus>"}
         )
-        return JSONResponse({"ok": True, "scan_id": scan_id, "status": "queued"}, status_code=202)
+        return JSONResponse(
+            {"ok": True, "scan_id": scan_id, "status": "queued", "analysis_mode": "tribe_text"},
+            status_code=202,
+        )
 
     # -----------------------------------------------------------------------
     # TRIBE v2 fine-tune kickoff (called by training_trigger.py from the cloud)
@@ -1423,49 +2051,55 @@ def create_app(
     # -----------------------------------------------------------------------
 
     if PUBLIC_DIR.exists():
+        def _public_file(name: str) -> FileResponse:
+            path = PUBLIC_DIR / name
+            if not path.exists():
+                raise HTTPException(status_code=404, detail=f"{name} not found")
+            return FileResponse(str(path))
+
         # Explicit routes for the multi-page demo so we don't need Vite in production.
         # Order matters: FastAPI routes registered above (all /api/*) take precedence.
         @app.get("/")
         async def index() -> FileResponse:
-            return FileResponse(str(PUBLIC_DIR / "index.html"))
+            return _public_file("index.html")
 
         @app.get("/gallery.html")
         async def gallery_page() -> FileResponse:
-            return FileResponse(str(PUBLIC_DIR / "gallery.html"))
+            return _public_file("gallery.html")
 
         @app.get("/personas.html")
         async def personas_page() -> FileResponse:
-            return FileResponse(str(PUBLIC_DIR / "personas.html"))
+            return _public_file("personas.html")
 
         @app.get("/specs.html")
         async def specs_page() -> FileResponse:
-            return FileResponse(str(PUBLIC_DIR / "specs.html"))
+            return _public_file("specs.html")
 
         @app.get("/status.html")
         async def status_page() -> FileResponse:
-            return FileResponse(str(PUBLIC_DIR / "status.html"))
+            return _public_file("status.html")
 
         # Clean URLs (no .html). The bare paths are the canonical form;
         # the .html paths above stay for backward compat with old links.
         @app.get("/status")
         async def status_alias() -> FileResponse:
-            return FileResponse(str(PUBLIC_DIR / "status.html"))
+            return _public_file("status.html")
 
         @app.get("/gallery")
         async def gallery_alias() -> FileResponse:
-            return FileResponse(str(PUBLIC_DIR / "gallery.html"))
+            return _public_file("gallery.html")
 
         @app.get("/personas")
         async def personas_alias() -> FileResponse:
-            return FileResponse(str(PUBLIC_DIR / "personas.html"))
+            return _public_file("personas.html")
 
         @app.get("/specs")
         async def specs_alias() -> FileResponse:
-            return FileResponse(str(PUBLIC_DIR / "specs.html"))
+            return _public_file("specs.html")
 
         @app.get("/demo")
         async def demo_alias() -> FileResponse:
-            return FileResponse(str(PUBLIC_DIR / "index.html"))
+            return _public_file("index.html")
 
         # Mount the entire public dir at /static/* for asset references like
         # /static/main.js, /static/style.css, /static/atlas.json, etc.
@@ -1624,18 +2258,14 @@ async def _narrate_with_model(
         return data["candidates"][0]["content"]["parts"][0]["text"]
 
     if prefix == "openrouter":
-        import os
         import httpx
         or_model = model[len("openrouter:"):]
-        api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        api_key = _load_openrouter_api_key()
         if not api_key:
-            # fall back: try reading from ~/.hermes/.env
-            env_path = Path.home() / ".hermes" / ".env"
-            if env_path.exists():
-                for line in env_path.read_text().splitlines():
-                    if line.startswith("OPENROUTER_API_KEY="):
-                        api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
-                        break
+            return (
+                "OpenRouter narration is selected, but OPENROUTER_API_KEY is not configured. "
+                "TRIBE results were produced locally; add a valid OpenRouter key to enable cloud narration."
+            )
         body = {
             "model": or_model,
             "messages": messages,
@@ -1653,7 +2283,15 @@ async def _narrate_with_model(
                 json=body,
                 headers=headers,
             )
-            resp.raise_for_status()
+            if resp.status_code >= 400:
+                try:
+                    err_msg = _safe_openrouter_message(resp.json())
+                except Exception:
+                    err_msg = ""
+                return (
+                    f"OpenRouter narration unavailable ({resp.status_code}). "
+                    f"{err_msg or 'Check the API key, credits, and selected model.'}"
+                )
             data = resp.json()
         return data["choices"][0]["message"]["content"]
 
@@ -1678,9 +2316,13 @@ async def _run_image_scan_background(
     media_path: str,
     tier: int,
     source: str,
-    narration_model: str = "local:gemma4:26b",
+    narration_model: str = f"openrouter:{OPENROUTER_DEFAULT_MODEL}",
 ) -> None:
-    """Image scan: Gemma vision describes the image, then Gemma narrates neural correlates."""
+    """Image scan: describe the image, then narrate expected neural correlates.
+
+    When OpenRouter is selected, use OpenRouter multimodal description so local
+    Gemma does not occupy VRAM that should remain available for TRIBE.
+    """
     queue: RequestQueue = app.state.queue
     registry: ScanRegistry = app.state.registry
     hub: WebSocketHub = app.state.hub
@@ -1693,12 +2335,16 @@ async def _run_image_scan_background(
         await _emit("narrating")
 
         loop = asyncio.get_event_loop()
-        desc = await loop.run_in_executor(
-            None, lambda: _media_gate.classify_image(Path(media_path))
-        )
+        if narration_model.startswith("openrouter:"):
+            visual_context = await _describe_media_for_prompt(Path(media_path))
+        else:
+            desc = await loop.run_in_executor(
+                None, lambda: _media_gate.classify_image(Path(media_path))
+            )
+            visual_context = f"Visual description: {desc.short_description()}"
         brain_ctx = (
             f"Input modality: image\n"
-            f"Visual description: {desc.short_description()}\n\n"
+            f"{visual_context}\n\n"
             "No fMRI scan was performed. Based on cognitive neuroscience knowledge, "
             "describe the brain regions and networks expected to activate when a person "
             "views this image."
@@ -1725,7 +2371,7 @@ async def _run_image_scan_background(
         ])
         narrations: dict[str, str] = dict(results)
 
-        await registry.update(scan_id, status="complete", narration=narrations.get("american", ""), narrations=narrations, top_rois=None, peak_t=None)
+        await registry.update(scan_id, status="complete", narration=narrations.get("student", ""), narrations=narrations, top_rois=None, peak_t=None)
         await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
         await hub.broadcast({"type": "scan_narrations_ready", "scan_id": scan_id, "narrations": narrations})
         log.info("[webapp] image scan %s complete", scan_id)
@@ -1743,7 +2389,7 @@ async def _run_document_scan_background(
     media_path: str,
     tier: int,
     source: str,
-    narration_model: str = "local:gemma4:26b",
+    narration_model: str = f"openrouter:{OPENROUTER_DEFAULT_MODEL}",
 ) -> None:
     """Document scan: extract text, then narrates expected neural correlates."""
     queue: RequestQueue = app.state.queue
@@ -1786,7 +2432,7 @@ async def _run_document_scan_background(
         ])
         narrations: dict[str, str] = dict(results)
 
-        await registry.update(scan_id, status="complete", narration=narrations.get("american", ""), narrations=narrations, top_rois=None, peak_t=None)
+        await registry.update(scan_id, status="complete", narration=narrations.get("student", ""), narrations=narrations, top_rois=None, peak_t=None)
         await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
         await hub.broadcast({"type": "scan_narrations_ready", "scan_id": scan_id, "narrations": narrations})
         log.info("[webapp] document scan %s complete", scan_id)
@@ -2015,7 +2661,7 @@ async def _run_scan_background(
     media_path: str,
     tier: int,
     source: str,
-    narration_model: str = "local:gemma4:26b",
+    narration_model: str = f"openrouter:{OPENROUTER_DEFAULT_MODEL}",
     external_scan_id: str | None = None,
 ) -> None:
     """Run a brain scan in the background and stream progress to WebSocket clients."""
@@ -2068,12 +2714,16 @@ async def _run_scan_background(
         except Exception as _exc:
             log.warning("[webapp] preds persist failed for %s: %s", scan_id, _exc)
 
-        # Build full brain context so Gemma gets real data, not a generic prompt.
+        # Build full brain context so the narrator gets both the real BOLD data
+        # and modality/source context. For video/audio this preserves soundtrack
+        # awareness through OpenRouter multimodal description or metadata fallback.
         loop = asyncio.get_event_loop()
-        brain_ctx = await loop.run_in_executor(
+        bold_ctx = await loop.run_in_executor(
             None,
             lambda: analyse(result, harvard_oxford=False, juelich=False).gemma_context(),
         )
+        media_ctx = await _describe_media_for_prompt(Path(media_path))
+        brain_ctx = f"{media_ctx}\n\nTRIBE v2 BOLD response summary:\n{bold_ctx}"
         label = Path(media_path).name
         user_prompt = _prompts.TIER_USER_TEMPLATE.format(label=label, brain_context=brain_ctx)
 
@@ -2115,8 +2765,9 @@ async def _run_scan_background(
             tribe_seconds=tribe_seconds,
             narration_seconds=narration_seconds,
             narration_timings=narration_timings,
-            narration=narrations.get("american", ""),
+            narration=narrations.get("student", ""),
             narrations=narrations,
+            media_context=media_ctx,
             tr_seconds=0.5,
             n_t=int(preds.shape[0]) if preds is not None else None,
         )
@@ -2146,7 +2797,7 @@ async def _run_scan_background(
 
 
 # ---------------------------------------------------------------------------
-# Text-only scan (no TRIBE inference — Gemma predicts neural correlates from text)
+# Text-only scan (typed text is persisted as .txt and routed through TRIBE)
 # ---------------------------------------------------------------------------
 
 async def _run_text_scan_background(
@@ -2155,7 +2806,7 @@ async def _run_text_scan_background(
     text: str,
     tier: int,
     source: str,
-    narration_model: str = "local:gemma4:26b",
+    narration_model: str = f"openrouter:{OPENROUTER_DEFAULT_MODEL}",
 ) -> None:
     queue: RequestQueue = app.state.queue
     registry: ScanRegistry = app.state.registry
@@ -2174,22 +2825,36 @@ async def _run_text_scan_background(
             "describe the brain regions and networks expected to activate when a person "
             "reads, thinks about, or experiences this stimulus."
         )
-        user_prompt   = _prompts.TIER_USER_TEMPLATE.format(label="text stimulus", brain_context=brain_ctx)
-        system_prompt = _prompts.ALL_TIER_SYSTEMS[max(0, min(6, tier))]
+        user_prompt = _prompts.TIER_USER_TEMPLATE.format(label="text stimulus", brain_context=brain_ctx)
 
-        narration = await _narrate_with_model(
-            model=narration_model,
-            prompt=user_prompt,
-            system=system_prompt,
-            tier=tier,
-            num_predict=_tiers._TIER_NUM_PREDICT[tier],
-            temperature=_tiers._TIER_TEMPERATURE[tier],
-            queue=queue,
-            source=source,
+        async def _one(pid: str, tier_n: int, sys_prompt: str) -> tuple[str, str]:
+            text_out = await _narrate_with_model(
+                model=narration_model,
+                prompt=user_prompt,
+                system=sys_prompt,
+                tier=tier_n,
+                num_predict=_tiers._TIER_NUM_PREDICT[tier_n],
+                temperature=_tiers._TIER_TEMPERATURE[tier_n],
+                queue=queue,
+                source=source,
+            )
+            return pid, text_out
+
+        results = await asyncio.gather(*[
+            _one(pid, t, sp) for pid, (t, sp) in _prompts.PERSONA_CONFIGS.items()
+        ])
+        narrations: dict[str, str] = dict(results)
+
+        await registry.update(
+            scan_id,
+            status="complete",
+            narration=narrations.get("student", next(iter(narrations.values()), "")),
+            narrations=narrations,
+            top_rois=None,
+            peak_t=None,
         )
-
-        await registry.update(scan_id, status="complete", narration=narration, top_rois=None, peak_t=None)
         await hub.broadcast({"type": "scan_complete", "scan_id": scan_id})
+        await hub.broadcast({"type": "scan_narrations_ready", "scan_id": scan_id, "narrations": narrations})
         log.info("[webapp] text scan %s complete", scan_id)
 
     except Exception as exc:
