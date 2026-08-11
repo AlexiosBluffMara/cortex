@@ -134,3 +134,8 @@ assets/test_*.mp4
 # --- Runtime scan output (local dev) ---
 scans/
 firebase-debug.log
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
